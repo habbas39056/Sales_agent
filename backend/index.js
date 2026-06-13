@@ -28,6 +28,14 @@ app.use('/api/reports', require('./routes/reports'));
 app.use('/api/expenses', require('./routes/expenses'));
 app.use('/api/banks', require('./routes/banks'));
 
+// Serve static frontend files
+app.use(express.static(path.join(__dirname, '../frontend/dist')));
+
+// Fallback for React Router (Single Page Application)
+app.get('*', (req, res) => {
+  res.sendFile(path.join(__dirname, '../frontend/dist/index.html'));
+});
+
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
 });
