@@ -1,5 +1,5 @@
 import React from 'react';
-import { BrowserRouter as Router, Routes, Route, Link, useLocation, useNavigate } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, Link, useLocation, useNavigate, Navigate } from 'react-router-dom';
 import { LayoutDashboard, Users, FileText, PlusCircle, Calendar, Clock, CheckSquare, MessageSquare, RotateCcw, DollarSign, LogOut, Shield } from 'lucide-react';
 import Dashboard from './pages/Dashboard';
 import Login from './pages/Login';
@@ -21,7 +21,15 @@ import Reports from './pages/Reports';
 import Expenses from './pages/Expenses';
 import Header from './components/Header';
 import './App.css';
+import './App.css';
 
+const ProtectedRoute = ({ children }) => {
+  const userStr = localStorage.getItem('user');
+  if (!userStr) {
+    return <Navigate to="/" replace />;
+  }
+  return children;
+};
 function AppContent() {
   const location = useLocation();
   const navigate = useNavigate();
@@ -30,7 +38,7 @@ function AppContent() {
   const showSidebar = !isLoginPage && !isClientPortal;
 
   const handleLogout = () => {
-    // Basic logout handling - navigate to login screen
+    localStorage.removeItem('user');
     navigate('/');
   };
 
@@ -80,24 +88,24 @@ function AppContent() {
         <main className="main-content" style={!showSidebar ? { padding: 0, maxWidth: '100%', height: '100vh' } : { height: 'calc(100vh - 70px)' }}>
           <Routes>
             <Route path="/" element={<Login />} />
-            <Route path="/dashboard" element={<Dashboard />} />
-            <Route path="/clients" element={<ClientsList />} />
-            <Route path="/clients/:id" element={<ClientProfile />} />
-            <Route path="/team" element={<TeamManagement />} />
-            <Route path="/invoices" element={<InvoiceManagement />} />
-            <Route path="/invoices/new" element={<CreateInvoice />} />
-            <Route path="/invoices/edit/:id" element={<CreateInvoice />} />
-            <Route path="/projects" element={<ProjectsList />} />
-            <Route path="/projects/:id" element={<ProjectDetails />} />
-            <Route path="/projects/:id/steps/new" element={<AddStep />} />
-            <Route path="/client-portal" element={<ClientPortal />} />
-            <Route path="/client-portal/revision/:projectId/:stepId" element={<RequestRevision />} />
-            <Route path="/pm" element={<PmPortal />} />
-            <Route path="/sales" element={<SalesPortal />} />
-            <Route path="/production" element={<ProductionPortal />} />
-            <Route path="/expenses" element={<Expenses />} />
-            <Route path="/commissions" element={<Commissions />} />
-            <Route path="/reports" element={<Reports />} />
+            <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
+            <Route path="/clients" element={<ProtectedRoute><ClientsList /></ProtectedRoute>} />
+            <Route path="/clients/:id" element={<ProtectedRoute><ClientProfile /></ProtectedRoute>} />
+            <Route path="/team" element={<ProtectedRoute><TeamManagement /></ProtectedRoute>} />
+            <Route path="/invoices" element={<ProtectedRoute><InvoiceManagement /></ProtectedRoute>} />
+            <Route path="/invoices/new" element={<ProtectedRoute><CreateInvoice /></ProtectedRoute>} />
+            <Route path="/invoices/edit/:id" element={<ProtectedRoute><CreateInvoice /></ProtectedRoute>} />
+            <Route path="/projects" element={<ProtectedRoute><ProjectsList /></ProtectedRoute>} />
+            <Route path="/projects/:id" element={<ProtectedRoute><ProjectDetails /></ProtectedRoute>} />
+            <Route path="/projects/:id/steps/new" element={<ProtectedRoute><AddStep /></ProtectedRoute>} />
+            <Route path="/client-portal" element={<ProtectedRoute><ClientPortal /></ProtectedRoute>} />
+            <Route path="/client-portal/revision/:projectId/:stepId" element={<ProtectedRoute><RequestRevision /></ProtectedRoute>} />
+            <Route path="/pm" element={<ProtectedRoute><PmPortal /></ProtectedRoute>} />
+            <Route path="/sales" element={<ProtectedRoute><SalesPortal /></ProtectedRoute>} />
+            <Route path="/production" element={<ProtectedRoute><ProductionPortal /></ProtectedRoute>} />
+            <Route path="/expenses" element={<ProtectedRoute><Expenses /></ProtectedRoute>} />
+            <Route path="/commissions" element={<ProtectedRoute><Commissions /></ProtectedRoute>} />
+            <Route path="/reports" element={<ProtectedRoute><Reports /></ProtectedRoute>} />
           </Routes>
         </main>
       </div>
