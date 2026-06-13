@@ -36,7 +36,7 @@ export default function Expenses() {
 
   const fetchBanks = async () => {
     try {
-      const res = await axios.get('http://localhost:5000/api/banks');
+      const res = await axios.get('/api/banks');
       setBanks(res.data);
     } catch (err) {
       console.error('Failed to fetch banks', err);
@@ -45,7 +45,7 @@ export default function Expenses() {
 
   const fetchClients = async () => {
     try {
-      const res = await axios.get('http://localhost:5000/api/reports/clients');
+      const res = await axios.get('/api/reports/clients');
       setClients(res.data);
     } catch (err) {
       console.error('Failed to fetch clients', err);
@@ -54,7 +54,7 @@ export default function Expenses() {
 
   const fetchExpenses = async () => {
     try {
-      const res = await axios.get('http://localhost:5000/api/expenses');
+      const res = await axios.get('/api/expenses');
       setExpenses(res.data.data);
       setSummary(res.data.summary);
     } catch (err) {
@@ -70,9 +70,9 @@ export default function Expenses() {
     e.preventDefault();
     try {
       if (editingId) {
-        await axios.put(`http://localhost:5000/api/expenses/${editingId}`, formData);
+        await axios.put(`/api/expenses/${editingId}`, formData);
       } else {
-        await axios.post('http://localhost:5000/api/expenses', formData);
+        await axios.post('/api/expenses', formData);
       }
       setIsModalOpen(false);
       setEditingId(null);
@@ -111,7 +111,7 @@ export default function Expenses() {
   const handleWipeData = async () => {
     if (window.confirm("Are you sure you want to wipe all expense data? This cannot be undone.")) {
       try {
-        await axios.delete('http://localhost:5000/api/expenses/wipe');
+        await axios.delete('/api/expenses/wipe');
         fetchExpenses();
       } catch (err) {
         console.error('Error wiping data', err);
@@ -123,7 +123,7 @@ export default function Expenses() {
   const handleCreateBank = async (e) => {
     e.preventDefault();
     try {
-      await axios.post('http://localhost:5000/api/banks', { name: newBankName });
+      await axios.post('/api/banks', { name: newBankName });
       setNewBankName('');
       fetchBanks();
     } catch (err) {
@@ -134,7 +134,7 @@ export default function Expenses() {
   const handleDeleteBank = async (id) => {
     if (window.confirm("Delete this bank?")) {
       try {
-        await axios.delete(`http://localhost:5000/api/banks/${id}`);
+        await axios.delete(`/api/banks/${id}`);
         fetchBanks();
       } catch (err) {
         alert(err.response?.data?.error || 'Error deleting bank');
@@ -313,7 +313,7 @@ export default function Expenses() {
                     </button>
                     <button className="btn-icon delete-btn" onClick={async () => {
                       if(window.confirm('Delete entry?')) {
-                        await axios.delete(`http://localhost:5000/api/expenses/${exp.id}`);
+                        await axios.delete(`/api/expenses/${exp.id}`);
                         fetchExpenses();
                       }
                     }} title="Delete Entry"><X size={16} /></button>

@@ -13,7 +13,7 @@ export default function Commissions() {
 
   const fetchCommissions = async () => {
     try {
-      const res = await axios.get('http://localhost:5000/api/commissions');
+      const res = await axios.get('/api/commissions');
       setCommissions(res.data);
       setLoading(false);
     } catch (error) {

@@ -10,7 +10,7 @@ export default function ProductionPortal() {
 
   const fetchProjects = async () => {
     try {
-      const res = await axios.get('http://localhost:5000/api/projects');
+      const res = await axios.get('/api/projects');
       setProjects(res.data);
     } catch (e) { console.error(e); }
   };
@@ -19,7 +19,7 @@ export default function ProductionPortal() {
     const file_name = prompt("Enter file name or link:");
     if (!file_name) return;
     try {
-      await axios.post(`http://localhost:5000/api/projects/${id}/submit-delivery`, { 
+      await axios.post(`/api/projects/${id}/submit-delivery`, { 
         user_id: 1, // Mocking logged in user
         file_url: 'https://example.com/file',
         file_name 

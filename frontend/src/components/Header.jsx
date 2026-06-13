@@ -52,7 +52,7 @@ export default function Header() {
             <button className="btn-danger" style={{ padding: '0.4rem 0.75rem', borderRadius: '6px', fontSize: '0.85rem' }} onClick={async () => {
               if(window.confirm("Are you sure you want to wipe all expense data? This cannot be undone.")) {
                 try {
-                  await axios.delete('http://localhost:5000/api/expenses/wipe');
+                  await axios.delete('/api/expenses/wipe');
                   window.location.reload();
                 } catch(e) {
                   alert('Failed to wipe data');

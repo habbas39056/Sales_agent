@@ -33,7 +33,7 @@ export default function ClientPortal() {
       }
       const user = JSON.parse(userStr);
       
-      const res = await axios.get(`http://localhost:5000/api/clients/user/${user.id}/portal-data`);
+      const res = await axios.get(`/api/clients/user/${user.id}/portal-data`);
       setPortalData(res.data);
       setLoading(false);
       
@@ -49,7 +49,7 @@ export default function ClientPortal() {
 
   const acceptTerms = async (projectId) => {
     try {
-      await axios.post(`http://localhost:5000/api/projects/${projectId}/accept-terms`);
+      await axios.post(`/api/projects/${projectId}/accept-terms`);
       fetchPortalData();
     } catch (e) { console.error(e); }
   };
@@ -63,9 +63,9 @@ export default function ClientPortal() {
     e.preventDefault();
     try {
       if (editingNote) {
-        await axios.put(`http://localhost:5000/api/clients/notes/${editingNote.id}`, { content: noteContent });
+        await axios.put(`/api/clients/notes/${editingNote.id}`, { content: noteContent });
       } else {
-        await axios.post(`http://localhost:5000/api/clients/notes`, { 
+        await axios.post(`/api/clients/notes`, { 
           client_id: portalData.client.id, 
           content: noteContent, 
           created_by: currentUser.id 
@@ -81,7 +81,7 @@ export default function ClientPortal() {
   const handleNoteDelete = async (id) => {
     if(window.confirm('Are you sure you want to delete this note?')) {
       try {
-        await axios.delete(`http://localhost:5000/api/clients/notes/${id}`);
+        await axios.delete(`/api/clients/notes/${id}`);
         fetchPortalData();
       } catch(e) { console.error(e); }
     }
@@ -368,7 +368,7 @@ export default function ClientPortal() {
                                           const fileName = file.split('/').pop();
                                           const isImg = file.match(/\.(jpeg|jpg|gif|png)$/i);
                                           return (
-                                            <a key={idx} href={`http://localhost:5000${file}`} target="_blank" rel="noopener noreferrer" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.5rem', backgroundColor: 'white', border: '1px solid #cbd5e1', borderRadius: '4px', textDecoration: 'none', color: 'var(--primary-color)', fontSize: '0.85rem' }}>
+                                            <a key={idx} href={`${file}`} target="_blank" rel="noopener noreferrer" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.5rem', backgroundColor: 'white', border: '1px solid #cbd5e1', borderRadius: '4px', textDecoration: 'none', color: 'var(--primary-color)', fontSize: '0.85rem' }}>
                                               {isImg ? <Eye size={14} /> : <FileText size={14} />} {fileName}
                                             </a>
                                           );
@@ -423,7 +423,7 @@ export default function ClientPortal() {
                                                     img.startsWith('http') ? (
                                                       <a key={i} href={img} target="_blank" rel="noopener noreferrer" style={{color: 'var(--primary-color)', fontSize: '0.9rem', display: 'block'}}>View Reference Link {i+1}</a>
                                                     ) : (
-                                                      <img key={i} src={`http://localhost:5000${img}`} alt={`Revision attachment ${i+1}`} style={{maxWidth: '100%', maxHeight: '200px', borderRadius: '4px', border: '1px solid #e2e8f0'}} />
+                                                      <img key={i} src={`${img}`} alt={`Revision attachment ${i+1}`} style={{maxWidth: '100%', maxHeight: '200px', borderRadius: '4px', border: '1px solid #e2e8f0'}} />
                                                     )
                                                   ));
                                                 })()}

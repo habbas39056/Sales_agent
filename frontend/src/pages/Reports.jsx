@@ -7,7 +7,7 @@ import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContai
 import { Download, Users, Shield, Loader, FileText, CheckCircle, Clock, X, Filter, DollarSign, TrendingUp, CreditCard } from 'lucide-react';
 import './Reports.css';
 
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
+const API_URL = import.meta.env.VITE_API_URL || '/api';
 
 export default function Reports() {
   const navigate = useNavigate();

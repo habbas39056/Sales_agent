@@ -48,11 +48,11 @@ export default function CreateInvoice() {
   const fetchData = async () => {
     try {
       const [cliRes, projRes, prodRes, agentRes, banksRes] = await Promise.all([
-        axios.get('http://localhost:5000/api/clients'),
-        axios.get('http://localhost:5000/api/projects'),
-        axios.get('http://localhost:5000/api/products'),
-        axios.get('http://localhost:5000/api/users'),
-        axios.get('http://localhost:5000/api/banks')
+        axios.get('/api/clients'),
+        axios.get('/api/projects'),
+        axios.get('/api/products'),
+        axios.get('/api/users'),
+        axios.get('/api/banks')
       ]);
       setClients(cliRes.data);
       setProjects(projRes.data);
@@ -61,7 +61,7 @@ export default function CreateInvoice() {
       setBanks(banksRes.data);
       
       if (id) {
-        const invRes = await axios.get(`http://localhost:5000/api/invoices/${id}`);
+        const invRes = await axios.get(`/api/invoices/${id}`);
         const inv = invRes.data;
         setFormData({
           invoice_number: inv.invoice_number,
@@ -153,9 +153,9 @@ export default function CreateInvoice() {
     };
     try {
       if (id) {
-        await axios.put(`http://localhost:5000/api/invoices/${id}`, dataToSend);
+        await axios.put(`/api/invoices/${id}`, dataToSend);
       } else {
-        await axios.post('http://localhost:5000/api/invoices', dataToSend);
+        await axios.post('/api/invoices', dataToSend);
       }
       navigate('/invoices');
     } catch (error) {
@@ -171,7 +171,7 @@ export default function CreateInvoice() {
       return;
     }
     try {
-      await axios.post(`http://localhost:5000/api/invoices/${id}/payments`, paymentForm);
+      await axios.post(`/api/invoices/${id}/payments`, paymentForm);
       setShowPaymentModal(false);
       setPaymentForm({
         amount: '',

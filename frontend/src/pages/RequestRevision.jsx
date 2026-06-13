@@ -29,7 +29,7 @@ export default function RequestRevision() {
       }
       const user = JSON.parse(userStr);
       
-      const res = await axios.get(`http://localhost:5000/api/clients/user/${user.id}/portal-data`);
+      const res = await axios.get(`/api/clients/user/${user.id}/portal-data`);
       const proj = res.data.projects.find(p => p.id === parseInt(projectId));
       
       if (proj) {
@@ -59,7 +59,7 @@ export default function RequestRevision() {
         imageFiles.forEach(file => formData.append('images', file));
       }
 
-      await axios.post(`http://localhost:5000/api/projects/${projectId}/request-revision`, formData, {
+      await axios.post(`/api/projects/${projectId}/request-revision`, formData, {
         headers: {
           'Content-Type': 'multipart/form-data'
         }

@@ -33,10 +33,10 @@ export default function InvoiceManagement() {
   const fetchData = async () => {
     try {
       const [invRes, cliRes, projRes, prodRes] = await Promise.all([
-        axios.get('http://localhost:5000/api/invoices'),
-        axios.get('http://localhost:5000/api/clients'),
-        axios.get('http://localhost:5000/api/projects'),
-        axios.get('http://localhost:5000/api/products')
+        axios.get('/api/invoices'),
+        axios.get('/api/clients'),
+        axios.get('/api/projects'),
+        axios.get('/api/products')
       ]);
       setInvoices(invRes.data);
       setClients(cliRes.data);
@@ -51,7 +51,7 @@ export default function InvoiceManagement() {
 
   const openPreview = async (id) => {
     try {
-      const res = await axios.get(`http://localhost:5000/api/invoices/${id}`);
+      const res = await axios.get(`/api/invoices/${id}`);
       setPreviewInvoice(res.data);
     } catch (error) {
       console.error('Failed to load invoice preview:', error);
@@ -75,7 +75,7 @@ export default function InvoiceManagement() {
   const handleRecordPayment = async (e) => {
     e.preventDefault();
     try {
-      await axios.post(`http://localhost:5000/api/invoices/${previewInvoice.id}/payments`, paymentData);
+      await axios.post(`/api/invoices/${previewInvoice.id}/payments`, paymentData);
       setIsPaymentModalOpen(false);
       // Refresh the invoice preview data
       openPreview(previewInvoice.id);

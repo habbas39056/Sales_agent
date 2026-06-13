@@ -13,7 +13,7 @@ export default function SalesPortal() {
 
   const fetchClients = async () => {
     try {
-      const res = await axios.get('http://localhost:5000/api/clients');
+      const res = await axios.get('/api/clients');
       setClients(res.data);
     } catch (e) { console.error(e); }
   };
@@ -21,7 +21,7 @@ export default function SalesPortal() {
   const createClient = async (e) => {
     e.preventDefault();
     try {
-      await axios.post('http://localhost:5000/api/clients', newClient);
+      await axios.post('/api/clients', newClient);
       setNewClient({ full_name: '', email: '' });
       fetchClients();
     } catch (e) { console.error(e); }
@@ -31,7 +31,7 @@ export default function SalesPortal() {
     e.preventDefault();
     if(!newProject.client_id) return alert("Select a client first");
     try {
-      await axios.post('http://localhost:5000/api/projects', newProject);
+      await axios.post('/api/projects', newProject);
       setNewProject({ title: '', description: '', client_id: '', revision_cycles_included: 2 });
       alert("Project Created Successfully!");
     } catch (e) { console.error(e); }

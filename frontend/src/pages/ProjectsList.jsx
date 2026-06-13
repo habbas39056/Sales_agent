@@ -50,7 +50,7 @@ export default function ProjectsList() {
 
   const fetchProjects = async () => {
     try {
-      const res = await axios.get('http://localhost:5000/api/projects');
+      const res = await axios.get('/api/projects');
       setProjects(res.data);
     } catch (error) {
       console.error('Failed to fetch projects', error);
@@ -59,7 +59,7 @@ export default function ProjectsList() {
 
   const fetchClients = async () => {
     try {
-      const res = await axios.get('http://localhost:5000/api/clients');
+      const res = await axios.get('/api/clients');
       setClients(res.data);
     } catch (error) {
       console.error('Failed to fetch clients', error);
@@ -68,7 +68,7 @@ export default function ProjectsList() {
 
   const fetchInvoices = async () => {
     try {
-      const res = await axios.get('http://localhost:5000/api/invoices');
+      const res = await axios.get('/api/invoices');
       setInvoices(res.data);
     } catch (error) {
       console.error('Failed to fetch invoices', error);
@@ -82,7 +82,7 @@ export default function ProjectsList() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     try {
-      await axios.post('http://localhost:5000/api/projects', formData);
+      await axios.post('/api/projects', formData);
       setIsModalOpen(false);
       setFormData({
         title: '',

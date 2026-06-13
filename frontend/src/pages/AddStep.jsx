@@ -30,10 +30,10 @@ export default function AddStep() {
 
   const fetchData = async () => {
     try {
-      const pRes = await axios.get(`http://localhost:5000/api/projects/${id}`);
+      const pRes = await axios.get(`/api/projects/${id}`);
       setProject(pRes.data);
       
-      const sRes = await axios.get('http://localhost:5000/api/users/specialists');
+      const sRes = await axios.get('/api/users/specialists');
       setSpecialists(sRes.data);
     } catch (error) {
       console.error('Failed to fetch data', error);
@@ -79,7 +79,7 @@ export default function AddStep() {
         fd.append('attachments', file);
       });
 
-      await axios.post(`http://localhost:5000/api/projects/${id}/steps`, fd, {
+      await axios.post(`/api/projects/${id}/steps`, fd, {
         headers: {
           'Content-Type': 'multipart/form-data'
         }

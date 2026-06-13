@@ -10,14 +10,14 @@ export default function PmPortal() {
 
   const fetchProjects = async () => {
     try {
-      const res = await axios.get('http://localhost:5000/api/projects');
+      const res = await axios.get('/api/projects');
       setProjects(res.data);
     } catch (e) { console.error(e); }
   };
 
   const lockDeadline = async (id, dateStr) => {
     try {
-      await axios.post(`http://localhost:5000/api/projects/${id}/lock-deadline`, { deadline: dateStr });
+      await axios.post(`/api/projects/${id}/lock-deadline`, { deadline: dateStr });
       alert("Deadline locked!");
       fetchProjects();
     } catch (e) { console.error(e); }

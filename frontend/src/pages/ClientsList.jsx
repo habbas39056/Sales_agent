@@ -28,7 +28,7 @@ export default function ClientsList() {
 
   const fetchClients = async () => {
     try {
-      const res = await axios.get('http://localhost:5000/api/clients');
+      const res = await axios.get('/api/clients');
       setClients(res.data);
     } catch (error) {
       console.error('Failed to fetch clients:', error);
@@ -69,7 +69,7 @@ export default function ClientsList() {
   const handleDelete = async (clientId) => {
     if (window.confirm('Are you sure you want to delete this client? This cannot be undone.')) {
       try {
-        await axios.delete(`http://localhost:5000/api/clients/${clientId}`);
+        await axios.delete(`/api/clients/${clientId}`);
         fetchClients();
       } catch (error) {
         console.error('Failed to delete client:', error);
@@ -83,10 +83,10 @@ export default function ClientsList() {
     try {
       if (editingClient) {
         // Edit Mode
-        await axios.put(`http://localhost:5000/api/clients/${editingClient.id}`, formData);
+        await axios.put(`/api/clients/${editingClient.id}`, formData);
       } else {
         // Add Mode
-        await axios.post('http://localhost:5000/api/clients', formData);
+        await axios.post('/api/clients', formData);
       }
       setIsModalOpen(false);
       setEditingClient(null);

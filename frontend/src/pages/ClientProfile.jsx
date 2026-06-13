@@ -16,7 +16,7 @@ export default function ClientProfile() {
 
   const fetchClientDetails = async () => {
     try {
-      const res = await axios.get(`http://localhost:5000/api/clients/${id}/details`);
+      const res = await axios.get(`/api/clients/${id}/details`);
       setData(res.data);
     } catch (error) {
       console.error('Failed to fetch client details:', error);

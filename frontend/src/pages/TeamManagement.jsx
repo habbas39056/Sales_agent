@@ -31,7 +31,7 @@ export default function TeamManagement() {
 
   const fetchTeamMembers = async () => {
     try {
-      const res = await axios.get('http://localhost:5000/api/users');
+      const res = await axios.get('/api/users');
       setTeamMembers(res.data);
     } catch (error) {
       console.error('Failed to fetch team members', error);
@@ -45,7 +45,7 @@ export default function TeamManagement() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     try {
-      await axios.post('http://localhost:5000/api/users', formData);
+      await axios.post('/api/users', formData);
       setIsModalOpen(false);
       setFormData({
         name: '',

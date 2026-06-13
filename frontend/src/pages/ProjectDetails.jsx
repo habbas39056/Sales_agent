@@ -24,7 +24,7 @@ export default function ProjectDetails() {
 
   const fetchProjectDetails = async () => {
     try {
-      const res = await axios.get(`http://localhost:5000/api/projects/${id}`);
+      const res = await axios.get(`/api/projects/${id}`);
       setProject(res.data);
       setLoading(false);
     } catch (error) {
@@ -37,7 +37,7 @@ export default function ProjectDetails() {
     e.preventDefault();
     if (!uploadName) return;
     try {
-      await axios.post(`http://localhost:5000/api/projects/${id}/submit-delivery`, {
+      await axios.post(`/api/projects/${id}/submit-delivery`, {
         user_id: 1, 
         file_url: `https://mock-storage.com/${uploadName.replace(/\s+/g, '_').toLowerCase()}.pdf`,
         file_name: uploadName
@@ -52,7 +52,7 @@ export default function ProjectDetails() {
 
   const handleStatusChange = async (stepId, newStatus) => {
     try {
-      await axios.put(`http://localhost:5000/api/projects/${id}/steps/${stepId}`, { status: newStatus });
+      await axios.put(`/api/projects/${id}/steps/${stepId}`, { status: newStatus });
       fetchProjectDetails();
     } catch (error) {
       console.error('Failed to update step status', error);
@@ -61,7 +61,7 @@ export default function ProjectDetails() {
 
   const handleToggleRevisionOption = async (stepId, currentOption) => {
     try {
-      await axios.put(`http://localhost:5000/api/projects/${id}/steps/${stepId}`, { allow_revision: !currentOption });
+      await axios.put(`/api/projects/${id}/steps/${stepId}`, { allow_revision: !currentOption });
       fetchProjectDetails();
     } catch (error) {
       console.error('Failed to update revision option', error);
@@ -280,7 +280,7 @@ export default function ProjectDetails() {
                                             images = [rev.image_url];
                                           }
                                           return images.map((img, i) => (
-                                            <a key={i} href={img.startsWith('http') ? img : `http://localhost:5000${img}`} target="_blank" rel="noreferrer" style={{color: 'var(--primary-color)', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '0.5rem', backgroundColor: '#f1f5f9', padding: '0.5rem 1rem', borderRadius: '4px'}}>
+                                            <a key={i} href={img.startsWith('http') ? img : `${img}`} target="_blank" rel="noreferrer" style={{color: 'var(--primary-color)', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '0.5rem', backgroundColor: '#f1f5f9', padding: '0.5rem 1rem', borderRadius: '4px'}}>
                                               <ExternalLink size={16} /> View Attachment {i+1}
                                             </a>
                                           ));
@@ -307,7 +307,7 @@ export default function ProjectDetails() {
                                       const fileName = file.split('/').pop();
                                       const isImg = file.match(/\.(jpeg|jpg|gif|png)$/i);
                                       return (
-                                        <a key={idx} href={`http://localhost:5000${file}`} target="_blank" rel="noopener noreferrer" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.5rem 1rem', backgroundColor: '#f1f5f9', border: '1px solid #cbd5e1', borderRadius: '4px', textDecoration: 'none', color: 'var(--primary-color)' }}>
+                                        <a key={idx} href={`${file}`} target="_blank" rel="noopener noreferrer" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.5rem 1rem', backgroundColor: '#f1f5f9', border: '1px solid #cbd5e1', borderRadius: '4px', textDecoration: 'none', color: 'var(--primary-color)' }}>
                                           <ExternalLink size={16} /> {fileName}
                                         </a>
                                       );

@@ -18,9 +18,9 @@ export default function Dashboard() {
     const fetchData = async () => {
       try {
         const [clientsRes, projectsRes, invoicesRes] = await Promise.all([
-          axios.get('http://localhost:5000/api/clients'),
-          axios.get('http://localhost:5000/api/projects'),
-          axios.get('http://localhost:5000/api/invoices')
+          axios.get('/api/clients'),
+          axios.get('/api/projects'),
+          axios.get('/api/invoices')
         ]);
         setClients(clientsRes.data);
         setProjects(projectsRes.data);
