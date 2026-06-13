@@ -1,0 +1,353 @@
+.dashboard-container.modern-ui {
+  padding: 2rem;
+  max-width: 1400px;
+  margin: 0 auto;
+  font-family: 'Inter', sans-serif;
+  background-color: #f1f5f9; /* Light grey background from image */
+  min-height: 100vh;
+}
+
+/* Typography Overrides */
+.dashboard-container.modern-ui h2 {
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: #1e293b;
+  margin: 0;
+}
+
+/* Stat Cards 4-Grid */
+.stats-grid-4 {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  gap: 1.5rem;
+  margin-bottom: 2rem;
+}
+
+.stat-card-ref {
+  background: #ffffff;
+  border-radius: 16px;
+  padding: 1.5rem;
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.02);
+  transition: transform 0.2s;
+}
+
+.stat-card-ref:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.05);
+}
+
+.stat-card-ref.primary-card {
+  background: #7c3aed; /* The solid purple color */
+  color: white;
+}
+
+.stat-content-ref {
+  display: flex;
+  flex-direction: column;
+}
+
+.stat-title-ref {
+  font-size: 0.85rem;
+  color: #64748b;
+  font-weight: 500;
+  margin-bottom: 0.75rem;
+}
+.primary-card .stat-title-ref {
+  color: rgba(255, 255, 255, 0.8);
+}
+
+.stat-val-row {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+}
+
+.stat-number-ref {
+  font-size: 1.75rem;
+  font-weight: 700;
+  color: #0f172a;
+}
+.primary-card .stat-number-ref {
+  color: white;
+}
+
+.stat-badge-ref {
+  font-size: 0.7rem;
+  padding: 0.2rem 0.5rem;
+  border-radius: 12px;
+  font-weight: 600;
+}
+.stat-badge-ref.positive {
+  background: #eef2ff;
+  color: #4f46e5;
+}
+.primary-card .stat-badge-ref.positive {
+  background: rgba(255, 255, 255, 0.2);
+  color: white;
+}
+.stat-badge-ref.negative {
+  background: #fef2f2;
+  color: #ef4444;
+}
+.stat-badge-ref.neutral {
+  background: #f1f5f9;
+  color: #64748b;
+}
+
+.stat-subtitle-ref {
+  font-size: 0.75rem;
+  color: #94a3b8;
+}
+.primary-card .stat-subtitle-ref {
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.stat-icon-ref {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.stat-icon-ref.icon-white {
+  background: white;
+  color: #7c3aed;
+}
+.stat-icon-ref.icon-orange {
+  background: #f59e0b;
+  color: white;
+}
+.stat-icon-ref.icon-blue {
+  background: #3b82f6;
+  color: white;
+}
+.stat-icon-ref.icon-purple {
+  background: #8b5cf6;
+  color: white;
+}
+
+/* Charts Row */
+.charts-row {
+  display: grid;
+  grid-template-columns: 2fr 1fr;
+  gap: 1.5rem;
+  margin-bottom: 2rem;
+}
+
+.chart-panel {
+  background: #ffffff;
+  border-radius: 16px;
+  padding: 1.5rem;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.02);
+}
+
+.panel-header-ref {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1.5rem;
+}
+
+.dropdown-btn-ref {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  padding: 0.5rem 1rem;
+  border-radius: 20px;
+  font-size: 0.85rem;
+  color: #475569;
+  cursor: pointer;
+  font-weight: 500;
+  transition: background 0.2s;
+}
+.dropdown-btn-ref:hover {
+  background: #f1f5f9;
+}
+
+.icon-btn-ref {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #475569;
+  cursor: pointer;
+}
+
+.bar-chart-container {
+  margin-top: 1rem;
+}
+
+/* Sales Overview Gauge */
+.gauge-container {
+  position: relative;
+  display: flex;
+  justify-content: center;
+  align-items: flex-end;
+  margin-bottom: 2rem;
+}
+
+.gauge-label {
+  position: absolute;
+  bottom: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  transform: translateY(20px);
+}
+
+.gauge-percent {
+  font-size: 2rem;
+  font-weight: 700;
+  color: #0f172a;
+}
+
+.gauge-text {
+  font-size: 0.75rem;
+  color: #64748b;
+  margin-top: 0.25rem;
+}
+
+.gauge-footer-stats {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 2.5rem;
+}
+
+.g-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.g-label {
+  font-size: 0.85rem;
+  color: #64748b;
+}
+
+.g-val {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+.g-val strong {
+  font-size: 1.25rem;
+  color: #0f172a;
+}
+
+.g-badge {
+  font-size: 0.65rem;
+  padding: 0.15rem 0.4rem;
+  border-radius: 10px;
+  background: #fef3c7;
+  color: #d97706;
+  font-weight: 600;
+}
+.g-badge.dark {
+  background: #1e293b;
+  color: white;
+}
+
+/* Recent Orders Panel */
+.recent-orders-panel {
+  background: #ffffff;
+  border-radius: 16px;
+  padding: 1.5rem;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.02);
+}
+
+.table-actions {
+  display: flex;
+  gap: 1rem;
+  align-items: center;
+}
+
+.search-box-ref {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  padding: 0.5rem 1rem;
+  border-radius: 20px;
+  color: #64748b;
+}
+.search-box-ref input {
+  border: none;
+  background: transparent;
+  outline: none;
+  font-size: 0.85rem;
+  width: 200px;
+}
+
+.table-responsive-ref {
+  overflow-x: auto;
+}
+
+.ref-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 1rem;
+}
+
+.ref-table th {
+  text-align: left;
+  padding: 1rem;
+  font-size: 0.8rem;
+  color: #94a3b8;
+  font-weight: 500;
+  border-bottom: 1px solid #f1f5f9;
+}
+
+.ref-table td {
+  padding: 1rem;
+  font-size: 0.9rem;
+  color: #334155;
+  border-bottom: 1px solid #f1f5f9;
+  vertical-align: middle;
+}
+
+.info-cell {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.info-icon {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+}
+
+.status-pill {
+  padding: 0.3rem 0.8rem;
+  border-radius: 20px;
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+.status-pill.paid, .status-pill.completed {
+  background: #ecfdf5;
+  color: #10b981;
+}
+.status-pill.pending {
+  background: #fef2f2;
+  color: #ef4444;
+}
+
+@media (max-width: 1024px) {
+  .charts-row {
+    grid-template-columns: 1fr;
+  }
+}

@@ -1,0 +1,173 @@
+.login-container {
+  display: flex;
+  height: 100vh;
+  width: 100vw;
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  position: fixed;
+  top: 0;
+  left: 0;
+  z-index: 1000;
+}
+
+.login-left {
+  flex: 6.5;
+  background-color: #2b3e64;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  color: white;
+}
+
+.login-right {
+  flex: 3.5;
+  background-color: white;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  color: #333;
+}
+
+.brand-section {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.logo-container {
+  text-align: center;
+  line-height: 1;
+}
+
+.logo-main {
+  font-size: 3.5rem;
+  font-weight: 700;
+  margin: 0;
+  letter-spacing: -1px;
+}
+
+.logo-a {
+  background: linear-gradient(135deg, #f05a28, #3b82f6);
+  -webkit-background-clip: text;
+  color: transparent;
+}
+
+.logo-sub {
+  font-size: 1.5rem;
+  font-weight: 400;
+  margin: 0;
+  margin-top: 5px;
+}
+
+.logo-accent {
+  color: #f05a28;
+}
+
+.platform-name {
+  color: rgba(255, 255, 255, 0.7);
+  margin-top: 15px;
+  margin-bottom: 30px;
+  font-size: 0.9rem;
+}
+
+.contact-box {
+  background-color: #334871;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 12px;
+  padding: 25px 40px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  min-width: 350px;
+}
+
+.contact-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 15px;
+  font-size: 0.9rem;
+}
+
+.contact-icon {
+  color: #f05a28;
+  margin-top: 2px;
+}
+
+.contact-item p {
+  margin: 0;
+  color: rgba(255, 255, 255, 0.8);
+}
+
+.contact-item strong {
+  display: block;
+  margin-bottom: 2px;
+}
+
+.login-form-container {
+  width: 100%;
+  max-width: 350px;
+  padding: 20px;
+}
+
+.login-form-container h2 {
+  font-size: 1.8rem;
+  color: #1e293b;
+  margin-bottom: 5px;
+}
+
+.login-subtitle {
+  color: #64748b;
+  margin-bottom: 30px;
+  font-size: 0.9rem;
+}
+
+.login-form {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.form-group label {
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: #475569;
+}
+
+.form-group input {
+  padding: 12px 15px;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  font-size: 0.95rem;
+  outline: none;
+  transition: border-color 0.2s;
+  background-color: white;
+  color: #333;
+}
+
+.form-group input:focus {
+  border-color: #f05a28;
+}
+
+.login-btn {
+  background-color: #f05a28;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  padding: 12px;
+  font-size: 1rem;
+  font-weight: 600;
+  cursor: pointer;
+  margin-top: 10px;
+  transition: background-color 0.2s;
+}
+
+.login-btn:hover {
+  background-color: #e04a18;
+}
