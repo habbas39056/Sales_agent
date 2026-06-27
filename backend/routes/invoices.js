@@ -2,19 +2,30 @@ const express = require('express');
 const router = express.Router();
 const db = require('../db');
 
-// Get all invoices with linked client and project info
+// Get all invoices with linked client and project info (filtered for non-admins)
 router.get('/', async (req, res) => {
   try {
-    const query = `
+    const { user_id, role } = req.query;
+
+    let query = `
       SELECT i.*, 
              c.full_name as client_name, 
              p.title as project_title
       FROM invoices i
       JOIN clients c ON i.client_id = c.id
       LEFT JOIN projects p ON i.project_id = p.id
-      ORDER BY i.created_at DESC
     `;
-    const [rows] = await db.query(query);
+    const params = [];
+
+    // Filter for non-admin roles
+    if (user_id && role && role !== 'Admin') {
+      query += ` WHERE (i.created_by = ? OR i.agent_id = ?)`;
+      params.push(user_id, user_id);
+    }
+
+    query += ` ORDER BY i.created_at DESC`;
+    
+    const [rows] = await db.query(query, params);
     res.json(rows);
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -51,7 +62,7 @@ router.get('/:id', async (req, res) => {
 
 // Create a new invoice with line items
 router.post('/', async (req, res) => {
-  const { invoice_number, client_id, project_id, agent_id, commission_amount, issue_date, due_date, terms_and_conditions, items, discount, bill_from_name, bill_from_address } = req.body;
+  const { invoice_number, client_id, project_id, agent_id, commission_amount, issue_date, due_date, terms_and_conditions, items, discount, bill_from_name, bill_from_address, created_by } = req.body;
   
   if (!client_id || !issue_date || !due_date || !items || items.length === 0) {
     return res.status(400).json({ error: 'Missing required fields or items' });
@@ -73,8 +84,8 @@ router.post('/', async (req, res) => {
     
     // Create Invoice
     const [invoiceResult] = await connection.query(
-      'INSERT INTO invoices (invoice_number, amount, balance, client_id, project_id, agent_id, commission_amount, issue_date, due_date, terms_and_conditions, bill_from_name, bill_from_address) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-      [finalInvoiceNumber, totalAmount, totalAmount, client_id, project_id || null, agent_id || null, commission_amount || 0, issue_date, due_date, terms_and_conditions, bill_from_name || 'Adwise Labs', bill_from_address || '']
+      'INSERT INTO invoices (invoice_number, amount, balance, client_id, project_id, agent_id, commission_amount, issue_date, due_date, terms_and_conditions, bill_from_name, bill_from_address, created_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+      [finalInvoiceNumber, totalAmount, totalAmount, client_id, project_id || null, agent_id || null, commission_amount || 0, issue_date, due_date, terms_and_conditions, bill_from_name || 'Adwise Labs', bill_from_address || '', created_by || null]
     );
     const invoiceId = invoiceResult.insertId;
 
@@ -260,6 +271,38 @@ router.put('/:id', async (req, res) => {
   } catch (error) {
     await connection.rollback();
     res.status(500).json({ error: error.message });
+  } finally {
+    connection.release();
+  }
+});
+
+// Delete an invoice
+router.delete('/:id', async (req, res) => {
+  const invoiceId = req.params.id;
+  const connection = await db.getConnection();
+  try {
+    await connection.beginTransaction();
+
+    // Delete related items and payments
+    await connection.query('DELETE FROM invoice_items WHERE invoice_id = ?', [invoiceId]);
+    await connection.query('DELETE FROM invoice_payments WHERE invoice_id = ?', [invoiceId]);
+    
+    // Delete the invoice itself
+    const [result] = await connection.query('DELETE FROM invoices WHERE id = ?', [invoiceId]);
+    
+    if (result.affectedRows === 0) {
+      throw new Error('Invoice not found');
+    }
+
+    await connection.commit();
+    res.json({ message: 'Invoice deleted successfully' });
+  } catch (error) {
+    await connection.rollback();
+    if (error.message === 'Invoice not found') {
+      res.status(404).json({ error: error.message });
+    } else {
+      res.status(500).json({ error: error.message });
+    }
   } finally {
     connection.release();
   }

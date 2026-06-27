@@ -32,9 +32,16 @@ export default function InvoiceManagement() {
 
   const fetchData = async () => {
     try {
+      const userStr = localStorage.getItem('user');
+      const user = userStr ? JSON.parse(userStr) : null;
+      let queryParams = '';
+      if (user) {
+        queryParams = `?user_id=${user.id}&role=${encodeURIComponent(user.role)}`;
+      }
+
       const [invRes, cliRes, projRes, prodRes] = await Promise.all([
-        axios.get('/api/invoices'),
-        axios.get('/api/clients'),
+        axios.get(`/api/invoices${queryParams}`),
+        axios.get(`/api/clients${queryParams}`),
         axios.get('/api/projects'),
         axios.get('/api/products')
       ]);
@@ -84,6 +91,18 @@ export default function InvoiceManagement() {
     } catch (error) {
       console.error('Failed to record payment:', error);
       alert(error.response?.data?.error || 'Error recording payment.');
+    }
+  };
+
+  const handleDeleteInvoice = async (id) => {
+    if (window.confirm("Are you sure you want to delete this invoice? This action cannot be undone.")) {
+      try {
+        await axios.delete(`/api/invoices/${id}`);
+        fetchData();
+      } catch (error) {
+        console.error('Failed to delete invoice:', error);
+        alert(error.response?.data?.error || 'Failed to delete invoice');
+      }
     }
   };
 
@@ -152,7 +171,7 @@ export default function InvoiceManagement() {
                     <div className="action-buttons">
                       <button className="btn-icon view-btn" onClick={() => openPreview(inv.id)} title="Preview Invoice"><Eye size={18} /></button>
                       <button className="btn-icon edit-btn" onClick={() => navigate(`/invoices/edit/${inv.id}`)} title="Edit Invoice"><Edit size={18} /></button>
-                      <button className="btn-icon delete-btn" onClick={() => alert("Delete not implemented yet")} title="Delete Invoice"><Trash2 size={18} /></button>
+                      <button className="btn-icon delete-btn" onClick={() => handleDeleteInvoice(inv.id)} title="Delete Invoice"><Trash2 size={18} /></button>
                     </div>
                   </td>
                 </tr>

@@ -13,7 +13,14 @@ export default function Commissions() {
 
   const fetchCommissions = async () => {
     try {
-      const res = await axios.get('/api/commissions');
+      const userStr = localStorage.getItem('user');
+      const user = userStr ? JSON.parse(userStr) : null;
+      let url = '/api/commissions';
+      if (user) {
+        url += `?user_id=${user.id}&role=${encodeURIComponent(user.role)}`;
+      }
+      
+      const res = await axios.get(url);
       setCommissions(res.data);
       setLoading(false);
     } catch (error) {

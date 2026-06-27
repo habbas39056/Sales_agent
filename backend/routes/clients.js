@@ -3,11 +3,20 @@ const router = express.Router();
 const db = require('../db');
 const bcrypt = require('bcrypt');
 
-// Get all clients
+// Get all clients (or filtered by creator for non-admins)
 router.get('/', async (req, res) => {
   try {
-    const [rows] = await db.query('SELECT * FROM clients ORDER BY created_at DESC');
-    res.json(rows);
+    const { user_id, role } = req.query;
+    
+    // If role is provided and NOT admin, filter by created_by
+    if (user_id && role && role !== 'Admin') {
+      const [rows] = await db.query('SELECT * FROM clients WHERE created_by = ? ORDER BY created_at DESC', [user_id]);
+      res.json(rows);
+    } else {
+      // Admins see all clients
+      const [rows] = await db.query('SELECT * FROM clients ORDER BY created_at DESC');
+      res.json(rows);
+    }
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
@@ -17,7 +26,7 @@ router.get('/', async (req, res) => {
 router.post('/', async (req, res) => {
   const { 
     full_name, business_name, whatsapp_number, email, physical_address, profile_image_url,
-    password
+    password, created_by
   } = req.body;
 
   if (!full_name || !email || !password) {
@@ -39,8 +48,8 @@ router.post('/', async (req, res) => {
 
     // 2. Create Client Profile linked to User Account
     const [clientResult] = await connection.query(
-      'INSERT INTO clients (full_name, business_name, whatsapp_number, email, physical_address, profile_image_url, user_id) VALUES (?, ?, ?, ?, ?, ?, ?)',
-      [full_name, business_name, whatsapp_number, email, physical_address, profile_image_url, userId]
+      'INSERT INTO clients (full_name, business_name, whatsapp_number, email, physical_address, profile_image_url, user_id, created_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+      [full_name, business_name, whatsapp_number, email, physical_address, profile_image_url, userId, created_by || null]
     );
     const clientId = clientResult.insertId;
 

@@ -14,6 +14,7 @@ import ClientPortal from './pages/ClientPortal';
 import PmPortal from './pages/PmPortal';
 import SalesPortal from './pages/SalesPortal';
 import ProductionPortal from './pages/ProductionPortal';
+import EmployeePortal from './pages/EmployeePortal';
 import RequestRevision from './pages/RequestRevision';
 import TeamManagement from './pages/TeamManagement';
 import Commissions from './pages/Commissions';
@@ -37,31 +38,78 @@ function AppContent() {
   const isClientPortal = location.pathname.startsWith('/client-portal');
   const showSidebar = !isLoginPage && !isClientPortal;
 
+  const userStr = localStorage.getItem('user');
+  const user = userStr ? JSON.parse(userStr) : null;
+  const originalAdminStr = localStorage.getItem('originalAdminUser');
+
   const handleLogout = () => {
     localStorage.removeItem('user');
+    localStorage.removeItem('originalAdminUser');
     navigate('/');
   };
 
+  const handleExitImpersonation = () => {
+    if (originalAdminStr) {
+      localStorage.setItem('user', originalAdminStr);
+      localStorage.removeItem('originalAdminUser');
+      window.location.href = '/team';
+    }
+  };
+
   return (
-    <div className="app-container">
-      {showSidebar && (
-        <aside className="sidebar">
+    <div className="app-container" style={{ display: 'flex', flexDirection: 'column', height: '100vh' }}>
+      {originalAdminStr && (
+        <div style={{ background: '#ef4444', color: '#fff', padding: '0.75rem', textAlign: 'center', fontSize: '0.9rem', fontWeight: 'bold', display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '1rem', zIndex: 9999 }}>
+          You are currently viewing the platform as {user?.name} ({user?.role}).
+          <button onClick={handleExitImpersonation} style={{ background: '#fff', color: '#ef4444', border: 'none', padding: '0.25rem 0.75rem', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold', fontSize: '0.8rem' }}>
+            Exit Impersonation
+          </button>
+        </div>
+      )}
+      <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
+        {showSidebar && (
+          <aside className="sidebar">
           <div className="sidebar-brand" style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', padding: '2rem 1.5rem 1rem 1.5rem' }}>
             <img src="/logo.png" alt="Adwise Labs Logo" style={{ width: '100%', maxWidth: '240px', height: 'auto', display: 'block', margin: '0 auto' }} />
           </div>
           
           <div className="sidebar-menu-title">Main Menu</div>
           <ul className="nav-links">
-            <li><Link to="/dashboard" className={location.pathname === '/dashboard' ? 'active' : ''}><LayoutDashboard size={20} /> Dashboard</Link></li>
-            <li><Link to="/clients" className={`sidebar-link ${location.pathname === '/clients' ? 'active' : ''}`}><Users size={20} /> Client Management</Link></li>
-            <li><Link to="/team" className={`sidebar-link ${location.pathname === '/team' ? 'active' : ''}`}><Shield size={20} /> Team Management</Link></li>
-            <li><Link to="/invoices" className={`sidebar-link ${location.pathname === '/invoices' ? 'active' : ''}`}><FileText size={20} /> Invoice Management</Link></li>
-            <li><Link to="/projects" className={`sidebar-link ${location.pathname === '/projects' ? 'active' : ''}`}><PlusCircle size={20} /> Project Creation</Link></li>
+            {(!user || user.role === 'Admin' || (user.modules_access && user.modules_access.includes('DASHBOARD'))) && (
+              <li><Link to="/dashboard" className={location.pathname === '/dashboard' ? 'active' : ''}><LayoutDashboard size={20} /> Dashboard</Link></li>
+            )}
+            
+            {(!user || user.role === 'Admin' || (user.modules_access && user.modules_access.includes('CLIENTS'))) && (
+              <li><Link to="/clients" className={`sidebar-link ${location.pathname === '/clients' ? 'active' : ''}`}><Users size={20} /> Client Management</Link></li>
+            )}
+            
+            {(!user || user.role === 'Admin' || (user.modules_access && user.modules_access.includes('STAFF MANAGEMENT'))) && (
+              <li><Link to="/team" className={`sidebar-link ${location.pathname === '/team' ? 'active' : ''}`}><Shield size={20} /> Team Management</Link></li>
+            )}
+            
+            {(!user || user.role === 'Admin' || (user.modules_access && user.modules_access.includes('INVOICES'))) && (
+              <li><Link to="/invoices" className={`sidebar-link ${location.pathname === '/invoices' ? 'active' : ''}`}><FileText size={20} /> Invoice Management</Link></li>
+            )}
+            
+            {(!user || user.role === 'Admin' || (user.modules_access && user.modules_access.includes('PROJECTS'))) && (
+              <li><Link to="/projects" className={`sidebar-link ${location.pathname === '/projects' ? 'active' : ''}`}><PlusCircle size={20} /> Project Creation</Link></li>
+            )}
 
-            <li><Link to="/deadlines" className={location.pathname.startsWith('/deadlines') ? 'active' : ''}><Clock size={20} /> Deadline Workflow</Link></li>
-            <li><Link to="/expenses" className={`sidebar-link ${location.pathname === '/expenses' ? 'active' : ''}`}><DollarSign size={20} /> Expenses</Link></li>
-            <li><Link to="/commissions" className={location.pathname.startsWith('/commissions') ? 'active' : ''}><DollarSign size={20} /> Commissions</Link></li>
-            <li><Link to="/reports" className={location.pathname.startsWith('/reports') ? 'active' : ''}><FileText size={20} /> System Reports</Link></li>
+            {(!user || user.role === 'Admin' || (user.modules_access && user.modules_access.includes('PROJECTS'))) && (
+              <li><Link to="/deadlines" className={location.pathname.startsWith('/deadlines') ? 'active' : ''}><Clock size={20} /> Deadline Workflow</Link></li>
+            )}
+            
+            {(!user || user.role === 'Admin' || (user.modules_access && user.modules_access.includes('CASHBOOK'))) && (
+              <li><Link to="/expenses" className={`sidebar-link ${location.pathname === '/expenses' ? 'active' : ''}`}><DollarSign size={20} /> Expenses</Link></li>
+            )}
+            
+            {(!user || user.role === 'Admin' || (user.modules_access && user.modules_access.includes('COMMISSIONS'))) && (
+              <li><Link to="/commissions" className={location.pathname.startsWith('/commissions') ? 'active' : ''}><DollarSign size={20} /> Commissions</Link></li>
+            )}
+            
+            {(!user || user.role === 'Admin' || (user.modules_access && user.modules_access.includes('REPORTS'))) && (
+              <li><Link to="/reports" className={location.pathname.startsWith('/reports') ? 'active' : ''}><FileText size={20} /> System Reports</Link></li>
+            )}
           </ul>
 
           <div className="sidebar-footer" style={{ marginTop: 'auto', padding: '1.5rem', borderTop: '1px solid var(--border-color)' }}>
@@ -103,11 +151,13 @@ function AppContent() {
             <Route path="/pm" element={<ProtectedRoute><PmPortal /></ProtectedRoute>} />
             <Route path="/sales" element={<ProtectedRoute><SalesPortal /></ProtectedRoute>} />
             <Route path="/production" element={<ProtectedRoute><ProductionPortal /></ProtectedRoute>} />
+            <Route path="/employee/:id" element={<ProtectedRoute><EmployeePortal /></ProtectedRoute>} />
             <Route path="/expenses" element={<ProtectedRoute><Expenses /></ProtectedRoute>} />
             <Route path="/commissions" element={<ProtectedRoute><Commissions /></ProtectedRoute>} />
             <Route path="/reports" element={<ProtectedRoute><Reports /></ProtectedRoute>} />
           </Routes>
         </main>
+      </div>
       </div>
     </div>
   );

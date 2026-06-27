@@ -52,8 +52,20 @@ router.get('/specialists', async (req, res) => {
 // Get team members (excluding clients)
 router.get('/', async (req, res) => {
   try {
-    const [rows] = await db.query("SELECT id, name, email, role, created_at, commission_percentage FROM users WHERE role != 'Client' ORDER BY created_at DESC");
+    const [rows] = await db.query("SELECT id, name, username, email, role, modules_access, created_at, commission_percentage FROM users WHERE role != 'Client' ORDER BY created_at DESC");
     res.json(rows);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Get a specific user by ID
+router.get('/:id', async (req, res) => {
+  if (req.params.id === 'specialists') return; // Skip if it's the specialists route
+  try {
+    const [rows] = await db.query("SELECT id, name, username, email, role, modules_access, created_at, commission_percentage FROM users WHERE id = ?", [req.params.id]);
+    if (rows.length === 0) return res.status(404).json({ error: 'User not found' });
+    res.json(rows[0]);
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
@@ -61,24 +73,74 @@ router.get('/', async (req, res) => {
 
 // Create a team member
 router.post('/', async (req, res) => {
-  const { name, email, password, role, commission_percentage } = req.body;
+  const { name, username, email, password, role, commission_percentage, modules_access } = req.body;
   if (!name || !email || !password || !role) {
-    return res.status(400).json({ error: 'All fields are required' });
+    return res.status(400).json({ error: 'Name, email, password and role are required' });
   }
   const commPct = commission_percentage || 0.00;
+  const modulesAccessJson = modules_access ? JSON.stringify(modules_access) : null;
+  
   try {
     const saltRounds = 10;
     const password_hash = await bcrypt.hash(password, saltRounds);
     
     const [result] = await db.query(
-      'INSERT INTO users (name, email, password_hash, role, commission_percentage) VALUES (?, ?, ?, ?, ?)',
-      [name, email, password_hash, role, commPct]
+      'INSERT INTO users (name, username, email, password_hash, role, commission_percentage, modules_access) VALUES (?, ?, ?, ?, ?, ?, ?)',
+      [name, username || null, email, password_hash, role, commPct, modulesAccessJson]
     );
-    res.status(201).json({ id: result.insertId, name, email, role });
+    res.status(201).json({ id: result.insertId, name, username, email, role, modules_access });
   } catch (error) {
     if (error.code === 'ER_DUP_ENTRY') {
+      if (error.message.includes('username')) {
+        return res.status(409).json({ error: 'Username already exists' });
+      }
       return res.status(409).json({ error: 'Email already exists' });
     }
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Update a team member
+router.put('/:id', async (req, res) => {
+  const userId = req.params.id;
+  const { name, username, email, password, role, commission_percentage, modules_access } = req.body;
+  if (!name || !email || !role) {
+    return res.status(400).json({ error: 'Name, email, and role are required' });
+  }
+  const commPct = commission_percentage || 0.00;
+  const modulesAccessJson = modules_access ? JSON.stringify(modules_access) : null;
+  
+  try {
+    if (password) {
+      const saltRounds = 10;
+      const password_hash = await bcrypt.hash(password, saltRounds);
+      await db.query(
+        'UPDATE users SET name = ?, username = ?, email = ?, password_hash = ?, role = ?, commission_percentage = ?, modules_access = ? WHERE id = ?',
+        [name, username || null, email, password_hash, role, commPct, modulesAccessJson, userId]
+      );
+    } else {
+      await db.query(
+        'UPDATE users SET name = ?, username = ?, email = ?, role = ?, commission_percentage = ?, modules_access = ? WHERE id = ?',
+        [name, username || null, email, role, commPct, modulesAccessJson, userId]
+      );
+    }
+    res.json({ message: 'User updated successfully' });
+  } catch (error) {
+    if (error.code === 'ER_DUP_ENTRY') {
+      if (error.message.includes('username')) return res.status(409).json({ error: 'Username already exists' });
+      return res.status(409).json({ error: 'Email already exists' });
+    }
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Delete a team member
+router.delete('/:id', async (req, res) => {
+  const userId = req.params.id;
+  try {
+    await db.query('DELETE FROM users WHERE id = ?', [userId]);
+    res.json({ message: 'User deleted successfully' });
+  } catch (error) {
     res.status(500).json({ error: error.message });
   }
 });

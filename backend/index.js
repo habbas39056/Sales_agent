@@ -27,6 +27,7 @@ app.use('/api/commissions', require('./routes/commissions'));
 app.use('/api/reports', require('./routes/reports'));
 app.use('/api/expenses', require('./routes/expenses'));
 app.use('/api/banks', require('./routes/banks'));
+app.use('/api/search', require('./routes/search'));
 
 // Serve static frontend files
 app.use(express.static(path.join(__dirname, '../frontend/dist')));

@@ -1,11 +1,51 @@
-import React from 'react';
-import { useLocation } from 'react-router-dom';
+import React, { useState, useEffect, useRef } from 'react';
+import { useLocation, useNavigate, Link } from 'react-router-dom';
 import { Bell, Search, User } from 'lucide-react';
 import axios from 'axios';
 import './Header.css';
 
 export default function Header() {
   const location = useLocation();
+  const navigate = useNavigate();
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchResults, setSearchResults] = useState(null);
+  const [showDropdown, setShowDropdown] = useState(false);
+  const searchRef = useRef(null);
+
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (searchRef.current && !searchRef.current.contains(event.target)) {
+        setShowDropdown(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  useEffect(() => {
+    if (!searchQuery.trim()) {
+      setSearchResults(null);
+      return;
+    }
+
+    const timer = setTimeout(async () => {
+      try {
+        const userStr = localStorage.getItem('user');
+        const user = userStr ? JSON.parse(userStr) : null;
+        let url = `/api/search?q=${encodeURIComponent(searchQuery)}`;
+        if (user) {
+          url += `&user_id=${user.id}&role=${encodeURIComponent(user.role)}`;
+        }
+        const res = await axios.get(url);
+        setSearchResults(res.data);
+        setShowDropdown(true);
+      } catch (e) {
+        console.error('Search error:', e);
+      }
+    }, 300);
+
+    return () => clearTimeout(timer);
+  }, [searchQuery]);
 
   let title = '';
   let subtitle = '';
@@ -42,9 +82,68 @@ export default function Header() {
       </div>
 
       <div className="header-right" style={{ display: 'flex', alignItems: 'center', gap: '1.5rem' }}>
-        <div className="header-search">
+        <div className="header-search" ref={searchRef} style={{ position: 'relative' }}>
           <Search size={18} className="search-icon" />
-          <input type="text" placeholder="Search everything..." />
+          <input 
+            type="text" 
+            placeholder="Search everything..." 
+            value={searchQuery}
+            onChange={(e) => {
+              setSearchQuery(e.target.value);
+              setShowDropdown(true);
+            }}
+            onFocus={() => searchQuery.trim() && setShowDropdown(true)}
+          />
+          
+          {showDropdown && searchResults && (
+            <div className="search-dropdown" style={{
+              position: 'absolute', top: '100%', left: 0, right: 0, marginTop: '0.5rem',
+              backgroundColor: 'white', borderRadius: '8px', boxShadow: '0 4px 15px rgba(0,0,0,0.1)',
+              border: '1px solid var(--border-color)', zIndex: 1000, maxHeight: '400px', overflowY: 'auto'
+            }}>
+              {Object.keys(searchResults).every(k => searchResults[k].length === 0) ? (
+                <div style={{ padding: '1rem', textAlign: 'center', color: 'var(--text-secondary)' }}>
+                  No results found.
+                </div>
+              ) : (
+                <div style={{ padding: '0.5rem 0' }}>
+                  {searchResults.clients && searchResults.clients.length > 0 && (
+                    <div className="search-section">
+                      <div style={{ padding: '0.25rem 1rem', fontSize: '0.75rem', fontWeight: 'bold', color: 'var(--text-secondary)', textTransform: 'uppercase' }}>Clients</div>
+                      {searchResults.clients.map(c => (
+                        <Link to="/clients" key={c.id} style={{ display: 'block', padding: '0.5rem 1rem', textDecoration: 'none', color: 'var(--text-primary)', borderBottom: '1px solid #f1f5f9' }} onClick={() => setShowDropdown(false)} onMouseOver={(e) => e.currentTarget.style.backgroundColor = '#f8fafc'} onMouseOut={(e) => e.currentTarget.style.backgroundColor = 'transparent'}>
+                          <div style={{ fontWeight: '500' }}>{c.full_name}</div>
+                          <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>{c.business_name} • {c.email}</div>
+                        </Link>
+                      ))}
+                    </div>
+                  )}
+                  {searchResults.invoices && searchResults.invoices.length > 0 && (
+                    <div className="search-section">
+                      <div style={{ padding: '0.25rem 1rem', fontSize: '0.75rem', fontWeight: 'bold', color: 'var(--text-secondary)', textTransform: 'uppercase', marginTop: '0.5rem' }}>Invoices</div>
+                      {searchResults.invoices.map(i => (
+                        <Link to="/invoices" key={i.id} style={{ display: 'flex', justifyContent: 'space-between', padding: '0.5rem 1rem', textDecoration: 'none', color: 'var(--text-primary)', borderBottom: '1px solid #f1f5f9' }} onClick={() => setShowDropdown(false)} onMouseOver={(e) => e.currentTarget.style.backgroundColor = '#f8fafc'} onMouseOut={(e) => e.currentTarget.style.backgroundColor = 'transparent'}>
+                          <div style={{ fontWeight: '500' }}>{i.invoice_number}</div>
+                          <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>{i.client_name}</div>
+                        </Link>
+                      ))}
+                    </div>
+                  )}
+                  {searchResults.projects && searchResults.projects.length > 0 && (
+                    <div className="search-section">
+                      <div style={{ padding: '0.25rem 1rem', fontSize: '0.75rem', fontWeight: 'bold', color: 'var(--text-secondary)', textTransform: 'uppercase', marginTop: '0.5rem' }}>Projects</div>
+                      {searchResults.projects.map(p => (
+                        <Link to="/projects" key={p.id} style={{ display: 'block', padding: '0.5rem 1rem', textDecoration: 'none', color: 'var(--text-primary)', borderBottom: '1px solid #f1f5f9' }} onClick={() => setShowDropdown(false)} onMouseOver={(e) => e.currentTarget.style.backgroundColor = '#f8fafc'} onMouseOut={(e) => e.currentTarget.style.backgroundColor = 'transparent'}>
+                          <div style={{ fontWeight: '500' }}>{p.title}</div>
+                          <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>{p.client_name}</div>
+                        </Link>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
         </div>
         
         <div className="header-actions">

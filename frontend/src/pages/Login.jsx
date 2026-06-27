@@ -32,6 +32,22 @@ export default function Login() {
         navigate('/sales');
       } else if (user.role === 'Production') {
         navigate('/production');
+      } else if (user.role === 'Employee') {
+        if (!user.modules_access || user.modules_access.length === 0) {
+          navigate('/dashboard');
+        } else if (user.modules_access.includes('DASHBOARD')) {
+          navigate('/dashboard');
+        } else if (user.modules_access.includes('CLIENTS')) {
+          navigate('/clients');
+        } else if (user.modules_access.includes('PROJECTS')) {
+          navigate('/projects');
+        } else if (user.modules_access.includes('INVOICES')) {
+          navigate('/invoices');
+        } else if (user.modules_access.includes('CASHBOOK')) {
+          navigate('/expenses');
+        } else {
+          navigate('/dashboard');
+        }
       } else {
         navigate('/dashboard'); // Admin or default
       }

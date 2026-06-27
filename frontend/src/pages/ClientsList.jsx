@@ -28,7 +28,15 @@ export default function ClientsList() {
 
   const fetchClients = async () => {
     try {
-      const res = await axios.get('/api/clients');
+      const userStr = localStorage.getItem('user');
+      const user = userStr ? JSON.parse(userStr) : null;
+      
+      let url = '/api/clients';
+      if (user) {
+        url += `?user_id=${user.id}&role=${encodeURIComponent(user.role)}`;
+      }
+
+      const res = await axios.get(url);
       setClients(res.data);
     } catch (error) {
       console.error('Failed to fetch clients:', error);
@@ -81,12 +89,20 @@ export default function ClientsList() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     try {
+      const userStr = localStorage.getItem('user');
+      const user = userStr ? JSON.parse(userStr) : null;
+
+      const payload = {
+        ...formData,
+        created_by: user ? user.id : null
+      };
+
       if (editingClient) {
         // Edit Mode
-        await axios.put(`/api/clients/${editingClient.id}`, formData);
+        await axios.put(`/api/clients/${editingClient.id}`, payload);
       } else {
         // Add Mode
-        await axios.post('/api/clients', formData);
+        await axios.post('/api/clients', payload);
       }
       setIsModalOpen(false);
       setEditingClient(null);

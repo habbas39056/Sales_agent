@@ -5,7 +5,9 @@ const db = require('../db');
 // Get all agents and their aggregate commission data
 router.get('/', async (req, res) => {
   try {
-    const query = `
+    const { user_id, role } = req.query;
+    
+    let query = `
       SELECT 
         u.id, 
         u.name, 
@@ -17,10 +19,19 @@ router.get('/', async (req, res) => {
       FROM users u
       LEFT JOIN invoices i ON u.id = i.agent_id
       WHERE u.role != 'Client'
+    `;
+    const params = [];
+    
+    if (user_id && role && role !== 'Admin') {
+      query += ` AND u.id = ? `;
+      params.push(user_id);
+    }
+    
+    query += `
       GROUP BY u.id
       ORDER BY total_earned DESC, u.name ASC
     `;
-    const [rows] = await db.query(query);
+    const [rows] = await db.query(query, params);
     res.json(rows);
   } catch (error) {
     res.status(500).json({ error: error.message });

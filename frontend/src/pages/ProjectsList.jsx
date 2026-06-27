@@ -50,7 +50,13 @@ export default function ProjectsList() {
 
   const fetchProjects = async () => {
     try {
-      const res = await axios.get('/api/projects');
+      const userStr = localStorage.getItem('user');
+      const user = userStr ? JSON.parse(userStr) : null;
+      let url = '/api/projects';
+      if (user) {
+        url += `?user_id=${user.id}&role=${encodeURIComponent(user.role)}`;
+      }
+      const res = await axios.get(url);
       setProjects(res.data);
     } catch (error) {
       console.error('Failed to fetch projects', error);
@@ -59,7 +65,13 @@ export default function ProjectsList() {
 
   const fetchClients = async () => {
     try {
-      const res = await axios.get('/api/clients');
+      const userStr = localStorage.getItem('user');
+      const user = userStr ? JSON.parse(userStr) : null;
+      let url = '/api/clients';
+      if (user) {
+        url += `?user_id=${user.id}&role=${encodeURIComponent(user.role)}`;
+      }
+      const res = await axios.get(url);
       setClients(res.data);
     } catch (error) {
       console.error('Failed to fetch clients', error);
@@ -68,7 +80,13 @@ export default function ProjectsList() {
 
   const fetchInvoices = async () => {
     try {
-      const res = await axios.get('/api/invoices');
+      const userStr = localStorage.getItem('user');
+      const user = userStr ? JSON.parse(userStr) : null;
+      let url = '/api/invoices';
+      if (user) {
+        url += `?user_id=${user.id}&role=${encodeURIComponent(user.role)}`;
+      }
+      const res = await axios.get(url);
       setInvoices(res.data);
     } catch (error) {
       console.error('Failed to fetch invoices', error);

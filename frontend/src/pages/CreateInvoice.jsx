@@ -47,8 +47,15 @@ export default function CreateInvoice() {
 
   const fetchData = async () => {
     try {
+      const userStr = localStorage.getItem('user');
+      const user = userStr ? JSON.parse(userStr) : null;
+      let queryParams = '';
+      if (user) {
+        queryParams = `?user_id=${user.id}&role=${encodeURIComponent(user.role)}`;
+      }
+
       const [cliRes, projRes, prodRes, agentRes, banksRes] = await Promise.all([
-        axios.get('/api/clients'),
+        axios.get(`/api/clients${queryParams}`),
         axios.get('/api/projects'),
         axios.get('/api/products'),
         axios.get('/api/users'),
@@ -147,9 +154,12 @@ export default function CreateInvoice() {
       return;
     }
     const commission_amount = calculateCommission();
+    const userStr = localStorage.getItem('user');
+    const user = userStr ? JSON.parse(userStr) : null;
     const dataToSend = {
       ...formData,
-      commission_amount
+      commission_amount,
+      created_by: user ? user.id : null
     };
     try {
       if (id) {
