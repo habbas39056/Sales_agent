@@ -17,17 +17,19 @@ app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', message: 'Agency Management System API is running' });
 });
 
+const authMiddleware = require('./middleware/auth');
+
 // Import and use routes
-app.use('/api/clients', require('./routes/clients'));
-app.use('/api/projects', require('./routes/projects'));
-app.use('/api/invoices', require('./routes/invoices'));
-app.use('/api/users', require('./routes/users'));
-app.use('/api/products', require('./routes/products'));
-app.use('/api/commissions', require('./routes/commissions'));
-app.use('/api/reports', require('./routes/reports'));
-app.use('/api/expenses', require('./routes/expenses'));
-app.use('/api/banks', require('./routes/banks'));
-app.use('/api/search', require('./routes/search'));
+app.use('/api/users', require('./routes/users')); // Users handles its own auth for /login
+app.use('/api/clients', authMiddleware, require('./routes/clients'));
+app.use('/api/projects', authMiddleware, require('./routes/projects'));
+app.use('/api/invoices', authMiddleware, require('./routes/invoices'));
+app.use('/api/products', authMiddleware, require('./routes/products'));
+app.use('/api/commissions', authMiddleware, require('./routes/commissions'));
+app.use('/api/reports', authMiddleware, require('./routes/reports'));
+app.use('/api/expenses', authMiddleware, require('./routes/expenses'));
+app.use('/api/banks', authMiddleware, require('./routes/banks'));
+app.use('/api/search', authMiddleware, require('./routes/search'));
 
 // Serve static frontend files
 app.use(express.static(path.join(__dirname, '../frontend/dist')));

@@ -2,6 +2,9 @@ const express = require('express');
 const router = express.Router();
 const db = require('../db');
 const bcrypt = require('bcrypt');
+const jwt = require('jsonwebtoken');
+const authMiddleware = require('../middleware/auth');
+const JWT_SECRET = process.env.JWT_SECRET || 'adwise_super_secret_key_2026';
 
 router.post('/login', async (req, res) => {
   const { email, password } = req.body;
@@ -30,7 +33,14 @@ router.post('/login', async (req, res) => {
       console.log(`Login SUCCESS for ${email}`);
       // Return user info (excluding password)
       const { password_hash, ...userInfo } = user;
-      res.json({ message: 'Login successful', user: userInfo });
+      
+      const token = jwt.sign(
+        { id: user.id, role: user.role, email: user.email }, 
+        JWT_SECRET, 
+        { expiresIn: '24h' }
+      );
+      
+      res.json({ message: 'Login successful', user: userInfo, token });
     } else {
       console.log(`Login failed: Password hash mismatch for ${email}`);
       res.status(401).json({ error: 'Invalid email or password' });
@@ -40,7 +50,7 @@ router.post('/login', async (req, res) => {
   }
 });
 
-router.get('/specialists', async (req, res) => {
+router.get('/specialists', authMiddleware, async (req, res) => {
   try {
     // Assuming specialists are users with a specific role, or just all users for now
     const [rows] = await db.query('SELECT id, name as full_name, email, role FROM users');
@@ -50,7 +60,7 @@ router.get('/specialists', async (req, res) => {
   }
 });
 // Get team members (excluding clients)
-router.get('/', async (req, res) => {
+router.get('/', authMiddleware, async (req, res) => {
   try {
     const [rows] = await db.query("SELECT id, name, username, email, role, modules_access, created_at, commission_percentage FROM users WHERE role != 'Client' ORDER BY created_at DESC");
     res.json(rows);
@@ -60,7 +70,7 @@ router.get('/', async (req, res) => {
 });
 
 // Get a specific user by ID
-router.get('/:id', async (req, res) => {
+router.get('/:id', authMiddleware, async (req, res) => {
   if (req.params.id === 'specialists') return; // Skip if it's the specialists route
   try {
     const [rows] = await db.query("SELECT id, name, username, email, role, modules_access, created_at, commission_percentage FROM users WHERE id = ?", [req.params.id]);
@@ -72,7 +82,7 @@ router.get('/:id', async (req, res) => {
 });
 
 // Create a team member
-router.post('/', async (req, res) => {
+router.post('/', authMiddleware, async (req, res) => {
   const { name, username, email, password, role, commission_percentage, modules_access } = req.body;
   if (!name || !email || !password || !role) {
     return res.status(400).json({ error: 'Name, email, password and role are required' });
@@ -101,7 +111,7 @@ router.post('/', async (req, res) => {
 });
 
 // Update a team member
-router.put('/:id', async (req, res) => {
+router.put('/:id', authMiddleware, async (req, res) => {
   const userId = req.params.id;
   const { name, username, email, password, role, commission_percentage, modules_access } = req.body;
   if (!name || !email || !role) {
@@ -135,7 +145,7 @@ router.put('/:id', async (req, res) => {
 });
 
 // Delete a team member
-router.delete('/:id', async (req, res) => {
+router.delete('/:id', authMiddleware, async (req, res) => {
   const userId = req.params.id;
   try {
     await db.query('DELETE FROM users WHERE id = ?', [userId]);

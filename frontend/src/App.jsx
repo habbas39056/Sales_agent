@@ -26,7 +26,8 @@ import './App.css';
 
 const ProtectedRoute = ({ children }) => {
   const userStr = localStorage.getItem('user');
-  if (!userStr) {
+  const token = localStorage.getItem('token');
+  if (!userStr || !token) {
     return <Navigate to="/" replace />;
   }
   return children;
@@ -44,6 +45,7 @@ function AppContent() {
 
   const handleLogout = () => {
     localStorage.removeItem('user');
+    localStorage.removeItem('token');
     localStorage.removeItem('originalAdminUser');
     navigate('/');
   };

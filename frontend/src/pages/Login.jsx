@@ -22,6 +22,9 @@ export default function Login() {
       // Save user info for portals to use
       const user = res.data.user;
       localStorage.setItem('user', JSON.stringify(user));
+      if (res.data.token) {
+        localStorage.setItem('token', res.data.token);
+      }
       
       // Role-based redirection
       if (user.role === 'Client') {
