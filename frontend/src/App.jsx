@@ -55,13 +55,29 @@ const ProtectedRoute = ({ children }) => {
 function AppContent() {
   const location = useLocation();
   const navigate = useNavigate();
-  const isLoginPage = location.pathname === '/';
-  const isClientPortal = location.pathname.startsWith('/client-portal');
-  const showSidebar = !isLoginPage && !isClientPortal;
-
+  
   const userStr = localStorage.getItem('user');
+  const token = localStorage.getItem('token');
   const user = userStr ? JSON.parse(userStr) : null;
   const originalAdminStr = localStorage.getItem('originalAdminUser');
+
+  let isAuthenticated = false;
+  if (userStr && token) {
+    try {
+      const payloadBase64 = token.split('.')[1];
+      const decodedJson = atob(payloadBase64);
+      const decoded = JSON.parse(decodedJson);
+      if (Date.now() < decoded.exp * 1000) {
+        isAuthenticated = true;
+      }
+    } catch (e) {
+      // invalid token
+    }
+  }
+
+  const isLoginPage = location.pathname === '/';
+  const isClientPortal = location.pathname.startsWith('/client-portal');
+  const showSidebar = isAuthenticated && !isLoginPage && !isClientPortal;
 
   const handleLogout = () => {
     localStorage.removeItem('user');
