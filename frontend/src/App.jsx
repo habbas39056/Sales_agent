@@ -27,9 +27,29 @@ import './App.css';
 const ProtectedRoute = ({ children }) => {
   const userStr = localStorage.getItem('user');
   const token = localStorage.getItem('token');
+  
   if (!userStr || !token) {
     return <Navigate to="/" replace />;
   }
+
+  try {
+    const payloadBase64 = token.split('.')[1];
+    const decodedJson = atob(payloadBase64);
+    const decoded = JSON.parse(decodedJson);
+    const exp = decoded.exp * 1000;
+    if (Date.now() >= exp) {
+      localStorage.removeItem('user');
+      localStorage.removeItem('token');
+      localStorage.removeItem('originalAdminUser');
+      return <Navigate to="/" replace />;
+    }
+  } catch (e) {
+    localStorage.removeItem('user');
+    localStorage.removeItem('token');
+    localStorage.removeItem('originalAdminUser');
+    return <Navigate to="/" replace />;
+  }
+
   return children;
 };
 function AppContent() {
