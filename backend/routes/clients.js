@@ -8,9 +8,14 @@ router.get('/', async (req, res) => {
   try {
     const { user_id, role } = req.query;
     
-    // If role is provided and NOT admin, filter by created_by
     if (user_id && role && role !== 'Admin') {
-      const [rows] = await db.query('SELECT * FROM clients WHERE created_by = ? ORDER BY created_at DESC', [user_id]);
+      const [rows] = await db.query(`
+        SELECT DISTINCT c.* 
+        FROM clients c
+        LEFT JOIN invoices i ON c.id = i.client_id
+        WHERE c.created_by = ? OR i.agent_id = ?
+        ORDER BY c.created_at DESC
+      `, [user_id, user_id]);
       res.json(rows);
     } else {
       // Admins see all clients

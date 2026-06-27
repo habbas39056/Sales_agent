@@ -17,11 +17,11 @@ router.get('/', async (req, res) => {
     const isNonAdmin = user_id && role && role !== 'Admin';
 
     // 1. Search Clients
-    let clientsQuery = `SELECT id, full_name, business_name, email FROM clients WHERE (full_name LIKE ? OR business_name LIKE ? OR email LIKE ?)`;
+    let clientsQuery = `SELECT DISTINCT c.id, c.full_name, c.business_name, c.email FROM clients c LEFT JOIN invoices i ON c.id = i.client_id WHERE (c.full_name LIKE ? OR c.business_name LIKE ? OR c.email LIKE ?)`;
     const clientsParams = [searchTerm, searchTerm, searchTerm];
     if (isNonAdmin) {
-      clientsQuery += ` AND created_by = ?`;
-      clientsParams.push(user_id);
+      clientsQuery += ` AND (c.created_by = ? OR i.agent_id = ?)`;
+      clientsParams.push(user_id, user_id);
     }
     clientsQuery += ` LIMIT 5`;
     const [clients] = await db.query(clientsQuery, clientsParams);
@@ -39,11 +39,11 @@ router.get('/', async (req, res) => {
     results.invoices = invoices;
 
     // 3. Search Projects
-    let projectsQuery = `SELECT p.id, p.title, c.full_name as client_name FROM projects p JOIN clients c ON p.client_id = c.id WHERE p.title LIKE ?`;
+    let projectsQuery = `SELECT DISTINCT p.id, p.title, c.full_name as client_name FROM projects p JOIN clients c ON p.client_id = c.id LEFT JOIN invoices i ON c.id = i.client_id WHERE p.title LIKE ?`;
     const projectsParams = [searchTerm];
     if (isNonAdmin) {
-      projectsQuery += ` AND c.created_by = ?`;
-      projectsParams.push(user_id);
+      projectsQuery += ` AND (c.created_by = ? OR i.agent_id = ?)`;
+      projectsParams.push(user_id, user_id);
     }
     projectsQuery += ` LIMIT 5`;
     const [projects] = await db.query(projectsQuery, projectsParams);
