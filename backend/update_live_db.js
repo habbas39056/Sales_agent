@@ -43,8 +43,8 @@ async function updateLiveDb() {
     console.error('\n❌ Migration failed:', error);
   } finally {
     connection.release();
-    process.exit(0);
   }
 }
 
-updateLiveDb();
+module.exports = updateLiveDb;
+
