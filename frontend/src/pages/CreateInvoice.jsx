@@ -206,7 +206,7 @@ export default function CreateInvoice() {
       <div className="invoice-editor-container" style={{ maxWidth: '1000px', margin: '0 auto' }}>
         
         {/* TOP TABS */}
-        <div className="invoice-editor-tabs">
+        <div className="invoice-editor-tabs print-hide">
           <div 
             className={`invoice-editor-tab ${activeTab === 'invoice' ? 'active' : ''}`}
             onClick={() => setActiveTab('invoice')}
@@ -230,7 +230,7 @@ export default function CreateInvoice() {
           {/* HEADER ACTIONS */}
           <div className="invoice-editor-header">
             <span className="invoice-badge-unpaid">UNPAID</span>
-            <div className="invoice-editor-actions">
+            <div className="invoice-editor-actions print-hide">
               <button type="button" className="btn-icon-outline" onClick={() => window.print()}>
                 <Printer size={16} />
               </button>
@@ -411,7 +411,7 @@ export default function CreateInvoice() {
                 <th style={{ width: '8%', textAlign: 'center' }}>QTY</th>
                 <th style={{ width: '15%', textAlign: 'center' }}>RATE</th>
                 <th style={{ width: '15%', textAlign: 'right' }}>AMOUNT</th>
-                <th style={{ width: '40px', textAlign: 'center' }}>
+                <th className="print-hide" style={{ width: '40px', textAlign: 'center' }}>
                   <button type="button" onClick={addItem} style={{ background: 'var(--accent-color)', color: 'white', border: 'none', borderRadius: '50%', width: '24px', height: '24px', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', margin: '0 auto' }}>
                     <Plus size={14} />
                   </button>
@@ -515,7 +515,7 @@ export default function CreateInvoice() {
                   </td>
                   <td style={{ textAlign: 'right', fontWeight: '800', color: '#0f172a' }}>PKR {(item.quantity * item.unit_price).toFixed(2)}
                   </td>
-                  <td style={{ textAlign: 'center' }}>
+                  <td className="print-hide" style={{ textAlign: 'center' }}>
                     <button type="button" onClick={() => removeItem(index)} style={{ background: 'none', border: 'none', color: '#cbd5e1', cursor: 'pointer' }}>
                       <Trash2 size={16} />
                     </button>
@@ -548,7 +548,13 @@ export default function CreateInvoice() {
               <div className="totals-divider"></div>
 
               <div className="totals-label">Total</div>
-              <div className="totals-value" style={{ color: 'var(--accent-color)' }}>PKR {calculateTotal().toFixed(2)}</div>
+              <div className="totals-value" style={{ color: 'var(--accent-color)' }}>PKR {invoiceTotal.toFixed(2)}</div>
+
+              <div className="totals-label" style={{ color: '#10b981' }}>Paid Amount</div>
+              <div className="totals-value" style={{ color: '#10b981' }}>PKR {totalPaid.toFixed(2)}</div>
+              
+              <div className="totals-label" style={{ color: '#ef4444' }}>Balance Due</div>
+              <div className="totals-value" style={{ color: '#ef4444' }}>PKR {remainingBalance.toFixed(2)}</div>
 
               <div className="agent-commission">
                 <label>
@@ -565,7 +571,7 @@ export default function CreateInvoice() {
             </div>
           </div>
 
-          <div className="bottom-actions">
+          <div className="bottom-actions print-hide">
             <button type="button" className="btn-cancel-text" onClick={() => navigate('/invoices')}>Cancel</button>
             <button type="submit" className="btn-purple" style={{ padding: '0.75rem 2rem' }}>Save Update</button>
           </div>
@@ -763,6 +769,96 @@ export default function CreateInvoice() {
           </div>
         </div>
       )}
+      {/* PRINT-ONLY INVOICE TEMPLATE */}
+      <div className="print-only-layout">
+        {(() => {
+          const selectedClient = clients.find(c => String(c.id) === String(formData.client_id)) || {};
+          let invoiceStatus = 'UNPAID';
+          if (totalPaid >= invoiceTotal && invoiceTotal > 0) invoiceStatus = 'PAID';
+          else if (formData.due_date && new Date(formData.due_date) < new Date() && totalPaid < invoiceTotal) invoiceStatus = 'OVERDUE';
+
+          return (
+            <div className={`invoice-document ${invoiceStatus === 'PAID' ? 'is-paid' : 'is-unpaid'}`} id="printable-invoice" style={{ padding: '2rem', fontFamily: 'Arial, sans-serif' }}>
+              
+              <div className="invoice-stamp">
+                {invoiceStatus}
+              </div>
+              
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '2rem' }}>
+                <div style={{ flex: 1 }}>
+                  <div style={{ backgroundColor: '#0f172a', padding: '1rem', borderRadius: '8px', display: 'inline-block', marginBottom: '2rem', WebkitPrintColorAdjust: 'exact', printColorAdjust: 'exact' }}>
+                    <img src="/Adwise Labs White Logo.png" alt="Adwise Labs Logo" style={{ maxWidth: '200px', display: 'block' }} />
+                  </div>
+                  <h2 style={{ fontSize: '1.2rem', marginBottom: '1.5rem' }}>Invoice {formData.invoice_number}</h2>
+                  
+                  <div style={{ fontSize: '0.9rem', lineHeight: '1.5' }}>
+                    <div style={{ fontWeight: 'bold', marginBottom: '0.25rem' }}>Invoice To,</div>
+                    <div>{selectedClient.full_name || 'Select Client'}</div>
+                    {selectedClient.business_name && <div>{selectedClient.business_name}</div>}
+                    {selectedClient.physical_address && <div style={{ maxWidth: '250px' }}>{selectedClient.physical_address}</div>}
+                    <div>{selectedClient.email || ''}</div>
+                  </div>
+                </div>
+                
+                <div style={{ flex: 1, textAlign: 'right', fontSize: '0.9rem', lineHeight: '1.5' }}>
+                  <div style={{ fontWeight: 'bold', marginBottom: '1rem' }}>Date: {formData.issue_date ? new Date(formData.issue_date).toLocaleDateString() : ''}</div>
+                  <div style={{ letterSpacing: '2px', marginBottom: '1rem' }}>******************************</div>
+                  
+                  <div style={{ fontWeight: 'bold' }}>Account Title: Adwise labs</div>
+                  <div style={{ fontWeight: 'bold' }}>Bank Al Falah</div>
+                  <div style={{ fontWeight: 'bold' }}>Account Number: 56395002519988</div>
+                  <div style={{ fontWeight: 'bold' }}>info@adwiselabs.com</div>
+                  <div style={{ fontWeight: 'bold' }}>www.adwiselabs.com</div>
+                </div>
+              </div>
+
+              <table className="invoice-table" style={{ border: '1px solid #000', marginBottom: '2rem', width: '100%', borderCollapse: 'collapse' }}>
+                <thead>
+                  <tr>
+                    <th style={{ border: '1px solid #000', padding: '0.75rem 1rem', textAlign: 'left', backgroundColor: 'transparent', color: '#000', fontWeight: 'bold' }}>Description</th>
+                    <th style={{ border: '1px solid #000', padding: '0.75rem 1rem', textAlign: 'center', backgroundColor: 'transparent', color: '#000', fontWeight: 'bold' }}>Qty</th>
+                    <th style={{ border: '1px solid #000', padding: '0.75rem 1rem', textAlign: 'center', backgroundColor: 'transparent', color: '#000', fontWeight: 'bold' }}>Rate</th>
+                    <th style={{ border: '1px solid #000', padding: '0.75rem 1rem', textAlign: 'right', backgroundColor: 'transparent', color: '#000', fontWeight: 'bold' }}>Amount</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {formData.items.map((item, idx) => (
+                    <tr key={idx}>
+                      <td style={{ border: '1px solid #000', padding: '0.75rem 1rem' }}>
+                        <div>{item.description}</div>
+                        {item.details && <div style={{ fontSize: '0.85rem', color: '#475569', marginTop: '0.25rem', whiteSpace: 'pre-wrap' }}>{item.details}</div>}
+                      </td>
+                      <td style={{ border: '1px solid #000', padding: '0.75rem 1rem', textAlign: 'center' }}>{item.quantity} {item.unit}</td>
+                      <td style={{ border: '1px solid #000', padding: '0.75rem 1rem', textAlign: 'center' }}>PKR {Number(item.unit_price).toFixed(2)}</td>
+                      <td style={{ border: '1px solid #000', padding: '0.75rem 1rem', textAlign: 'right' }}>PKR {(Number(item.quantity) * Number(item.unit_price)).toFixed(2)}</td>
+                    </tr>
+                  ))}
+                  <tr>
+                    <td colSpan="3" style={{ border: '1px solid #000', padding: '0.75rem 1rem', textAlign: 'right', fontWeight: 'bold' }}>Sub Total</td>
+                    <td style={{ border: '1px solid #000', padding: '0.75rem 1rem', textAlign: 'right', fontWeight: 'bold' }}>PKR {calculateTotal().toFixed(2)}</td>
+                  </tr>
+                  <tr>
+                    <td colSpan="3" style={{ border: '1px solid #000', padding: '0.75rem 1rem', textAlign: 'right', fontWeight: 'bold' }}>Total Paid</td>
+                    <td style={{ border: '1px solid #000', padding: '0.75rem 1rem', textAlign: 'right', fontWeight: 'bold' }}>PKR {totalPaid.toFixed(2)}</td>
+                  </tr>
+                  <tr>
+                    <td colSpan="3" style={{ border: '1px solid #000', padding: '0.75rem 1rem', textAlign: 'right', fontWeight: 'bold' }}>Total Amount Receivable</td>
+                    <td style={{ border: '1px solid #000', padding: '0.75rem 1rem', textAlign: 'right', fontWeight: 'bold' }}>PKR {remainingBalance.toFixed(2)}</td>
+                  </tr>
+                </tbody>
+              </table>
+
+              <div style={{ textAlign: 'center', color: '#0369a1', fontSize: '0.9rem', fontWeight: 'bold', lineHeight: '1.6', marginTop: '3rem' }}>
+                <div style={{ marginBottom: '0.5rem' }}>Prompt Payments are Appreciated!</div>
+                <div style={{ marginBottom: '0.5rem' }}>Thank You</div>
+                <div style={{ marginBottom: '0.5rem' }}>Accounts Department – Adwise Labs</div>
+                <div style={{ color: '#000', fontSize: '0.8rem' }}>ADWISE LABS | A-205/II Saba Ave, DHA Karachi Phase VIII Zone A, 76500</div>
+                <div style={{ color: '#000', fontSize: '0.8rem', fontWeight: 'normal' }}>Contact No. +1 (774) 674-1872 | +92 329 2371279 | Email: info@adwiselabs.com</div>
+              </div>
+            </div>
+          );
+        })()}
+      </div>
     </div>
   );
 }

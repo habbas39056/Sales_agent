@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { useNavigate } from 'react-router-dom';
 import { Search, Folder, Plus, X } from 'lucide-react';
+import Pagination from '../components/Pagination';
 import './ProjectsList.css';
 import './Modal.css';
 
@@ -14,6 +15,10 @@ export default function ProjectsList() {
   const [statusFilter, setStatusFilter] = useState('All Statuses');
   const [serviceFilter, setServiceFilter] = useState('All Services');
   const [isModalOpen, setIsModalOpen] = useState(false);
+  
+  // Pagination
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 15;
   
   const [formData, setFormData] = useState({
     title: '',
@@ -132,6 +137,8 @@ export default function ProjectsList() {
     return matchesSearch && matchesStatus && matchesService;
   });
 
+  const currentProjects = filteredProjects.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
+
   return (
     <div className="projects-container">
       <div className="projects-header">
@@ -148,13 +155,19 @@ export default function ProjectsList() {
             type="text" 
             placeholder="Search by title or client name..." 
             value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
+            onChange={(e) => {
+              setSearchTerm(e.target.value);
+              setCurrentPage(1);
+            }}
           />
         </div>
         <select 
           className="filter-select"
           value={statusFilter}
-          onChange={(e) => setStatusFilter(e.target.value)}
+          onChange={(e) => {
+            setStatusFilter(e.target.value);
+            setCurrentPage(1);
+          }}
         >
           <option value="All Statuses">All Statuses</option>
           {availableStatuses.map(s => <option key={s} value={s}>{s}</option>)}
@@ -162,7 +175,10 @@ export default function ProjectsList() {
         <select 
           className="filter-select"
           value={serviceFilter}
-          onChange={(e) => setServiceFilter(e.target.value)}
+          onChange={(e) => {
+            setServiceFilter(e.target.value);
+            setCurrentPage(1);
+          }}
         >
           <option value="All Services">All Services</option>
           {availableServices.map(s => <option key={s} value={s}>{s}</option>)}
@@ -170,7 +186,7 @@ export default function ProjectsList() {
       </div>
 
       <div className="projects-grid">
-        {filteredProjects.map(project => {
+        {currentProjects.map(project => {
           const total = project.total_steps || 0;
           const completed = project.completed_steps || 0;
           const percent = total > 0 ? Math.round((completed / total) * 100) : 0;
@@ -213,12 +229,21 @@ export default function ProjectsList() {
             </div>
           );
         })}
-        {filteredProjects.length === 0 && (
+        {currentProjects.length === 0 && (
           <div className="empty-state" style={{ gridColumn: '1 / -1', textAlign: 'center', padding: '3rem' }}>
             No projects found matching your criteria.
           </div>
         )}
       </div>
+
+      {filteredProjects.length > 0 && (
+        <Pagination 
+          currentPage={currentPage}
+          totalItems={filteredProjects.length}
+          itemsPerPage={itemsPerPage}
+          onPageChange={setCurrentPage}
+        />
+      )}
 
       {isModalOpen && (
         <div className="modal-overlay">

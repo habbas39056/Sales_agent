@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
-import { Plus, X, User, Mail, Calendar, Shield, Edit, Trash2 } from 'lucide-react';
+import { Plus, X, User, Mail, Calendar, Shield, Edit, Trash2, Search } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import Pagination from '../components/Pagination';
 import './TeamManagement.css';
 import './Modal.css';
 
@@ -19,6 +20,13 @@ export default function TeamManagement() {
     modules_access: []
   });
   const [editingUserId, setEditingUserId] = useState(null);
+  
+  // Search, Filter and Pagination
+  const [searchTerm, setSearchTerm] = useState('');
+  const [roleFilter, setRoleFilter] = useState('All Roles');
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 15;
+  
   const navigate = useNavigate();
 
   const availableRoles = [
@@ -184,20 +192,60 @@ export default function TeamManagement() {
     }
   };
 
+  const filteredMembers = teamMembers.filter(member => {
+    const matchesSearch = member.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
+                          member.email.toLowerCase().includes(searchTerm.toLowerCase());
+    const matchesRole = roleFilter === 'All Roles' || member.role === roleFilter;
+    
+    return matchesSearch && matchesRole;
+  });
+
+  const currentMembers = filteredMembers.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
+
   return (
     <div className="team-container">
-      <div className="page-header">
-        <div>
-          <h1>Team Management</h1>
-          <p className="subtitle" style={{ color: 'var(--text-secondary)', margin: 0 }}>Manage your agency's internal team</p>
+      <div className="page-header" style={{ display: 'flex', flexDirection: 'column', gap: '1rem', alignItems: 'stretch' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <div>
+            <h1>Team Management</h1>
+            <p className="subtitle" style={{ color: 'var(--text-secondary)', margin: 0 }}>Manage your agency's internal team</p>
+          </div>
+          <button className="btn-primary" onClick={() => { closeModal(); setIsModalOpen(true); }} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', border: 'none', padding: '0.75rem 1.25rem', borderRadius: '8px', cursor: 'pointer', fontWeight: '600' }}>
+            <Plus size={18} /> Add Team Member
+          </button>
         </div>
-        <button className="btn-primary" onClick={() => { closeModal(); setIsModalOpen(true); }} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', border: 'none', padding: '0.75rem 1.25rem', borderRadius: '8px', cursor: 'pointer', fontWeight: '600' }}>
-          <Plus size={18} /> Add Team Member
-        </button>
+        
+        <div className="panel-header-ref" style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap', backgroundColor: '#fff', padding: '1rem', borderRadius: '8px', border: '1px solid var(--border-color)', marginTop: '1rem' }}>
+          <div className="search-box-ref" style={{ margin: 0, flex: 1, minWidth: '200px', display: 'flex', alignItems: 'center', background: '#f8fafc', padding: '0.5rem 1rem', borderRadius: '6px', border: '1px solid #e2e8f0' }}>
+            <Search size={16} style={{ color: '#64748b' }} />
+            <input 
+              type="text" 
+              placeholder="Search by name or email..." 
+              value={searchTerm}
+              onChange={e => {
+                setSearchTerm(e.target.value);
+                setCurrentPage(1);
+              }}
+              style={{ border: 'none', background: 'transparent', outline: 'none', marginLeft: '0.5rem', width: '100%' }}
+            />
+          </div>
+          <select 
+            className="filter-select"
+            value={roleFilter}
+            onChange={(e) => {
+              setRoleFilter(e.target.value);
+              setCurrentPage(1);
+            }}
+            style={{ padding: '0.5rem 1rem', borderRadius: '6px', border: '1px solid var(--border-color)', outline: 'none' }}
+          >
+            <option value="All Roles">All Roles</option>
+            {availableRoles.map(role => <option key={role} value={role}>{role}</option>)}
+          </select>
+        </div>
       </div>
 
-      <div className="team-grid">
-        {teamMembers.map(member => (
+      <div className="team-grid" style={{ marginTop: '2rem' }}>
+        {currentMembers.map(member => (
           <div 
             key={member.id} 
             className="team-card"
@@ -255,6 +303,23 @@ export default function TeamManagement() {
           </div>
         ))}
       </div>
+      
+      {filteredMembers.length === 0 && (
+        <div className="empty-state" style={{ textAlign: 'center', padding: '3rem', backgroundColor: '#fff', borderRadius: '8px', border: '1px solid #e2e8f0', marginTop: '2rem' }}>
+          No team members found matching your criteria.
+        </div>
+      )}
+
+      {filteredMembers.length > 0 && (
+        <div style={{ backgroundColor: '#fff', padding: '1rem', borderRadius: '8px', border: '1px solid #e2e8f0', marginTop: '1rem' }}>
+          <Pagination 
+            currentPage={currentPage}
+            totalItems={filteredMembers.length}
+            itemsPerPage={itemsPerPage}
+            onPageChange={setCurrentPage}
+          />
+        </div>
+      )}
 
       {isModalOpen && (
         <div className="modal-overlay">
@@ -312,13 +377,31 @@ export default function TeamManagement() {
                 </div>
               </div>
 
-              <div className="form-group" style={{ width: '25%', marginTop: '1rem' }}>
-                <label>ROLE</label>
-                <select name="role" value={formData.role} onChange={handleInputChange} required>
-                  {availableRoles.map(role => (
-                    <option key={role} value={role}>{role}</option>
-                  ))}
-                </select>
+              <div style={{ display: 'flex', gap: '1rem', marginTop: '1rem' }}>
+                <div className="form-group" style={{ width: '25%' }}>
+                  <label>ROLE</label>
+                  <select name="role" value={formData.role} onChange={handleInputChange} required>
+                    {availableRoles.map(role => (
+                      <option key={role} value={role}>{role}</option>
+                    ))}
+                  </select>
+                </div>
+
+                {formData.role === 'Sales Rep' && (
+                  <div className="form-group" style={{ width: '25%' }}>
+                    <label>COMMISSION PERCENTAGE (%) *</label>
+                    <input 
+                      type="number" 
+                      name="commission_percentage" 
+                      value={formData.commission_percentage} 
+                      onChange={handleInputChange} 
+                      min="0" 
+                      max="100" 
+                      step="0.01"
+                      required 
+                    />
+                  </div>
+                )}
               </div>
 
               <div className="form-group" style={{ marginTop: '1.5rem' }}>

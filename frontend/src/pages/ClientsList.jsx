@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import axios from 'axios';
 import { Search, Plus, User, Edit, Trash2 } from 'lucide-react';
+import Pagination from '../components/Pagination';
 import './ClientsList.css';
 import './Modal.css';
 
@@ -10,6 +11,10 @@ export default function ClientsList() {
   const [searchTerm, setSearchTerm] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingClient, setEditingClient] = useState(null);
+  
+  // Pagination
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 15;
   
   // Form State
   const [formData, setFormData] = useState({
@@ -118,6 +123,8 @@ export default function ClientsList() {
     (c.business_name && c.business_name.toLowerCase().includes(searchTerm.toLowerCase()))
   );
 
+  const currentClients = filteredClients.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
+
   return (
     <div className="clients-list-container modern-ui">
       <div className="recent-orders-panel" style={{ marginTop: '2rem' }}>
@@ -128,7 +135,10 @@ export default function ClientsList() {
               type="text" 
               placeholder="Search clients..." 
               value={searchTerm}
-              onChange={e => setSearchTerm(e.target.value)}
+              onChange={e => {
+                setSearchTerm(e.target.value);
+                setCurrentPage(1);
+              }}
             />
           </div>
           <button className="btn-primary" onClick={openAddModal} style={{ borderRadius: '20px', fontSize: '0.85rem' }}>
@@ -148,7 +158,7 @@ export default function ClientsList() {
               </tr>
             </thead>
             <tbody>
-              {filteredClients.map(client => (
+              {currentClients.map(client => (
                 <tr key={client.id}>
                   <td>
                     <div className="client-cell">
@@ -186,7 +196,7 @@ export default function ClientsList() {
                   </td>
                 </tr>
               ))}
-              {filteredClients.length === 0 && (
+              {currentClients.length === 0 && (
                 <tr>
                   <td colSpan="5" className="empty-state">No clients found.</td>
                 </tr>
@@ -194,6 +204,15 @@ export default function ClientsList() {
             </tbody>
           </table>
         </div>
+        
+        {filteredClients.length > 0 && (
+          <Pagination 
+            currentPage={currentPage}
+            totalItems={filteredClients.length}
+            itemsPerPage={itemsPerPage}
+            onPageChange={setCurrentPage}
+          />
+        )}
       </div>
 
       {/* Add/Edit Client Modal */}

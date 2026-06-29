@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { useNavigate } from 'react-router-dom';
 import { Search, Plus, FileText, Eye, X, Check, Trash2, Printer, DollarSign, Edit } from 'lucide-react';
+import Pagination from '../components/Pagination';
 import './InvoiceManagement.css';
 
 export default function InvoiceManagement() {
@@ -11,6 +12,14 @@ export default function InvoiceManagement() {
   const [projects, setProjects] = useState([]);
   const [products, setProducts] = useState([]);
   const [searchTerm, setSearchTerm] = useState('');
+  
+  // Filters
+  const [statusFilter, setStatusFilter] = useState('All Statuses');
+  const [clientFilter, setClientFilter] = useState('All Clients');
+  
+  // Pagination
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 15;
   
   // Modals
   const [previewInvoice, setPreviewInvoice] = useState(null); // When not null, opens preview modal
@@ -106,10 +115,16 @@ export default function InvoiceManagement() {
     }
   };
 
-  const filteredInvoices = invoices.filter(inv => 
-    inv.invoice_number.toLowerCase().includes(searchTerm.toLowerCase()) || 
-    (inv.client_name && inv.client_name.toLowerCase().includes(searchTerm.toLowerCase()))
-  );
+  const filteredInvoices = invoices.filter(inv => {
+    const matchesSearch = inv.invoice_number.toLowerCase().includes(searchTerm.toLowerCase()) || 
+                          (inv.client_name && inv.client_name.toLowerCase().includes(searchTerm.toLowerCase()));
+    const matchesStatus = statusFilter === 'All Statuses' || inv.status === statusFilter;
+    const matchesClient = clientFilter === 'All Clients' || inv.client_name === clientFilter;
+    
+    return matchesSearch && matchesStatus && matchesClient;
+  });
+
+  const currentInvoices = filteredInvoices.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
 
   return (
     <div className="invoice-management-container modern-ui">
@@ -121,17 +136,48 @@ export default function InvoiceManagement() {
       </div>
 
       <div className="recent-orders-panel" style={{ marginTop: '2rem' }}>
-        <div className="panel-header-ref">
-          <div className="search-box-ref">
-            <Search size={16} />
-            <input 
-              type="text" 
-              placeholder="Search invoices..." 
-              value={searchTerm}
-              onChange={e => setSearchTerm(e.target.value)}
-            />
+        <div className="panel-header-ref" style={{ flexWrap: 'wrap', gap: '1rem' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', flexWrap: 'wrap', flex: 1 }}>
+            <div className="search-box-ref">
+              <Search size={16} />
+              <input 
+                type="text" 
+                placeholder="Search invoices..." 
+                value={searchTerm}
+                onChange={e => {
+                  setSearchTerm(e.target.value);
+                  setCurrentPage(1);
+                }}
+              />
+            </div>
+            <select 
+              className="filter-select"
+              value={statusFilter}
+              onChange={(e) => {
+                setStatusFilter(e.target.value);
+                setCurrentPage(1);
+              }}
+              style={{ padding: '0.5rem', borderRadius: '6px', border: '1px solid var(--border-color)', outline: 'none' }}
+            >
+              <option value="All Statuses">All Statuses</option>
+              <option value="Paid">Paid</option>
+              <option value="Unpaid">Unpaid</option>
+              <option value="Overdue">Overdue</option>
+            </select>
+            <select 
+              className="filter-select"
+              value={clientFilter}
+              onChange={(e) => {
+                setClientFilter(e.target.value);
+                setCurrentPage(1);
+              }}
+              style={{ padding: '0.5rem', borderRadius: '6px', border: '1px solid var(--border-color)', outline: 'none', maxWidth: '200px' }}
+            >
+              <option value="All Clients">All Clients</option>
+              {clients.map(c => <option key={c.id} value={c.full_name}>{c.full_name}</option>)}
+            </select>
           </div>
-          <button className="btn-primary" onClick={() => navigate('/invoices/new')} style={{ borderRadius: '20px', fontSize: '0.85rem' }}>
+          <button className="btn-primary" onClick={() => navigate('/invoices/new')} style={{ borderRadius: '20px', fontSize: '0.85rem', whiteSpace: 'nowrap' }}>
             <Plus size={16} /> Create Invoice
           </button>
         </div>
@@ -152,7 +198,7 @@ export default function InvoiceManagement() {
               </tr>
             </thead>
             <tbody>
-              {filteredInvoices.map(inv => (
+              {currentInvoices.map(inv => (
                 <tr key={inv.id}>
                   <td><strong>{inv.invoice_number}</strong></td>
                   <td><strong>PKR {Number(inv.amount).toFixed(2)}</strong></td>
@@ -176,14 +222,23 @@ export default function InvoiceManagement() {
                   </td>
                 </tr>
               ))}
-              {filteredInvoices.length === 0 && (
+              {currentInvoices.length === 0 && (
                 <tr>
-                  <td colSpan="6" className="empty-state">No invoices found.</td>
+                  <td colSpan="9" className="empty-state">No invoices found.</td>
                 </tr>
               )}
             </tbody>
           </table>
         </div>
+        
+        {filteredInvoices.length > 0 && (
+          <Pagination 
+            currentPage={currentPage}
+            totalItems={filteredInvoices.length}
+            itemsPerPage={itemsPerPage}
+            onPageChange={setCurrentPage}
+          />
+        )}
       </div>
 
 

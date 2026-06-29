@@ -4,6 +4,7 @@ import { Plus, Download, Briefcase, CreditCard, DollarSign, X, Building2, FileTe
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import Select from 'react-select';
+import Pagination from '../components/Pagination';
 import './Expenses.css';
 import './Modal.css';
 
@@ -13,6 +14,15 @@ export default function Expenses() {
   const [banks, setBanks] = useState([]);
   const [summary, setSummary] = useState({ cashInHand: 0, otherExpenses: 0, totalNetBalance: 0, bankTotals: {} });
   const [searchTerm, setSearchTerm] = useState('');
+  
+  // Filters
+  const [typeFilter, setTypeFilter] = useState('All Types');
+  const [bankFilter, setBankFilter] = useState('All Banks');
+  
+  // Pagination
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 15;
+  
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingId, setEditingId] = useState(null);
   const [isManageBanksModalOpen, setIsManageBanksModalOpen] = useState(false);
@@ -64,6 +74,11 @@ export default function Expenses() {
 
   const handleInputChange = (e) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
+  };
+
+  const handleSearchChange = (e) => {
+    setSearchTerm(e.target.value);
+    setCurrentPage(1);
   };
 
   const handleSubmit = async (e) => {
@@ -177,10 +192,20 @@ export default function Expenses() {
     doc.save('expense_report.pdf');
   };
 
-  const filteredExpenses = expenses.filter(exp => 
-    (exp.client && exp.client.toLowerCase().includes(searchTerm.toLowerCase())) ||
-    (exp.description && exp.description.toLowerCase().includes(searchTerm.toLowerCase()))
-  );
+  const filteredExpenses = expenses.filter(exp => {
+    const matchesSearch = (exp.client && exp.client.toLowerCase().includes(searchTerm.toLowerCase())) ||
+                          (exp.description && exp.description.toLowerCase().includes(searchTerm.toLowerCase()));
+    
+    let matchesType = true;
+    if (typeFilter === 'Receipts') matchesType = exp.receipt_amount > 0;
+    if (typeFilter === 'Payments') matchesType = exp.payment_amount > 0;
+    
+    const matchesBank = bankFilter === 'All Banks' || exp.bank === bankFilter;
+    
+    return matchesSearch && matchesType && matchesBank;
+  });
+
+  const currentExpenses = filteredExpenses.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
 
   const clientOptions = clients.map(c => ({
     value: c.full_name,
@@ -279,6 +304,43 @@ export default function Expenses() {
 
       {/* Expenses Table */}
       <div className="recent-orders-panel" style={{ marginTop: '2rem' }}>
+        <div className="panel-header-ref" style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap', marginBottom: '1rem', alignItems: 'center' }}>
+          <div className="search-box-ref" style={{ margin: 0, flex: 1, minWidth: '200px' }}>
+            <Search size={16} />
+            <input 
+              type="text" 
+              placeholder="Search expenses..." 
+              value={searchTerm}
+              onChange={handleSearchChange}
+            />
+          </div>
+          <select 
+            className="filter-select"
+            value={typeFilter}
+            onChange={(e) => {
+              setTypeFilter(e.target.value);
+              setCurrentPage(1);
+            }}
+            style={{ padding: '0.5rem', borderRadius: '6px', border: '1px solid var(--border-color)', outline: 'none' }}
+          >
+            <option value="All Types">All Types</option>
+            <option value="Receipts">Receipts</option>
+            <option value="Payments">Payments</option>
+          </select>
+          <select 
+            className="filter-select"
+            value={bankFilter}
+            onChange={(e) => {
+              setBankFilter(e.target.value);
+              setCurrentPage(1);
+            }}
+            style={{ padding: '0.5rem', borderRadius: '6px', border: '1px solid var(--border-color)', outline: 'none', maxWidth: '200px' }}
+          >
+            <option value="All Banks">All Banks</option>
+            {banks.map(b => <option key={b.id} value={b.name}>{b.name}</option>)}
+          </select>
+        </div>
+
         <div className="table-responsive-ref">
           <table className="ref-table">
             <thead>
@@ -296,7 +358,7 @@ export default function Expenses() {
               </tr>
             </thead>
             <tbody>
-              {filteredExpenses.map(exp => (
+              {currentExpenses.map(exp => (
                 <tr key={exp.id}>
                   <td>{new Date(exp.date).toLocaleDateString()}</td>
                   <td style={{fontWeight: '600'}}>{exp.client}</td>
@@ -320,7 +382,7 @@ export default function Expenses() {
                   </td>
                 </tr>
               ))}
-              {filteredExpenses.length === 0 && (
+              {currentExpenses.length === 0 && (
                 <tr>
                   <td colSpan="10" className="empty-state" style={{textAlign: 'center', padding: '2rem'}}>No expenses found</td>
                 </tr>
@@ -328,6 +390,15 @@ export default function Expenses() {
             </tbody>
           </table>
         </div>
+        
+        {filteredExpenses.length > 0 && (
+          <Pagination 
+            currentPage={currentPage}
+            totalItems={filteredExpenses.length}
+            itemsPerPage={itemsPerPage}
+            onPageChange={setCurrentPage}
+          />
+        )}
       </div>
 
       {/* Add Entry Modal */}
