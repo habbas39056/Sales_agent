@@ -13,6 +13,7 @@ export default function ProjectsList() {
   const [clients, setClients] = useState([]);
   const [invoices, setInvoices] = useState([]);
   const [categories, setCategories] = useState([]);
+  const [teamMembers, setTeamMembers] = useState([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('All Statuses');
   const [serviceFilter, setServiceFilter] = useState('All Services');
@@ -27,6 +28,7 @@ export default function ProjectsList() {
     description: '',
     client_id: '',
     invoice_id: '',
+    pm_id: '',
     service_type: '',
     revision_cycles_included: 0,
     terms_and_conditions: ''
@@ -46,7 +48,17 @@ export default function ProjectsList() {
     fetchClients();
     fetchInvoices();
     fetchCategories();
+    fetchTeamMembers();
   }, []);
+
+  const fetchTeamMembers = async () => {
+    try {
+      const res = await axios.get('/api/users/specialists');
+      setTeamMembers(res.data);
+    } catch (error) {
+      console.error('Failed to fetch team members', error);
+    }
+  };
 
   const fetchCategories = async () => {
     try {
@@ -174,6 +186,7 @@ export default function ProjectsList() {
         description: '',
         client_id: '',
         invoice_id: '',
+        pm_id: '',
         service_type: categories.length > 0 ? categories[0].name : '',
         revision_cycles_included: 0,
         terms_and_conditions: ''
@@ -258,6 +271,7 @@ export default function ProjectsList() {
               <tr>
                 <th style={{ paddingLeft: '1.25rem' }}>Project Title</th>
                 <th>Client</th>
+                <th>Assigned To</th>
                 <th>Service Category</th>
                 <th>Progress</th>
                 <th>Status</th>
@@ -286,6 +300,7 @@ export default function ProjectsList() {
                       </div>
                     </td>
                     <td style={{ color: '#475569', fontWeight: '500' }}>{project.client_name || 'No Client'}</td>
+                    <td style={{ color: '#475569', fontWeight: '500' }}>{project.assigned_name || 'Unassigned'}</td>
                     <td>
                       <span className="service-tag">{project.service_type || 'Unspecified'}</span>
                     </td>
@@ -310,7 +325,7 @@ export default function ProjectsList() {
               })}
               {currentProjects.length === 0 && (
                 <tr>
-                  <td colSpan="6" style={{ textAlign: 'center', padding: '3rem', color: '#94a3b8' }}>
+                  <td colSpan="7" style={{ textAlign: 'center', padding: '3rem', color: '#94a3b8' }}>
                     No projects found matching your criteria.
                   </td>
                 </tr>
@@ -358,6 +373,14 @@ export default function ProjectsList() {
                     {invoices.filter(i => i.client_id === parseInt(formData.client_id)).map(i => (
                       <option key={i.id} value={i.id}>{i.invoice_number} - ${i.amount}</option>
                     ))}
+                  </select>
+                </div>
+
+                <div className="form-group">
+                  <label>Assign To (Team Member)</label>
+                  <select name="pm_id" value={formData.pm_id} onChange={handleInputChange}>
+                    <option value="">Unassigned</option>
+                    {teamMembers.map(m => <option key={m.id} value={m.id}>{m.full_name} ({m.role})</option>)}
                   </select>
                 </div>
               </div>

@@ -22,17 +22,19 @@ router.get('/', async (req, res) => {
 
     let query = `
       SELECT DISTINCT projects.*, clients.full_name as client_name,
+      assigned_user.name as assigned_name,
       (SELECT COUNT(*) FROM project_steps WHERE project_steps.project_id = projects.id) as dyn_total_steps,
       (SELECT COUNT(*) FROM project_steps WHERE project_steps.project_id = projects.id AND project_steps.status = 'Completed') as dyn_completed_steps
       FROM projects 
       LEFT JOIN clients ON projects.client_id = clients.id
+      LEFT JOIN users assigned_user ON projects.pm_id = assigned_user.id
       LEFT JOIN invoices i ON clients.id = i.client_id
     `;
     const params = [];
 
     if (user_id && role && role !== 'Admin') {
-      query += ` WHERE clients.created_by = ? OR i.agent_id = ?`;
-      params.push(user_id, user_id);
+      query += ` WHERE (clients.created_by = ? OR i.agent_id = ? OR projects.pm_id = ? OR projects.production_id = ?)`;
+      params.push(user_id, user_id, user_id, user_id);
     }
     
     const [rows] = await db.query(query, params);
