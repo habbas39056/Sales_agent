@@ -92,7 +92,7 @@ export default function CreateInvoice() {
           items: inv.items.map(item => ({
             description: item.description,
             details: item.details || '',
-            category: 'SERVICE', // Default mapping
+            category: item.category || 'SERVICE',
             quantity: item.quantity,
             unit: item.unit || '',
             unit_price: item.unit_price
@@ -104,6 +104,8 @@ export default function CreateInvoice() {
       console.error('Failed to fetch data:', error);
     }
   };
+
+  const fetchData = fetchDropdowns;
 
   const handleInputChange = (e) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
