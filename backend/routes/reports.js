@@ -6,14 +6,20 @@ const db = require('../db');
 // Gets top-level metrics: total invoiced, total paid, total balance across all clients
 router.get('/dashboard', async (req, res) => {
     try {
-        const query = `
+        const { user_id, role } = req.query;
+        let query = `
             SELECT 
                 COALESCE(SUM(amount), 0) as total_invoiced,
                 COALESCE(SUM(amount) - SUM(balance), 0) as total_paid,
                 COALESCE(SUM(balance), 0) as total_balance
-            FROM invoices
+            FROM invoices i
         `;
-        const [rows] = await db.query(query);
+        const params = [];
+        if (user_id && role && role !== 'Admin') {
+            query += ` WHERE (i.created_by = ? OR i.agent_id = ?)`;
+            params.push(user_id, user_id);
+        }
+        const [rows] = await db.query(query, params);
         res.json(rows[0]);
     } catch (err) {
         console.error('Error fetching dashboard metrics:', err);
@@ -25,7 +31,8 @@ router.get('/dashboard', async (req, res) => {
 // Gets an overview of all sales/invoices
 router.get('/sales', async (req, res) => {
     try {
-        const query = `
+        const { user_id, role } = req.query;
+        let query = `
             SELECT 
                 i.id as invoice_id,
                 i.invoice_number,
@@ -38,9 +45,14 @@ router.get('/sales', async (req, res) => {
                 i.due_date
             FROM invoices i
             LEFT JOIN clients c ON i.client_id = c.id
-            ORDER BY i.created_at DESC
         `;
-        const [rows] = await db.query(query);
+        const params = [];
+        if (user_id && role && role !== 'Admin') {
+            query += ` WHERE (i.created_by = ? OR i.agent_id = ?)`;
+            params.push(user_id, user_id);
+        }
+        query += ` ORDER BY i.created_at DESC`;
+        const [rows] = await db.query(query, params);
         res.json(rows);
     } catch (err) {
         console.error('Error fetching sales data:', err);
@@ -52,7 +64,8 @@ router.get('/sales', async (req, res) => {
 // Gets 360 view for each client: total balance, invoices, paids, due dates
 router.get('/clients', async (req, res) => {
     try {
-        const query = `
+        const { user_id, role } = req.query;
+        let query = `
             SELECT 
                 c.id as client_id,
                 c.full_name,
@@ -66,11 +79,15 @@ router.get('/clients', async (req, res) => {
                 SUM(CASE WHEN i.status = 'Overdue' THEN i.balance ELSE 0 END) as total_overdue
             FROM clients c
             LEFT JOIN invoices i ON c.id = i.client_id
-            GROUP BY c.id
-            ORDER BY c.full_name ASC
         `;
+        const params = [];
+        if (user_id && role && role !== 'Admin') {
+            query += ` WHERE (c.created_by = ? OR i.agent_id = ?)`;
+            params.push(user_id, user_id);
+        }
+        query += ` GROUP BY c.id ORDER BY c.full_name ASC`;
         
-        const [rows] = await db.query(query);
+        const [rows] = await db.query(query, params);
         res.json(rows);
     } catch (err) {
         console.error('Error fetching client reports:', err);

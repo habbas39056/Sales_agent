@@ -17,10 +17,16 @@ export default function Dashboard() {
   useEffect(() => {
     const fetchData = async () => {
       try {
+        const userStr = localStorage.getItem('user');
+        const user = userStr ? JSON.parse(userStr) : null;
+        let queryParams = '';
+        if (user) {
+          queryParams = `?user_id=${user.id}&role=${encodeURIComponent(user.role)}`;
+        }
         const [clientsRes, projectsRes, invoicesRes] = await Promise.all([
-          axios.get('/api/clients'),
-          axios.get('/api/projects'),
-          axios.get('/api/invoices')
+          axios.get(`/api/clients${queryParams}`),
+          axios.get(`/api/projects${queryParams}`),
+          axios.get(`/api/invoices${queryParams}`)
         ]);
         setClients(clientsRes.data);
         setProjects(projectsRes.data);
