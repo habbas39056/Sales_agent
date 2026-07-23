@@ -41,12 +41,20 @@ export default function CreateInvoice() {
     items: []
   });
 
-  useEffect(() => {
-    fetchData();
-  }, []);
+  const [termsAndConditions, setTermsAndConditions] = useState('');
 
-  const fetchData = async () => {
+  useEffect(() => {
+    fetchDropdowns();
+  }, [id]);
+
+  const fetchDropdowns = async () => {
     try {
+      axios.get('/api/settings').then(res => {
+        if (res.data && res.data.terms_and_conditions) {
+          setTermsAndConditions(res.data.terms_and_conditions);
+        }
+      }).catch(err => console.error(err));
+
       const userStr = localStorage.getItem('user');
       const user = userStr ? JSON.parse(userStr) : null;
       let queryParams = '';
@@ -856,6 +864,24 @@ export default function CreateInvoice() {
                 <div style={{ color: '#000', fontSize: '0.8rem' }}>ADWISE LABS | A-205/II Saba Ave, DHA Karachi Phase VIII Zone A, 76500</div>
                 <div style={{ color: '#000', fontSize: '0.8rem', fontWeight: 'normal' }}>Contact No. +1 (774) 674-1872 | +92 329 2371279 | Email: info@adwiselabs.com</div>
               </div>
+
+              {/* SEPARATE PAGE: TERMS & CONDITIONS */}
+              {termsAndConditions && (
+                <div className="terms-page-break">
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem', borderBottom: '2px solid #0f172a', paddingBottom: '1rem' }}>
+                    <img src="/Adwise-Labs-Primary-Logo.png" alt="Adwise Labs Logo" style={{ maxWidth: '180px', height: 'auto' }} />
+                    <h2 style={{ fontSize: '1.3rem', color: '#0f172a', margin: 0, textTransform: 'uppercase', letterSpacing: '1px' }}>Terms & Conditions</h2>
+                  </div>
+                  
+                  <div style={{ fontSize: '0.9rem', color: '#334155', lineHeight: '1.8', whiteSpace: 'pre-wrap', background: '#f8fafc', padding: '1.5rem', borderRadius: '8px', border: '1px solid #cbd5e1' }}>
+                    {termsAndConditions}
+                  </div>
+
+                  <div style={{ marginTop: '3rem', textAlign: 'center', color: '#64748b', fontSize: '0.8rem' }}>
+                    ADWISE LABS | Terms & Conditions attached to Invoice {formData.invoice_number}
+                  </div>
+                </div>
+              )}
             </div>
           );
         })()}

@@ -68,10 +68,25 @@ async function updateLiveDb() {
         ['email_notifications', 'true'],
         ['project_updates', 'true']
       ];
+      const defaultTermsText = `1. PAYMENT TERMS: Payments are due within 15 days from the date of invoice issuance. Late payments may be subject to a 1.5% monthly service charge.
+2. REVISIONS & SCOPE: Any additional feature requests or out-of-scope revisions beyond agreed milestone deliverables will be billed separately.
+3. INTELLECTUAL PROPERTY: Final project deliverables and assets will be released to the client upon receipt of 100% full payment.
+4. CONFIDENTIALITY: Both parties agree to maintain non-disclosure of proprietary business data and technology shared during project execution.
+5. CANCELLATION & REFUNDS: Deposits and work completed prior to cancellation are non-refundable.`;
+      
+      await connection.query('INSERT IGNORE INTO settings (setting_key, setting_value) VALUES (?, ?)', ['terms_and_conditions', defaultTermsText]);
+      
       for (const [key, val] of defaults) {
         await connection.query('INSERT IGNORE INTO settings (setting_key, setting_value) VALUES (?, ?)', [key, val]);
       }
       console.log('✅ Seeded default system settings.');
+    } else {
+      const defaultTermsText = `1. PAYMENT TERMS: Payments are due within 15 days from the date of invoice issuance. Late payments may be subject to a 1.5% monthly service charge.
+2. REVISIONS & SCOPE: Any additional feature requests or out-of-scope revisions beyond agreed milestone deliverables will be billed separately.
+3. INTELLECTUAL PROPERTY: Final project deliverables and assets will be released to the client upon receipt of 100% full payment.
+4. CONFIDENTIALITY: Both parties agree to maintain non-disclosure of proprietary business data and technology shared during project execution.
+5. CANCELLATION & REFUNDS: Deposits and work completed prior to cancellation are non-refundable.`;
+      await connection.query('INSERT IGNORE INTO settings (setting_key, setting_value) VALUES (?, ?)', ['terms_and_conditions', defaultTermsText]);
     }
 
     // 5. Project Categories Table
