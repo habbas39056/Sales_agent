@@ -47,7 +47,7 @@ router.post('/', async (req, res) => {
     await db.query(`
       CREATE TABLE IF NOT EXISTS settings (
         setting_key VARCHAR(100) NOT NULL PRIMARY KEY,
-        setting_value TEXT NOT NULL
+        setting_value MEDIUMTEXT NOT NULL
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
     `);
 
@@ -63,8 +63,8 @@ router.post('/', async (req, res) => {
       if (key && key !== 'settings') {
         const val = String(payload[key] ?? '');
         await db.query(
-          'REPLACE INTO settings (setting_key, setting_value) VALUES (?, ?)',
-          [key, val]
+          'INSERT INTO settings (setting_key, setting_value) VALUES (?, ?) ON DUPLICATE KEY UPDATE setting_value = ?',
+          [key, val, val]
         );
       }
     }
