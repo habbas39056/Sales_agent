@@ -19,35 +19,50 @@ const upload = multer({ storage: storage });
 // Get all system settings as key-value pairs
 router.get('/', async (req, res) => {
   try {
+    await db.query(`
+      CREATE TABLE IF NOT EXISTS settings (
+        setting_key VARCHAR(100) NOT NULL PRIMARY KEY,
+        setting_value TEXT NOT NULL
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+    `);
     const [rows] = await db.query('SELECT setting_key, setting_value FROM settings');
     const settings = {};
-    rows.forEach(row => {
+    (rows || []).forEach(row => {
       settings[row.setting_key] = row.setting_value;
     });
     res.json(settings);
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    console.error('Error fetching settings:', error);
+    res.json({});
   }
 });
 
 // Update batch of settings
 router.post('/', async (req, res) => {
-  const { settings } = req.body;
-  if (!settings || typeof settings !== 'object') {
-    return res.status(400).json({ error: 'Settings object is required' });
-  }
-
   try {
-    const keys = Object.keys(settings);
+    await db.query(`
+      CREATE TABLE IF NOT EXISTS settings (
+        setting_key VARCHAR(100) NOT NULL PRIMARY KEY,
+        setting_value TEXT NOT NULL
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+    `);
+
+    const payload = (req.body && req.body.settings) ? req.body.settings : req.body;
+    if (!payload || typeof payload !== 'object') {
+      return res.status(400).json({ error: 'Settings object is required' });
+    }
+
+    const keys = Object.keys(payload);
     for (const key of keys) {
-      const val = String(settings[key] ?? '');
+      const val = String(payload[key] ?? '');
       await db.query(
-        'INSERT INTO settings (setting_key, setting_value) VALUES (?, ?) ON DUPLICATE KEY UPDATE setting_value = VALUES(setting_value)',
+        'REPLACE INTO settings (setting_key, setting_value) VALUES (?, ?)',
         [key, val]
       );
     }
     res.json({ message: 'Settings saved successfully' });
   } catch (error) {
+    console.error('Error saving settings:', error);
     res.status(500).json({ error: error.message });
   }
 });
