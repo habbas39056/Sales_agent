@@ -16,8 +16,7 @@ const storage = multer.diskStorage({
 });
 const upload = multer({ storage: storage });
 
-// Get all system settings as key-value pairs
-router.get('/', async (req, res) => {
+const ensureSettingsTable = async () => {
   try {
     await db.query(`
       CREATE TABLE IF NOT EXISTS settings (
@@ -25,6 +24,15 @@ router.get('/', async (req, res) => {
         setting_value MEDIUMTEXT NOT NULL
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
     `);
+  } catch (e) {
+    // Ignore if table exists or permission restricted
+  }
+};
+
+// Get all system settings as key-value pairs
+router.get('/', async (req, res) => {
+  try {
+    await ensureSettingsTable();
     const [rows] = await db.query('SELECT setting_key, setting_value FROM settings');
     const settings = {};
     if (Array.isArray(rows)) {
@@ -36,7 +44,7 @@ router.get('/', async (req, res) => {
     }
     res.json(settings);
   } catch (error) {
-    console.error('Error fetching settings:', error);
+    console.error('Error fetching settings:', error.message);
     res.json({});
   }
 });
@@ -44,24 +52,27 @@ router.get('/', async (req, res) => {
 // Update batch of settings
 router.post('/', async (req, res) => {
   try {
-    await db.query(`
-      CREATE TABLE IF NOT EXISTS settings (
-        setting_key VARCHAR(100) NOT NULL PRIMARY KEY,
-        setting_value MEDIUMTEXT NOT NULL
-      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
-    `);
+    await ensureSettingsTable();
 
     const body = req.body || {};
-    const settingsToSave = body.settings && typeof body.settings === 'object' ? body.settings : body;
+    const settingsToSave = (body.settings && typeof body.settings === 'object') ? body.settings : body;
 
     const keys = Object.keys(settingsToSave);
     for (const key of keys) {
       if (key && key !== 'settings') {
         const val = String(settingsToSave[key] ?? '');
-        await db.query(
-          'INSERT INTO settings (setting_key, setting_value) VALUES (?, ?) ON DUPLICATE KEY UPDATE setting_value = ?',
-          [key, val, val]
-        );
+        try {
+          await db.query(
+            'INSERT INTO settings (setting_key, setting_value) VALUES (?, ?) ON DUPLICATE KEY UPDATE setting_value = ?',
+            [key, val, val]
+          );
+        } catch (queryErr) {
+          console.error(`Query error for key ${key}:`, queryErr.message);
+          await db.query(
+            'REPLACE INTO settings (setting_key, setting_value) VALUES (?, ?)',
+            [key, val]
+          );
+        }
       }
     }
     res.json({ message: 'Settings saved successfully', settings: settingsToSave });

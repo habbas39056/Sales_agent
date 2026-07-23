@@ -94,7 +94,8 @@ export default function Settings() {
       showAlert('success', 'Terms & Conditions saved successfully!');
     } catch (err) {
       console.error('Error saving terms:', err);
-      showAlert('error', err.response?.data?.error || 'Failed to save terms & conditions');
+      const serverMsg = err.response?.data?.error || err.message || 'Failed to save terms & conditions';
+      showAlert('error', serverMsg);
     } finally {
       setSaving(false);
     }
