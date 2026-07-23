@@ -27,9 +27,13 @@ router.get('/', async (req, res) => {
     `);
     const [rows] = await db.query('SELECT setting_key, setting_value FROM settings');
     const settings = {};
-    (rows || []).forEach(row => {
-      settings[row.setting_key] = row.setting_value;
-    });
+    if (Array.isArray(rows)) {
+      rows.forEach(row => {
+        if (row && row.setting_key) {
+          settings[row.setting_key] = row.setting_value;
+        }
+      });
+    }
     res.json(settings);
   } catch (error) {
     console.error('Error fetching settings:', error);
@@ -47,23 +51,27 @@ router.post('/', async (req, res) => {
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
     `);
 
-    const payload = (req.body && req.body.settings) ? req.body.settings : req.body;
+    const body = req.body || {};
+    const payload = body.settings ? body.settings : body;
+
     if (!payload || typeof payload !== 'object') {
       return res.status(400).json({ error: 'Settings object is required' });
     }
 
     const keys = Object.keys(payload);
     for (const key of keys) {
-      const val = String(payload[key] ?? '');
-      await db.query(
-        'REPLACE INTO settings (setting_key, setting_value) VALUES (?, ?)',
-        [key, val]
-      );
+      if (key && key !== 'settings') {
+        const val = String(payload[key] ?? '');
+        await db.query(
+          'REPLACE INTO settings (setting_key, setting_value) VALUES (?, ?)',
+          [key, val]
+        );
+      }
     }
     res.json({ message: 'Settings saved successfully' });
   } catch (error) {
     console.error('Error saving settings:', error);
-    res.status(500).json({ error: error.message });
+    res.status(500).json({ error: error.message || 'Failed to save settings' });
   }
 });
 
