@@ -399,12 +399,8 @@ export default function InvoiceManagement() {
                     <h2 style={{ fontSize: '1.3rem', color: '#0f172a', margin: 0, textTransform: 'uppercase', letterSpacing: '1px' }}>Terms & Conditions</h2>
                   </div>
                   
-                  <div style={{ fontSize: '0.9rem', color: '#334155', lineHeight: '1.8', whiteSpace: 'pre-wrap', background: '#f8fafc', padding: '1.5rem', borderRadius: '8px', border: '1px solid #cbd5e1' }}>
+                  <div style={{ fontSize: '0.92rem', color: '#334155', lineHeight: '1.8', whiteSpace: 'pre-wrap' }}>
                     {termsAndConditions}
-                  </div>
-
-                  <div style={{ marginTop: '3rem', textAlign: 'center', color: '#64748b', fontSize: '0.8rem' }}>
-                    ADWISE LABS | Terms & Conditions attached to Invoice {previewInvoice.invoice_number}
                   </div>
                 </div>
               )}
