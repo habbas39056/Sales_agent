@@ -89,10 +89,11 @@ export default function Settings() {
     setSaving(true);
     try {
       await axios.post('/api/settings', {
-        settings: { terms_and_conditions: termsAndConditions }
+        terms_and_conditions: termsAndConditions
       });
       showAlert('success', 'Terms & Conditions saved successfully!');
     } catch (err) {
+      console.error('Error saving terms:', err);
       showAlert('error', err.response?.data?.error || 'Failed to save terms & conditions');
     } finally {
       setSaving(false);

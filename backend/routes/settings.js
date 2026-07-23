@@ -22,7 +22,7 @@ router.get('/', async (req, res) => {
     await db.query(`
       CREATE TABLE IF NOT EXISTS settings (
         setting_key VARCHAR(100) NOT NULL PRIMARY KEY,
-        setting_value TEXT NOT NULL
+        setting_value MEDIUMTEXT NOT NULL
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
     `);
     const [rows] = await db.query('SELECT setting_key, setting_value FROM settings');
@@ -52,23 +52,19 @@ router.post('/', async (req, res) => {
     `);
 
     const body = req.body || {};
-    const payload = body.settings ? body.settings : body;
+    const settingsToSave = body.settings && typeof body.settings === 'object' ? body.settings : body;
 
-    if (!payload || typeof payload !== 'object') {
-      return res.status(400).json({ error: 'Settings object is required' });
-    }
-
-    const keys = Object.keys(payload);
+    const keys = Object.keys(settingsToSave);
     for (const key of keys) {
       if (key && key !== 'settings') {
-        const val = String(payload[key] ?? '');
+        const val = String(settingsToSave[key] ?? '');
         await db.query(
           'INSERT INTO settings (setting_key, setting_value) VALUES (?, ?) ON DUPLICATE KEY UPDATE setting_value = ?',
           [key, val, val]
         );
       }
     }
-    res.json({ message: 'Settings saved successfully' });
+    res.json({ message: 'Settings saved successfully', settings: settingsToSave });
   } catch (error) {
     console.error('Error saving settings:', error);
     res.status(500).json({ error: error.message || 'Failed to save settings' });
