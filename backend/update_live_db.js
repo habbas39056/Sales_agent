@@ -124,6 +124,37 @@ async function updateLiveDb() {
       }
       console.log('✅ Seeded default project categories.');
     }
+    // 6. Step Comments Table
+    await connection.query(`
+      CREATE TABLE IF NOT EXISTS step_comments (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        step_id INT NOT NULL,
+        user_id INT NOT NULL,
+        message TEXT NOT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        KEY step_id (step_id),
+        KEY user_id (user_id),
+        CONSTRAINT step_comments_ibfk_1 FOREIGN KEY (step_id) REFERENCES project_steps(id) ON DELETE CASCADE,
+        CONSTRAINT step_comments_ibfk_2 FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+    `);
+    console.log('✅ Ensured step_comments table exists.');
+
+    // 7. Step Activity Table
+    await connection.query(`
+      CREATE TABLE IF NOT EXISTS step_activity (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        step_id INT NOT NULL,
+        user_id INT NOT NULL,
+        action_text TEXT NOT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        KEY step_id (step_id),
+        KEY user_id (user_id),
+        CONSTRAINT step_activity_ibfk_1 FOREIGN KEY (step_id) REFERENCES project_steps(id) ON DELETE CASCADE,
+        CONSTRAINT step_activity_ibfk_2 FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+    `);
+    console.log('✅ Ensured step_activity table exists.');
 
     console.log('\n🎉 Live database update completed successfully!');
   } catch (error) {
