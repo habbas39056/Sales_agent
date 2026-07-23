@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import axios from 'axios';
-import { FileText, Plus, ExternalLink, Calendar, Trash2 } from 'lucide-react';
+import { FileText, Plus, ExternalLink, Calendar, Trash2, Edit, CreditCard } from 'lucide-react';
 import './AddStep.css';
 
 export default function AddStep() {
@@ -24,6 +24,10 @@ export default function AddStep() {
     allow_revision: false
   });
 
+  const [isEditingInvoice, setIsEditingInvoice] = useState(false);
+  const [invoiceItems, setInvoiceItems] = useState([]);
+  const [savingInvoice, setSavingInvoice] = useState(false);
+
   useEffect(() => {
     fetchData();
   }, [id]);
@@ -32,11 +36,62 @@ export default function AddStep() {
     try {
       const pRes = await axios.get(`/api/projects/${id}`);
       setProject(pRes.data);
+      if (pRes.data && pRes.data.invoice && pRes.data.invoice.id) {
+        const invRes = await axios.get(`/api/invoices/${pRes.data.invoice.id}`);
+        setInvoiceItems(invRes.data.items || []);
+      }
       
       const sRes = await axios.get('/api/users/specialists');
       setSpecialists(sRes.data);
     } catch (error) {
       console.error('Failed to fetch data', error);
+    }
+  };
+
+  const handleAddInvoiceItem = () => {
+    setInvoiceItems(prev => [...prev, { description: '', quantity: 1, unit_price: 0, total: 0 }]);
+  };
+
+  const handleUpdateInvoiceItem = (index, field, value) => {
+    const updated = [...invoiceItems];
+    updated[index][field] = value;
+    if (field === 'quantity' || field === 'unit_price') {
+      const qty = Number(field === 'quantity' ? value : updated[index].quantity) || 0;
+      const price = Number(field === 'unit_price' ? value : updated[index].unit_price) || 0;
+      updated[index].total = qty * price;
+    }
+    setInvoiceItems(updated);
+  };
+
+  const handleRemoveInvoiceItem = (index) => {
+    setInvoiceItems(prev => prev.filter((_, i) => i !== index));
+  };
+
+  const handleSaveInvoiceItems = async () => {
+    if (!project.invoice || !project.invoice.id) return;
+    setSavingInvoice(true);
+    try {
+      const invRes = await axios.get(`/api/invoices/${project.invoice.id}`);
+      const inv = invRes.data;
+
+      await axios.put(`/api/invoices/${project.invoice.id}`, {
+        client_id: inv.client_id,
+        project_id: inv.project_id,
+        agent_id: inv.agent_id,
+        commission_amount: inv.commission_amount,
+        issue_date: inv.issue_date,
+        due_date: inv.due_date,
+        terms_and_conditions: inv.terms_and_conditions,
+        items: invoiceItems
+      });
+
+      setIsEditingInvoice(false);
+      fetchData();
+    } catch(err) {
+      console.error('Failed to save inline invoice items', err);
+      alert('Failed to save items');
+    } finally {
+      setSavingInvoice(false);
     }
   };
 
@@ -233,21 +288,154 @@ export default function AddStep() {
             </div>
             
             {formData.requires_payment && (
-              <div className="payment-box">
-                <p className="payment-notice">
-                  THE PROJECT'S DEFAULT INVOICE WILL BE AUTOMATICALLY LINKED WHEN YOU SAVE THIS MILESTONE.
-                </p>
+              <div className="payment-box" style={{ background: '#ecfdf5', padding: '1rem', borderRadius: '12px', border: '1px solid #a7f3d0' }}>
+                <div style={{ textAlign: 'center', color: '#059669', fontSize: '0.75rem', fontWeight: '800', letterSpacing: '0.05em', marginBottom: '0.75rem' }}>
+                  USING PROJECT'S DEFAULT INVOICE
+                </div>
+
                 {project.invoice ? (
-                  <div className="invoice-display">
-                    <div className="inv-icon"><FileText size={20} /></div>
-                    <div className="inv-details">
-                      <strong>{project.invoice.invoice_number}</strong>
-                      <span>Rs. {project.invoice.amount} ({project.invoice.status.toLowerCase()})</span>
+                  <div>
+                    {/* Top card bar with Pencil & External Link icons matching reference design */}
+                    <div style={{ background: 'white', border: '1px solid #d1fae5', borderRadius: '12px', padding: '0.85rem 1rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between', boxShadow: '0 2px 6px rgba(0,0,0,0.02)' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                        <div style={{ background: '#e0e7ff', color: '#4f46e5', width: '36px', height: '36px', borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                          <CreditCard size={18} />
+                        </div>
+                        <div>
+                          <strong style={{ fontSize: '0.95rem', color: '#1e293b', display: 'block' }}>#{project.invoice.invoice_number}</strong>
+                          <span style={{ fontSize: '0.8rem', color: '#059669', fontWeight: '600' }}>
+                            Rs. {Number(project.invoice.amount).toLocaleString()} ({project.invoice.status.toLowerCase()})
+                          </span>
+                        </div>
+                      </div>
+
+                      <div style={{ display: 'flex', gap: '0.5rem' }}>
+                        {/* Pencil Icon -> Toggle inline item editor */}
+                        <button 
+                          type="button"
+                          title="Edit items inline"
+                          style={{ background: '#f8fafc', border: '1px solid #cbd5e1', color: '#475569', width: '34px', height: '34px', borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', transition: 'all 0.2s' }}
+                          onClick={() => setIsEditingInvoice(prev => !prev)}
+                        >
+                          <Edit size={16} />
+                        </button>
+
+                        {/* External Link Icon -> Open full invoice edit page */}
+                        <button 
+                          type="button"
+                          title="Open whole invoice editor"
+                          style={{ background: '#f8fafc', border: '1px solid #cbd5e1', color: '#475569', width: '34px', height: '34px', borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', transition: 'all 0.2s' }}
+                          onClick={() => navigate(`/invoices/edit/${project.invoice.id}`)}
+                        >
+                          <ExternalLink size={16} />
+                        </button>
+                      </div>
                     </div>
-                    <button className="btn-inv-link"><ExternalLink size={18} /></button>
+
+                    {/* Inline Item Editor Drawer matching reference mockup */}
+                    {isEditingInvoice && (
+                      <div style={{ background: 'white', borderRadius: '12px', border: '1px solid #e2e8f0', marginTop: '0.75rem', padding: '1rem', boxShadow: '0 4px 12px rgba(0,0,0,0.05)' }}>
+                        <div style={{ overflowX: 'auto' }}>
+                          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.82rem', textAlign: 'left' }}>
+                            <thead>
+                              <tr style={{ borderBottom: '1px solid #e2e8f0', color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                                <th style={{ padding: '0.5rem 0.25rem' }}>#</th>
+                                <th style={{ padding: '0.5rem 0.25rem' }}>Item</th>
+                                <th style={{ padding: '0.5rem 0.25rem', width: '60px' }}>Qty</th>
+                                <th style={{ padding: '0.5rem 0.25rem', width: '80px' }}>Rate</th>
+                                <th style={{ padding: '0.5rem 0.25rem', width: '90px', textAlign: 'right' }}>Amount</th>
+                                <th style={{ padding: '0.5rem 0.25rem', width: '30px' }}></th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {invoiceItems.map((item, idx) => (
+                                <tr key={idx} style={{ borderBottom: '1px solid #f1f5f9' }}>
+                                  <td style={{ padding: '0.5rem 0.25rem', fontWeight: 'bold', color: '#64748b' }}>{idx + 1}</td>
+                                  <td style={{ padding: '0.5rem 0.25rem' }}>
+                                    <input 
+                                      type="text" 
+                                      value={item.description}
+                                      onChange={(e) => handleUpdateInvoiceItem(idx, 'description', e.target.value)}
+                                      placeholder="Item description"
+                                      style={{ width: '100%', padding: '0.35rem 0.5rem', border: '1px solid #cbd5e1', borderRadius: '4px', fontSize: '0.82rem' }}
+                                    />
+                                  </td>
+                                  <td style={{ padding: '0.5rem 0.25rem' }}>
+                                    <input 
+                                      type="number" 
+                                      value={item.quantity}
+                                      onChange={(e) => handleUpdateInvoiceItem(idx, 'quantity', e.target.value)}
+                                      style={{ width: '100%', padding: '0.35rem 0.25rem', border: '1px solid #cbd5e1', borderRadius: '4px', fontSize: '0.82rem', textAlign: 'center' }}
+                                    />
+                                  </td>
+                                  <td style={{ padding: '0.5rem 0.25rem' }}>
+                                    <input 
+                                      type="number" 
+                                      value={item.unit_price}
+                                      onChange={(e) => handleUpdateInvoiceItem(idx, 'unit_price', e.target.value)}
+                                      style={{ width: '100%', padding: '0.35rem 0.25rem', border: '1px solid #cbd5e1', borderRadius: '4px', fontSize: '0.82rem', textAlign: 'right' }}
+                                    />
+                                  </td>
+                                  <td style={{ padding: '0.5rem 0.25rem', textAlign: 'right', fontWeight: '700', color: '#1e293b' }}>
+                                    {(Number(item.quantity || 0) * Number(item.unit_price || 0)).toLocaleString()}
+                                  </td>
+                                  <td style={{ padding: '0.5rem 0.25rem', textAlign: 'center' }}>
+                                    <button 
+                                      type="button" 
+                                      onClick={() => handleRemoveInvoiceItem(idx)}
+                                      style={{ background: 'none', border: 'none', color: '#cbd5e1', cursor: 'pointer', padding: 0 }}
+                                      onMouseOver={(e) => e.currentTarget.style.color = '#ef4444'}
+                                      onMouseOut={(e) => e.currentTarget.style.color = '#cbd5e1'}
+                                    >
+                                      <Trash2 size={15} />
+                                    </button>
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+
+                        {/* Add Item Button */}
+                        <div style={{ marginTop: '0.75rem', textAlign: 'center' }}>
+                          <button 
+                            type="button" 
+                            onClick={handleAddInvoiceItem}
+                            style={{ background: '#f8fafc', border: '1px dashed #4f46e5', color: '#4f46e5', borderRadius: '8px', padding: '0.4rem 1rem', fontSize: '0.8rem', fontWeight: '700', cursor: 'pointer', width: '100%' }}
+                          >
+                            + ADD ITEM
+                          </button>
+                        </div>
+
+                        {/* Total & Action Buttons */}
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: '1rem', paddingTop: '0.75rem', borderTop: '1px solid #e2e8f0' }}>
+                          <div style={{ fontWeight: '800', fontSize: '0.95rem', color: '#1e293b' }}>
+                            Total: Rs. {invoiceItems.reduce((sum, item) => sum + (Number(item.quantity || 0) * Number(item.unit_price || 0)), 0).toLocaleString()}
+                          </div>
+
+                          <div style={{ display: 'flex', gap: '0.5rem' }}>
+                            <button 
+                              type="button" 
+                              onClick={() => setIsEditingInvoice(false)}
+                              style={{ background: 'none', border: 'none', color: '#64748b', fontWeight: '600', fontSize: '0.85rem', cursor: 'pointer' }}
+                            >
+                              Cancel
+                            </button>
+                            <button 
+                              type="button" 
+                              disabled={savingInvoice}
+                              onClick={handleSaveInvoiceItems}
+                              style={{ background: '#4f46e5', color: 'white', border: 'none', borderRadius: '6px', padding: '0.4rem 1.25rem', fontWeight: '700', fontSize: '0.85rem', cursor: 'pointer' }}
+                            >
+                              {savingInvoice ? 'Saving...' : 'Save'}
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 ) : (
-                  <p style={{ color: '#ef4444', fontSize: '0.85rem' }}>No invoice currently linked to this project.</p>
+                  <p style={{ color: '#ef4444', fontSize: '0.85rem', textAlign: 'center', margin: 0 }}>No invoice currently linked to this project.</p>
                 )}
               </div>
             )}

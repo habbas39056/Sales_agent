@@ -83,6 +83,7 @@ export default function CreateInvoice() {
           bill_from_address: inv.bill_from_address || 'A-205 / II Saba Ave, DHA Karachi Phase VIII Zone A Phase VIII\nDefence Housing Authority\nKarachi Sindh\n76500',
           items: inv.items.map(item => ({
             description: item.description,
+            details: item.details || '',
             category: 'SERVICE', // Default mapping
             quantity: item.quantity,
             unit: item.unit || '',
@@ -103,14 +104,14 @@ export default function CreateInvoice() {
   const addItem = () => {
     setFormData({
       ...formData,
-      items: [...formData.items, { description: '', category: 'SERVICE', quantity: 1, unit: '', unit_price: 0 }]
+      items: [...formData.items, { description: '', details: '', category: 'SERVICE', quantity: 1, unit: '', unit_price: 0 }]
     });
   };
 
   const addProductFromCatalog = (product) => {
     setFormData({
       ...formData,
-      items: [...formData.items, { description: product.name, category: 'SERVICE', quantity: 1, unit: '', unit_price: product.default_price }]
+      items: [...formData.items, { description: product.name, details: product.description || '', category: 'SERVICE', quantity: 1, unit: '', unit_price: product.default_price }]
     });
   };
 
@@ -786,8 +787,8 @@ export default function CreateInvoice() {
               
               <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '2rem' }}>
                 <div style={{ flex: 1 }}>
-                  <div style={{ backgroundColor: '#0f172a', padding: '1rem', borderRadius: '8px', display: 'inline-block', marginBottom: '2rem', WebkitPrintColorAdjust: 'exact', printColorAdjust: 'exact' }}>
-                    <img src="/Adwise Labs White Logo.png" alt="Adwise Labs Logo" style={{ maxWidth: '200px', display: 'block' }} />
+                  <div style={{ marginBottom: '1.5rem' }}>
+                    <img src="/Adwise-Labs-Primary-Logo.png" alt="Adwise Labs Logo" style={{ maxWidth: '220px', height: 'auto', display: 'block' }} />
                   </div>
                   <h2 style={{ fontSize: '1.2rem', marginBottom: '1.5rem' }}>Invoice {formData.invoice_number}</h2>
                   

@@ -1,6 +1,6 @@
 import React from 'react';
 import { BrowserRouter as Router, Routes, Route, Link, useLocation, useNavigate, Navigate } from 'react-router-dom';
-import { LayoutDashboard, Users, FileText, PlusCircle, Calendar, Clock, CheckSquare, MessageSquare, RotateCcw, DollarSign, LogOut, Shield } from 'lucide-react';
+import { LayoutDashboard, Users, FileText, PlusCircle, Calendar, Clock, CheckSquare, MessageSquare, RotateCcw, DollarSign, LogOut, Shield, Settings as SettingsIcon } from 'lucide-react';
 import Dashboard from './pages/Dashboard';
 import Login from './pages/Login';
 import ClientsList from './pages/ClientsList';
@@ -20,6 +20,7 @@ import TeamManagement from './pages/TeamManagement';
 import Commissions from './pages/Commissions';
 import Reports from './pages/Reports';
 import Expenses from './pages/Expenses';
+import Settings from './pages/Settings';
 import Header from './components/Header';
 import './App.css';
 import './App.css';
@@ -148,6 +149,8 @@ function AppContent() {
             {(!user || user.role === 'Admin' || (user.modules_access && user.modules_access.includes('REPORTS'))) && (
               <li><Link to="/reports" className={location.pathname.startsWith('/reports') ? 'active' : ''}><FileText size={20} /> System Reports</Link></li>
             )}
+
+            <li><Link to="/settings" className={`sidebar-link ${location.pathname.startsWith('/settings') ? 'active' : ''}`}><SettingsIcon size={20} /> Settings</Link></li>
           </ul>
 
           <div className="sidebar-footer" style={{ marginTop: 'auto', padding: '1.5rem', borderTop: '1px solid var(--border-color)' }}>
@@ -193,6 +196,7 @@ function AppContent() {
             <Route path="/expenses" element={<ProtectedRoute><Expenses /></ProtectedRoute>} />
             <Route path="/commissions" element={<ProtectedRoute><Commissions /></ProtectedRoute>} />
             <Route path="/reports" element={<ProtectedRoute><Reports /></ProtectedRoute>} />
+            <Route path="/settings" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
           </Routes>
         </main>
       </div>

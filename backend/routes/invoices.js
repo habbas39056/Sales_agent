@@ -82,10 +82,14 @@ router.post('/', async (req, res) => {
 
     const finalInvoiceNumber = invoice_number || `INV-${Date.now()}`;
     
+    const cleanProjectId = (project_id && project_id !== '') ? project_id : null;
+    const cleanAgentId = (agent_id && agent_id !== '') ? agent_id : null;
+    const cleanCreatedBy = (created_by && created_by !== '') ? created_by : null;
+
     // Create Invoice
     const [invoiceResult] = await connection.query(
       'INSERT INTO invoices (invoice_number, amount, balance, client_id, project_id, agent_id, commission_amount, issue_date, due_date, terms_and_conditions, bill_from_name, bill_from_address, created_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-      [finalInvoiceNumber, totalAmount, totalAmount, client_id, project_id || null, agent_id || null, commission_amount || 0, issue_date, due_date, terms_and_conditions, bill_from_name || 'Adwise Labs', bill_from_address || '', created_by || null]
+      [finalInvoiceNumber, totalAmount, totalAmount, client_id, cleanProjectId, cleanAgentId, commission_amount || 0, issue_date, due_date, terms_and_conditions, bill_from_name || 'Adwise Labs', bill_from_address || '', cleanCreatedBy]
     );
     const invoiceId = invoiceResult.insertId;
 
@@ -219,8 +223,8 @@ router.put('/:id', async (req, res) => {
   const invoiceId = req.params.id;
   const { client_id, project_id, agent_id, commission_amount, issue_date, due_date, terms_and_conditions, items, discount, bill_from_name, bill_from_address } = req.body;
   
-  if (!client_id || !issue_date || !due_date || !items || items.length === 0) {
-    return res.status(400).json({ error: 'Missing required fields or items' });
+  if (!items || !Array.isArray(items)) {
+    return res.status(400).json({ error: 'Invoice items array is required' });
   }
 
   const connection = await db.getConnection();
@@ -237,6 +241,20 @@ router.put('/:id', async (req, res) => {
     const [[invoice]] = await connection.query('SELECT * FROM invoices WHERE id = ?', [invoiceId]);
     if (!invoice) throw new Error('Invoice not found');
 
+    const targetClientId = client_id || invoice.client_id;
+    const targetIssueDate = issue_date || (invoice.issue_date ? new Date(invoice.issue_date).toISOString().split('T')[0] : new Date().toISOString().split('T')[0]);
+    const targetDueDate = due_date || (invoice.due_date ? new Date(invoice.due_date).toISOString().split('T')[0] : new Date().toISOString().split('T')[0]);
+    let targetProjectId = project_id !== undefined ? project_id : invoice.project_id;
+    if (targetProjectId === '') targetProjectId = null;
+
+    let targetAgentId = agent_id !== undefined ? agent_id : invoice.agent_id;
+    if (targetAgentId === '') targetAgentId = null;
+
+    const targetCommissionAmount = commission_amount !== undefined ? commission_amount : invoice.commission_amount;
+    const targetTerms = terms_and_conditions !== undefined ? terms_and_conditions : invoice.terms_and_conditions;
+    const targetBillName = bill_from_name || invoice.bill_from_name || 'Adwise Labs';
+    const targetBillAddress = bill_from_address !== undefined ? bill_from_address : invoice.bill_from_address;
+
     const [[paymentsSum]] = await connection.query('SELECT SUM(amount) as total_paid FROM invoice_payments WHERE invoice_id = ?', [invoiceId]);
     const paid = paymentsSum.total_paid || 0;
     
@@ -245,7 +263,7 @@ router.put('/:id', async (req, res) => {
     if (newBalance <= 0) {
       newBalance = 0;
       status = 'Paid';
-    } else if (new Date(due_date) < new Date()) {
+    } else if (targetDueDate && new Date(targetDueDate) < new Date()) {
       status = 'Overdue';
     } else {
       status = 'Unpaid';
@@ -253,7 +271,7 @@ router.put('/:id', async (req, res) => {
 
     await connection.query(
       'UPDATE invoices SET amount = ?, balance = ?, client_id = ?, project_id = ?, agent_id = ?, commission_amount = ?, issue_date = ?, due_date = ?, terms_and_conditions = ?, bill_from_name = ?, bill_from_address = ?, status = ? WHERE id = ?',
-      [totalAmount, newBalance, client_id, project_id || null, agent_id || null, commission_amount || 0, issue_date, due_date, terms_and_conditions, bill_from_name || 'Adwise Labs', bill_from_address || '', status, invoiceId]
+      [totalAmount, newBalance, targetClientId, targetProjectId, targetAgentId, targetCommissionAmount, targetIssueDate, targetDueDate, targetTerms, targetBillName, targetBillAddress, status, invoiceId]
     );
 
     await connection.query('DELETE FROM invoice_items WHERE invoice_id = ?', [invoiceId]);

@@ -32,7 +32,35 @@ export default function Reports() {
   const [selectedTeamMember, setSelectedTeamMember] = useState(null);
   const [teamDetails, setTeamDetails] = useState([]);
   const [isTeamModalOpen, setIsTeamModalOpen] = useState(false);
-  const [teamDetailsLoading, setTeamDetailsLoading] = useState(false);
+  // Profit Analysis State
+  const [profitReport, setProfitReport] = useState({ summary: { total_revenue: 0, total_expenses: 0, net_profit: 0, profit_margin: 0 }, monthlyTrend: [] });
+  const [profitStartDate, setProfitStartDate] = useState('');
+  const [profitEndDate, setProfitEndDate] = useState('');
+  const [profitQuickPreset, setProfitQuickPreset] = useState('all');
+
+  const setProfitQuickFilter = (preset) => {
+    setProfitQuickPreset(preset);
+    const today = new Date();
+    if (preset === 'this_month') {
+      const firstDay = new Date(today.getFullYear(), today.getMonth(), 1).toISOString().split('T')[0];
+      const lastDay = new Date(today.getFullYear(), today.getMonth() + 1, 0).toISOString().split('T')[0];
+      setProfitStartDate(firstDay);
+      setProfitEndDate(lastDay);
+    } else if (preset === 'last_month') {
+      const firstDay = new Date(today.getFullYear(), today.getMonth() - 1, 1).toISOString().split('T')[0];
+      const lastDay = new Date(today.getFullYear(), today.getMonth(), 0).toISOString().split('T')[0];
+      setProfitStartDate(firstDay);
+      setProfitEndDate(lastDay);
+    } else if (preset === 'this_year') {
+      const firstDay = new Date(today.getFullYear(), 0, 1).toISOString().split('T')[0];
+      const lastDay = new Date(today.getFullYear(), 11, 31).toISOString().split('T')[0];
+      setProfitStartDate(firstDay);
+      setProfitEndDate(lastDay);
+    } else {
+      setProfitStartDate('');
+      setProfitEndDate('');
+    }
+  };
 
   const setQuickFilter = (days) => {
     const end = new Date();
@@ -123,7 +151,7 @@ export default function Reports() {
 
   useEffect(() => {
     fetchReports();
-  }, [activeTab]);
+  }, [activeTab, profitStartDate, profitEndDate]);
 
   const fetchReports = async () => {
     setLoading(true);
@@ -139,6 +167,14 @@ export default function Reports() {
       } else if (activeTab === 'team') {
         const res = await axios.get(`${API_URL}/reports/team`);
         setTeamReports(res.data);
+      } else if (activeTab === 'profit') {
+        let url = `${API_URL}/reports/profit`;
+        const params = new URLSearchParams();
+        if (profitStartDate) params.append('start_date', profitStartDate);
+        if (profitEndDate) params.append('end_date', profitEndDate);
+        if (params.toString()) url += `?${params.toString()}`;
+        const res = await axios.get(url);
+        setProfitReport(res.data);
       } else {
         const res = await axios.get(`${API_URL}/reports/sales`);
         setSalesReports(res.data);
@@ -269,15 +305,45 @@ export default function Reports() {
     doc.save('Team_Reports.pdf');
   };
 
+  const downloadProfitPDF = () => {
+    const doc = new jsPDF();
+    doc.setFontSize(20);
+    doc.setTextColor(40, 40, 40);
+    doc.text('Profit & Financial Analytics Report', 14, 22);
+    
+    doc.setFontSize(10);
+    doc.setTextColor(100, 100, 100);
+    doc.text(`Generated on: ${new Date().toLocaleDateString()}`, 14, 30);
+    
+    const summary = profitReport.summary || {};
+    doc.setFontSize(10);
+    doc.setTextColor(30, 41, 59);
+    doc.text(`Total Revenue: PKR ${summary.total_revenue || 0} | Expenses: PKR ${summary.total_expenses || 0} | Net Profit: PKR ${summary.net_profit || 0} (Margin: ${summary.profit_margin || 0}%)`, 14, 37);
+
+    const tableColumn = ["Month", "Revenue (PKR)", "Expenses (PKR)", "Net Profit (PKR)", "Margin (%)", "Status"];
+    const tableRows = (profitReport.monthlyTrend || []).map(row => [
+      row.month,
+      `PKR ${parseFloat(row.revenue).toFixed(2)}`,
+      `PKR ${parseFloat(row.expenses).toFixed(2)}`,
+      `PKR ${parseFloat(row.profit).toFixed(2)}`,
+      `${row.margin}%`,
+      row.profit >= 0 ? 'Profitable' : 'Loss'
+    ]);
+
+    autoTable(doc, {
+      head: [tableColumn],
+      body: tableRows,
+      startY: 45,
+      theme: 'grid',
+      headStyles: { fillColor: [79, 70, 229] }, // Indigo primary color
+      styles: { fontSize: 10, cellPadding: 3 },
+    });
+
+    doc.save('Profit_Loss_Analytics_Report.pdf');
+  };
+
   return (
     <div className="reports-container">
-      <div className="reports-header">
-        <div>
-          <h1>System Reports</h1>
-          <p>360-degree view of clients and team performance</p>
-        </div>
-      </div>
-
       <div className="reports-dashboard-cards">
         <div className="dashboard-stat-card">
           <div className="stat-icon-wrapper blue">
@@ -328,6 +394,12 @@ export default function Reports() {
           onClick={() => setActiveTab('team')}
         >
           <Shield size={18} /> Team Reports
+        </button>
+        <button 
+          className={`tab-btn ${activeTab === 'profit' ? 'active' : ''}`}
+          onClick={() => setActiveTab('profit')}
+        >
+          <TrendingUp size={18} /> Profit Analysis
         </button>
       </div>
 
@@ -455,7 +527,7 @@ export default function Reports() {
               </table>
             </div>
           </div>
-        ) : (
+        ) : activeTab === 'team' ? (
           <div className="report-panel fade-in">
             <div className="panel-header">
               <h2>Team Performance & Commissions</h2>
@@ -497,6 +569,197 @@ export default function Reports() {
                         <td className="text-warning fw-600">{member.active_projects}</td>
                         <td className="text-blue">PKR {parseFloat(member.total_commissions).toFixed(2)}</td>
                         <td className={parseFloat(member.pending_commissions) > 0 ? 'text-warning fw-600' : ''}>PKR {parseFloat(member.pending_commissions).toFixed(2)}
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        ) : (
+          <div className="report-panel fade-in">
+            <div className="panel-header" style={{ flexDirection: 'column', alignItems: 'flex-start', gap: '1rem' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%', flexWrap: 'wrap', gap: '1rem' }}>
+                <h2>Profit & Financial Loss Analysis</h2>
+                <button className="download-btn btn-blue" onClick={downloadProfitPDF} style={{ background: '#4f46e5', color: '#ffffff', border: 'none', padding: '0.55rem 1.1rem', borderRadius: '8px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.5rem', fontWeight: 600 }}>
+                  <Download size={18} /> Export Profit PDF
+                </button>
+              </div>
+
+              {/* Profit Date Filters */}
+              <div className="sales-filters" style={{ width: '100%' }}>
+                <div className="date-inputs">
+                  <div className="input-group">
+                    <label>From:</label>
+                    <input 
+                      type="date" 
+                      value={profitStartDate} 
+                      onChange={(e) => { setProfitStartDate(e.target.value); setProfitQuickPreset(''); }} 
+                    />
+                  </div>
+                  <div className="input-group">
+                    <label>To:</label>
+                    <input 
+                      type="date" 
+                      value={profitEndDate} 
+                      onChange={(e) => { setProfitEndDate(e.target.value); setProfitQuickPreset(''); }} 
+                    />
+                  </div>
+                  {(profitStartDate || profitEndDate) && (
+                    <button 
+                      className="btn-clear-date"
+                      onClick={() => { setProfitStartDate(''); setProfitEndDate(''); setProfitQuickPreset('all'); }}
+                    >
+                      Clear
+                    </button>
+                  )}
+                </div>
+
+                <div className="quick-filters">
+                  <button 
+                    className={`btn-quick ${profitQuickPreset === 'all' ? 'active' : ''}`}
+                    onClick={() => setProfitQuickFilter('all')}
+                  >
+                    All Time
+                  </button>
+                  <button 
+                    className={`btn-quick ${profitQuickPreset === 'this_month' ? 'active' : ''}`}
+                    onClick={() => setProfitQuickFilter('this_month')}
+                  >
+                    This Month
+                  </button>
+                  <button 
+                    className={`btn-quick ${profitQuickPreset === 'last_month' ? 'active' : ''}`}
+                    onClick={() => setProfitQuickFilter('last_month')}
+                  >
+                    Last Month
+                  </button>
+                  <button 
+                    className={`btn-quick ${profitQuickPreset === 'this_year' ? 'active' : ''}`}
+                    onClick={() => setProfitQuickFilter('this_year')}
+                  >
+                    This Year
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            {/* Stat Cards for Profit */}
+            <div className="reports-dashboard-cards" style={{ marginTop: '1.5rem', marginBottom: '1.5rem' }}>
+              <div className="dashboard-stat-card">
+                <div className="stat-icon-wrapper green">
+                  <TrendingUp size={24} />
+                </div>
+                <div className="stat-content">
+                  <p className="stat-label">Total Revenue (Income)</p>
+                  <h3 className="stat-value text-success">PKR {Number(profitReport.summary?.total_revenue || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</h3>
+                </div>
+              </div>
+
+              <div className="dashboard-stat-card">
+                <div className="stat-icon-wrapper orange">
+                  <CreditCard size={24} />
+                </div>
+                <div className="stat-content">
+                  <p className="stat-label">Total Expenses</p>
+                  <h3 className="stat-value text-danger">PKR {Number(profitReport.summary?.total_expenses || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</h3>
+                </div>
+              </div>
+
+              <div className="dashboard-stat-card">
+                <div className="stat-icon-wrapper blue">
+                  <DollarSign size={24} />
+                </div>
+                <div className="stat-content">
+                  <p className="stat-label">Net Profit / (Loss)</p>
+                  <h3 className={`stat-value ${(profitReport.summary?.net_profit || 0) >= 0 ? 'text-success' : 'text-danger'}`}>
+                    PKR {Number(profitReport.summary?.net_profit || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  </h3>
+                </div>
+              </div>
+
+              <div className="dashboard-stat-card">
+                <div className="stat-icon-wrapper blue" style={{ backgroundColor: '#f3e8ff', color: '#9333ea' }}>
+                  <CheckCircle size={24} />
+                </div>
+                <div className="stat-content">
+                  <p className="stat-label">Profit Margin</p>
+                  <h3 className="stat-value" style={{ color: '#9333ea' }}>
+                    {profitReport.summary?.profit_margin || 0}%
+                  </h3>
+                </div>
+              </div>
+            </div>
+
+            {/* Recharts Chart */}
+            <div className="chart-container" style={{ marginTop: '1.5rem', marginBottom: '2rem', background: '#ffffff', padding: '1.25rem', borderRadius: '12px', border: '1px solid #e2e8f0' }}>
+              <h3 style={{ marginBottom: '1.25rem', fontSize: '1.1rem', fontWeight: 600, color: '#1e293b' }}>Monthly Revenue vs Expense & Net Profit Trend</h3>
+              {(profitReport.monthlyTrend || []).length === 0 ? (
+                <div className="empty-state">No trend data available for the selected period.</div>
+              ) : (
+                <ResponsiveContainer width="100%" height={320}>
+                  <AreaChart data={profitReport.monthlyTrend} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
+                    <defs>
+                      <linearGradient id="colorRevenue" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="#10b981" stopOpacity={0.8}/>
+                        <stop offset="95%" stopColor="#10b981" stopOpacity={0}/>
+                      </linearGradient>
+                      <linearGradient id="colorExpense" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="#ef4444" stopOpacity={0.8}/>
+                        <stop offset="95%" stopColor="#ef4444" stopOpacity={0}/>
+                      </linearGradient>
+                      <linearGradient id="colorProfit" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="#4f46e5" stopOpacity={0.8}/>
+                        <stop offset="95%" stopColor="#4f46e5" stopOpacity={0}/>
+                      </linearGradient>
+                    </defs>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
+                    <XAxis dataKey="month" tick={{ fontSize: 12 }} />
+                    <YAxis tick={{ fontSize: 12 }} tickFormatter={(val) => `${val >= 1000 ? (val/1000) + 'k' : val}`} />
+                    <Tooltip formatter={(val) => [`PKR ${Number(val).toLocaleString()}`, '']} />
+                    <Legend />
+                    <Area type="monotone" dataKey="revenue" name="Revenue" stroke="#10b981" fillOpacity={1} fill="url(#colorRevenue)" />
+                    <Area type="monotone" dataKey="expenses" name="Expenses" stroke="#ef4444" fillOpacity={1} fill="url(#colorExpense)" />
+                    <Area type="monotone" dataKey="profit" name="Net Profit" stroke="#4f46e5" fillOpacity={1} fill="url(#colorProfit)" />
+                  </AreaChart>
+                </ResponsiveContainer>
+              )}
+            </div>
+
+            {/* Monthly Profit Breakdown Table */}
+            <div className="table-responsive">
+              <h3 style={{ marginBottom: '1rem', fontSize: '1.1rem', fontWeight: 600, color: '#1e293b' }}>Monthly Financial Breakdown</h3>
+              <table className="modern-table">
+                <thead>
+                  <tr>
+                    <th>Month</th>
+                    <th>Revenue (PKR)</th>
+                    <th>Expenses (PKR)</th>
+                    <th>Net Profit (PKR)</th>
+                    <th>Profit Margin</th>
+                    <th>Status</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {(profitReport.monthlyTrend || []).length === 0 ? (
+                    <tr>
+                      <td colSpan="6" className="empty-state">No monthly records found.</td>
+                    </tr>
+                  ) : (
+                    (profitReport.monthlyTrend || []).map((row, idx) => (
+                      <tr key={idx}>
+                        <td className="fw-600">{row.month}</td>
+                        <td className="text-success fw-600">PKR {Number(row.revenue).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                        <td className="text-danger fw-600">PKR {Number(row.expenses).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                        <td className={row.profit >= 0 ? "text-success fw-600" : "text-danger fw-600"}>
+                          PKR {Number(row.profit).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        </td>
+                        <td>{row.margin}%</td>
+                        <td>
+                          <span className={`status-badge ${row.profit >= 0 ? 'status-paid' : 'status-overdue'}`}>
+                            {row.profit >= 0 ? 'Profitable' : 'Loss'}
+                          </span>
                         </td>
                       </tr>
                     ))

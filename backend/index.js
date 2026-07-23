@@ -30,6 +30,8 @@ app.use('/api/reports', authMiddleware, require('./routes/reports'));
 app.use('/api/expenses', authMiddleware, require('./routes/expenses'));
 app.use('/api/banks', authMiddleware, require('./routes/banks'));
 app.use('/api/search', authMiddleware, require('./routes/search'));
+app.use('/api/settings', authMiddleware, require('./routes/settings'));
+app.use('/api/project-categories', authMiddleware, require('./routes/project_categories'));
 
 // Serve static frontend files
 app.use(express.static(path.join(__dirname, '../frontend/dist')));

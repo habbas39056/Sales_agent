@@ -35,6 +35,26 @@
   opacity: 0.9;
 }
 
+.btn-excel {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  background-color: #10b981;
+  color: white;
+  border: none;
+  padding: 0.75rem 1.25rem;
+  border-radius: 8px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color 0.2s, transform 0.1s;
+  box-shadow: 0 2px 4px rgba(16, 185, 129, 0.2);
+}
+
+.btn-excel:hover {
+  background-color: #059669;
+  transform: translateY(-1px);
+}
+
 .projects-filters {
   display: flex;
   gap: 1rem;
@@ -200,4 +220,58 @@
 .status-pill.completed {
   background-color: #e0e7ff;
   color: #4338ca;
+}
+
+/* Thin Project Table Rows */
+.project-row {
+  transition: background-color 0.15s ease;
+  cursor: pointer;
+}
+
+.project-row:hover {
+  background-color: #f8fafc !important;
+}
+
+.project-row td {
+  padding: 0.65rem 1rem !important;
+  vertical-align: middle;
+}
+
+.folder-icon-sm {
+  background-color: #eff6ff;
+  color: var(--primary-color);
+  width: 32px;
+  height: 32px;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.service-tag {
+  background-color: #f1f5f9;
+  color: #475569;
+  padding: 0.2rem 0.6rem;
+  border-radius: 6px;
+  font-size: 0.8rem;
+  font-weight: 500;
+}
+
+.btn-view-link {
+  background: transparent;
+  border: 1px solid var(--border-color);
+  color: var(--primary-color);
+  padding: 0.3rem 0.75rem;
+  border-radius: 6px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.btn-view-link:hover {
+  background: var(--primary-color);
+  color: #ffffff;
+  border-color: var(--primary-color);
 }

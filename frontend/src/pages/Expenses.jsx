@@ -18,7 +18,9 @@ export default function Expenses() {
   // Filters
   const [typeFilter, setTypeFilter] = useState('All Types');
   const [bankFilter, setBankFilter] = useState('All Banks');
-  
+  const [fromDate, setFromDate] = useState('');
+  const [toDate, setToDate] = useState('');
+
   // Pagination
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 15;
@@ -164,12 +166,12 @@ export default function Expenses() {
     
     doc.setFontSize(11);
     doc.text(`Generated: ${new Date().toLocaleDateString()}`, 14, 32);
-    doc.text(`Cash in Hand: $${summary.cashInHand.toFixed(2)}`, 14, 40);
-    doc.text(`Other Expenses: $${summary.otherExpenses.toFixed(2)}`, 14, 46);
-    doc.text(`Total Net Balance: $${summary.totalNetBalance.toFixed(2)}`, 14, 52);
+    doc.text(`Cash in Hand: $${summary.cashInHand?.toFixed(2) || '0.00'}`, 14, 40);
+    doc.text(`Other Expenses: $${summary.otherExpenses?.toFixed(2) || '0.00'}`, 14, 46);
+    doc.text(`Total Net Balance: $${summary.totalNetBalance?.toFixed(2) || '0.00'}`, 14, 52);
 
     const tableColumn = ["Date", "Client/Party", "Description", "Mode", "Bank", "Ref", "Receipt", "Payment", "Balance"];
-    const tableRows = expenses.map(exp => [
+    const tableRows = filteredExpenses.map(exp => [
       new Date(exp.date).toLocaleDateString(),
       exp.client,
       exp.description,
@@ -193,16 +195,34 @@ export default function Expenses() {
   };
 
   const filteredExpenses = expenses.filter(exp => {
-    const matchesSearch = (exp.client && exp.client.toLowerCase().includes(searchTerm.toLowerCase())) ||
-                          (exp.description && exp.description.toLowerCase().includes(searchTerm.toLowerCase()));
+    const term = searchTerm.trim().toLowerCase();
+
+    // Multi-field search across Client, Description, Mode, Bank, Reference, Amount, and ID
+    const matchesSearch = !term || 
+      (exp.client && exp.client.toLowerCase().includes(term)) || 
+      (exp.description && exp.description.toLowerCase().includes(term)) || 
+      (exp.mode && exp.mode.toLowerCase().includes(term)) || 
+      (exp.bank && exp.bank.toLowerCase().includes(term)) || 
+      (exp.reference && exp.reference.toLowerCase().includes(term)) || 
+      (exp.receipt_amount && exp.receipt_amount.toString().includes(term)) || 
+      (exp.payment_amount && exp.payment_amount.toString().includes(term)) || 
+      (exp.id && exp.id.toString().includes(term));
     
     let matchesType = true;
     if (typeFilter === 'Receipts') matchesType = exp.receipt_amount > 0;
     if (typeFilter === 'Payments') matchesType = exp.payment_amount > 0;
     
     const matchesBank = bankFilter === 'All Banks' || exp.bank === bankFilter;
+
+    // Date Range Filter
+    let matchesDate = true;
+    if (exp.date) {
+      const expDateStr = new Date(exp.date).toISOString().slice(0, 10);
+      if (fromDate && expDateStr < fromDate) matchesDate = false;
+      if (toDate && expDateStr > toDate) matchesDate = false;
+    }
     
-    return matchesSearch && matchesType && matchesBank;
+    return matchesSearch && matchesType && matchesBank && matchesDate;
   });
 
   const currentExpenses = filteredExpenses.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
@@ -214,8 +234,7 @@ export default function Expenses() {
 
   return (
     <div className="expenses-container modern-ui">
-      <div className="expenses-controls">
-        <h2>Expense</h2>
+      <div className="expenses-controls" style={{ justifyContent: 'flex-end', marginBottom: '1.5rem' }}>
         <div className="controls-right">
           <button className="btn-outline" onClick={() => setIsManageBanksModalOpen(true)}>
             <Building2 size={16} /> Manage Banks
@@ -304,12 +323,12 @@ export default function Expenses() {
 
       {/* Expenses Table */}
       <div className="recent-orders-panel" style={{ marginTop: '2rem' }}>
-        <div className="panel-header-ref" style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap', marginBottom: '1rem', alignItems: 'center' }}>
-          <div className="search-box-ref" style={{ margin: 0, flex: 1, minWidth: '200px' }}>
+        <div className="panel-header-ref" style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap', marginBottom: '1rem', alignItems: 'center' }}>
+          <div className="search-box-ref" style={{ margin: 0, flex: '1 1 220px', minWidth: '200px' }}>
             <Search size={16} />
             <input 
               type="text" 
-              placeholder="Search expenses..." 
+              placeholder="Search by client, description, mode, bank, ref, amount..." 
               value={searchTerm}
               onChange={handleSearchChange}
             />
@@ -321,7 +340,7 @@ export default function Expenses() {
               setTypeFilter(e.target.value);
               setCurrentPage(1);
             }}
-            style={{ padding: '0.5rem', borderRadius: '6px', border: '1px solid var(--border-color)', outline: 'none' }}
+            style={{ padding: '0.5rem 0.75rem', borderRadius: '20px', border: '1px solid #e2e8f0', background: '#f8fafc', fontSize: '0.85rem', outline: 'none' }}
           >
             <option value="All Types">All Types</option>
             <option value="Receipts">Receipts</option>
@@ -334,11 +353,43 @@ export default function Expenses() {
               setBankFilter(e.target.value);
               setCurrentPage(1);
             }}
-            style={{ padding: '0.5rem', borderRadius: '6px', border: '1px solid var(--border-color)', outline: 'none', maxWidth: '200px' }}
+            style={{ padding: '0.5rem 0.75rem', borderRadius: '20px', border: '1px solid #e2e8f0', background: '#f8fafc', fontSize: '0.85rem', outline: 'none', maxWidth: '180px' }}
           >
             <option value="All Banks">All Banks</option>
             {banks.map(b => <option key={b.id} value={b.name}>{b.name}</option>)}
           </select>
+
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '20px', padding: '0.35rem 0.75rem' }}>
+            <span style={{ fontSize: '0.8rem', color: '#64748b', fontWeight: 600 }}>From:</span>
+            <input 
+              type="date" 
+              value={fromDate} 
+              onChange={e => {
+                setFromDate(e.target.value);
+                setCurrentPage(1);
+              }}
+              style={{ border: 'none', background: 'transparent', fontSize: '0.82rem', color: '#1e293b', outline: 'none' }}
+            />
+            <span style={{ fontSize: '0.8rem', color: '#64748b', fontWeight: 600 }}>To:</span>
+            <input 
+              type="date" 
+              value={toDate} 
+              onChange={e => {
+                setToDate(e.target.value);
+                setCurrentPage(1);
+              }}
+              style={{ border: 'none', background: 'transparent', fontSize: '0.82rem', color: '#1e293b', outline: 'none' }}
+            />
+            {(fromDate || toDate) && (
+              <button 
+                onClick={() => { setFromDate(''); setToDate(''); setCurrentPage(1); }}
+                style={{ border: 'none', background: 'transparent', color: '#ef4444', cursor: 'pointer', fontSize: '0.8rem', fontWeight: 'bold', marginLeft: '0.25rem' }}
+                title="Clear Date Filter"
+              >
+                ✕
+              </button>
+            )}
+          </div>
         </div>
 
         <div className="table-responsive-ref">

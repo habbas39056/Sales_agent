@@ -139,16 +139,56 @@ router.post('/:id/steps', upload.array('attachments', 5), async (req, res) => {
   }
 });
 
+// Upload documents to a workflow step
+router.post('/:id/steps/:step_id/documents', upload.array('documents', 10), async (req, res) => {
+  try {
+    if (!req.files || req.files.length === 0) {
+      return res.status(400).json({ error: 'No files uploaded.' });
+    }
+
+    const newPaths = req.files.map(file => `/uploads/${file.filename}`);
+
+    const [[step]] = await db.query('SELECT attachments FROM project_steps WHERE id = ? AND project_id = ?', [req.params.step_id, req.params.id]);
+    if (!step) return res.status(404).json({ error: 'Step not found.' });
+
+    let existingFiles = [];
+    if (step.attachments) {
+      try { existingFiles = JSON.parse(step.attachments); } catch(e) { existingFiles = [step.attachments]; }
+    }
+
+    const updatedFiles = [...existingFiles, ...newPaths];
+    await db.query('UPDATE project_steps SET attachments = ? WHERE id = ? AND project_id = ?', [JSON.stringify(updatedFiles), req.params.step_id, req.params.id]);
+
+    // Log to step activity
+    await db.query('INSERT INTO step_activity (step_id, user_id, action_text) VALUES (?, ?, ?)',
+      [req.params.step_id, null, `Uploaded ${req.files.length} document(s)`]
+    );
+
+    res.json({ message: 'Documents uploaded', attachments: updatedFiles });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // Update workflow step status or allow_revision
 router.put('/:id/steps/:step_id', async (req, res) => {
   const { status, allow_revision } = req.body;
   try {
     if (status !== undefined && allow_revision !== undefined) {
       await db.query('UPDATE project_steps SET status = ?, allow_revision = ? WHERE id = ? AND project_id = ?', [status, allow_revision, req.params.step_id, req.params.id]);
+      await db.query('INSERT INTO step_activity (step_id, user_id, action_text) VALUES (?, ?, ?)',
+        [req.params.step_id, null, `Updated status to "${status}" and revision option to ${allow_revision ? 'Enabled' : 'Disabled'}`]
+      );
     } else if (status !== undefined) {
       await db.query('UPDATE project_steps SET status = ? WHERE id = ? AND project_id = ?', [status, req.params.step_id, req.params.id]);
+      await db.query('INSERT INTO step_activity (step_id, user_id, action_text) VALUES (?, ?, ?)',
+        [req.params.step_id, null, `Changed status to "${status}"`]
+      );
     } else if (allow_revision !== undefined) {
       await db.query('UPDATE project_steps SET allow_revision = ? WHERE id = ? AND project_id = ?', [allow_revision, req.params.step_id, req.params.id]);
+      await db.query('INSERT INTO step_activity (step_id, user_id, action_text) VALUES (?, ?, ?)',
+        [req.params.step_id, null, `${allow_revision ? 'Enabled' : 'Disabled'} revision requests`]
+      );
     }
     res.json({ message: 'Step updated' });
   } catch (error) {
@@ -283,4 +323,87 @@ router.post('/:id/approve', async (req, res) => {
   }
 });
 
+// Step Comments Endpoints
+router.get('/steps/:step_id/comments', async (req, res) => {
+  try {
+    const [comments] = await db.query(`
+      SELECT sc.*, u.name as user_name, u.role as user_role 
+      FROM step_comments sc 
+      JOIN users u ON sc.user_id = u.id 
+      WHERE sc.step_id = ? 
+      ORDER BY sc.created_at ASC
+    `, [req.params.step_id]);
+    res.json(comments);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+router.post('/steps/:step_id/comments', async (req, res) => {
+  const { user_id, message } = req.body;
+  if (!user_id || !message || !message.trim()) {
+    return res.status(400).json({ error: 'User ID and message are required.' });
+  }
+  try {
+    const [result] = await db.query(
+      'INSERT INTO step_comments (step_id, user_id, message) VALUES (?, ?, ?)',
+      [req.params.step_id, user_id, message.trim()]
+    );
+    const [[newComment]] = await db.query(`
+      SELECT sc.*, u.name as user_name, u.role as user_role 
+      FROM step_comments sc 
+      JOIN users u ON sc.user_id = u.id 
+      WHERE sc.id = ?
+    `, [result.insertId]);
+
+    // Also log to activity
+    await db.query('INSERT INTO step_activity (step_id, user_id, action_text) VALUES (?, ?, ?)',
+      [req.params.step_id, user_id, `Posted a comment: "${message.trim().substring(0, 50)}${message.trim().length > 50 ? '...' : ''}"`]
+    );
+
+    res.json(newComment);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Step Activity Endpoints
+router.get('/steps/:step_id/activity', async (req, res) => {
+  try {
+    const [activities] = await db.query(`
+      SELECT sa.*, u.name as user_name, u.role as user_role 
+      FROM step_activity sa 
+      LEFT JOIN users u ON sa.user_id = u.id 
+      WHERE sa.step_id = ? 
+      ORDER BY sa.created_at DESC
+    `, [req.params.step_id]);
+    res.json(activities);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+router.post('/steps/:step_id/activity', async (req, res) => {
+  const { user_id, action_text } = req.body;
+  if (!action_text) {
+    return res.status(400).json({ error: 'Action text is required.' });
+  }
+  try {
+    const [result] = await db.query(
+      'INSERT INTO step_activity (step_id, user_id, action_text) VALUES (?, ?, ?)',
+      [req.params.step_id, user_id || null, action_text]
+    );
+    const [[newAct]] = await db.query(`
+      SELECT sa.*, u.name as user_name, u.role as user_role 
+      FROM step_activity sa 
+      LEFT JOIN users u ON sa.user_id = u.id 
+      WHERE sa.id = ?
+    `, [result.insertId]);
+    res.json(newAct);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 module.exports = router;
+

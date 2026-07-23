@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { useNavigate } from 'react-router-dom';
-import { LayoutDashboard, FileText, CreditCard, Folder, StickyNote, Check, Eye, Printer, X, ChevronRight, Lock, LogOut, Plus, Edit, Trash2 } from 'lucide-react';
+import { LayoutDashboard, FileText, CreditCard, Folder, StickyNote, Check, Eye, Printer, X, ChevronRight, Lock, LogOut, Plus, Edit, Trash2, MessageSquare } from 'lucide-react';
+import StepComments from '../components/StepComments';
 import './ClientPortal.css';
 
 export default function ClientPortal() {
@@ -17,6 +18,7 @@ export default function ClientPortal() {
   const [editingNote, setEditingNote] = useState(null);
   const [noteContent, setNoteContent] = useState('');
   const [expandedRevisions, setExpandedRevisions] = useState({});
+  const [expandedComments, setExpandedComments] = useState({});
 
   const currentUser = JSON.parse(localStorage.getItem('user') || '{}');
 
@@ -379,15 +381,32 @@ export default function ClientPortal() {
                                 </div>
                               )}
                               
-                              {/* If no revision exists, show the Request button (if allowed) */}
-                              {!!step.allow_revision && !hasRevision && (
+                              {/* Revision & Comments Buttons */}
+                              <div style={{ marginTop: '1rem', display: 'flex', gap: '1rem', flexWrap: 'wrap', alignItems: 'center' }}>
+                                {!!step.allow_revision && !hasRevision && (
+                                  <button 
+                                    className="btn" 
+                                    style={{ backgroundColor: '#e2e8f0', color: '#1e293b', display: 'flex', alignItems: 'center', gap: '0.5rem', border: '1px solid #cbd5e1' }}
+                                    onClick={() => navigate(`/client-portal/revision/${selectedProject.id}/${step.id}`)}
+                                  >
+                                    <Edit size={16} /> Revision Required
+                                  </button>
+                                )}
+
                                 <button 
-                                  className="btn" 
-                                  style={{marginTop: '1rem', backgroundColor: '#e2e8f0', color: '#1e293b', display: 'flex', alignItems: 'center', gap: '0.5rem', border: '1px solid #cbd5e1'}}
-                                  onClick={() => navigate(`/client-portal/revision/${selectedProject.id}/${step.id}`)}
+                                  className="btn-link" 
+                                  style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: 0, color: 'var(--primary-color)', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 'bold' }}
+                                  onClick={() => setExpandedComments(prev => ({ ...prev, [step.id]: !prev[step.id] }))}
                                 >
-                                  <Edit size={16} /> Revision Required
+                                  <MessageSquare size={16} /> {expandedComments[step.id] ? 'Hide Comments & Chat' : 'Comments & Discussion'}
                                 </button>
+                              </div>
+
+                              {/* Comments Chat Drawer */}
+                              {expandedComments[step.id] && (
+                                <div style={{ marginTop: '1rem' }}>
+                                  <StepComments stepId={step.id} currentUser={currentUser} />
+                                </div>
                               )}
 
                               {/* If revision exists, show View Revision button */}
@@ -554,8 +573,8 @@ export default function ClientPortal() {
               
               <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '2rem' }}>
                 <div style={{ flex: 1 }}>
-                  <div style={{ backgroundColor: '#0f172a', padding: '1rem', borderRadius: '8px', display: 'inline-block', marginBottom: '2rem', WebkitPrintColorAdjust: 'exact', printColorAdjust: 'exact' }}>
-                    <img src="/Adwise Labs White Logo.png" alt="Adwise Labs Logo" style={{ maxWidth: '200px', display: 'block' }} />
+                  <div style={{ marginBottom: '1.5rem' }}>
+                    <img src="/Adwise-Labs-Primary-Logo.png" alt="Adwise Labs Logo" style={{ maxWidth: '220px', height: 'auto', display: 'block' }} />
                   </div>
                   <h2 style={{ fontSize: '1.2rem', marginBottom: '1.5rem' }}>Invoice {previewInvoice.invoice_number}</h2>
                   

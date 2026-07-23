@@ -52,8 +52,8 @@ router.post('/login', async (req, res) => {
 
 router.get('/specialists', authMiddleware, async (req, res) => {
   try {
-    // Assuming specialists are users with a specific role, or just all users for now
-    const [rows] = await db.query('SELECT id, name as full_name, email, role FROM users');
+    // Only return team members (exclude clients)
+    const [rows] = await db.query("SELECT id, name as full_name, email, role FROM users WHERE role != 'Client' ORDER BY name ASC");
     res.json(rows);
   } catch (error) {
     res.status(500).json({ error: error.message });

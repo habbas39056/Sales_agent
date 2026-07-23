@@ -118,30 +118,113 @@ export default function ClientsList() {
     }
   };
 
-  const filteredClients = clients.filter(c => 
-    c.full_name.toLowerCase().includes(searchTerm.toLowerCase()) || 
-    (c.business_name && c.business_name.toLowerCase().includes(searchTerm.toLowerCase()))
-  );
+  const [typeFilter, setTypeFilter] = useState('All Types');
+  const [fromDate, setFromDate] = useState('');
+  const [toDate, setToDate] = useState('');
+
+  const filteredClients = clients.filter(c => {
+    const term = searchTerm.trim().toLowerCase();
+    
+    // Multi-field search across Name, Business, Email, Phone/WhatsApp, Address, and ID
+    const matchesSearch = !term || 
+      (c.full_name && c.full_name.toLowerCase().includes(term)) || 
+      (c.business_name && c.business_name.toLowerCase().includes(term)) || 
+      (c.email && c.email.toLowerCase().includes(term)) || 
+      (c.whatsapp_number && c.whatsapp_number.toLowerCase().includes(term)) || 
+      (c.physical_address && c.physical_address.toLowerCase().includes(term)) || 
+      (c.id && c.id.toString().includes(term));
+
+    // Client Type Filter
+    let matchesType = true;
+    if (typeFilter === 'Corporate / Business') {
+      matchesType = Boolean(c.business_name && c.business_name.trim());
+    } else if (typeFilter === 'Individual') {
+      matchesType = !c.business_name || !c.business_name.trim();
+    }
+
+    // Date Range Filter
+    let matchesDate = true;
+    if (c.created_at) {
+      const clientDateStr = new Date(c.created_at).toISOString().slice(0, 10);
+      if (fromDate && clientDateStr < fromDate) {
+        matchesDate = false;
+      }
+      if (toDate && clientDateStr > toDate) {
+        matchesDate = false;
+      }
+    }
+
+    return matchesSearch && matchesType && matchesDate;
+  });
 
   const currentClients = filteredClients.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
 
   return (
     <div className="clients-list-container modern-ui">
       <div className="recent-orders-panel" style={{ marginTop: '2rem' }}>
-        <div className="panel-header-ref">
-          <div className="search-box-ref">
-            <Search size={16} />
-            <input 
-              type="text" 
-              placeholder="Search clients..." 
-              value={searchTerm}
+        <div className="panel-header-ref" style={{ display: 'flex', flexWrap: 'wrap', gap: '1rem', alignItems: 'center', justifyContent: 'space-between' }}>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.75rem', flex: 1, alignItems: 'center' }}>
+            <div className="search-box-ref" style={{ flex: '1 1 220px', minWidth: '200px' }}>
+              <Search size={16} />
+              <input 
+                type="text" 
+                placeholder="Search by name, email, phone, address..." 
+                value={searchTerm}
+                onChange={e => {
+                  setSearchTerm(e.target.value);
+                  setCurrentPage(1);
+                }}
+              />
+            </div>
+
+            <select 
+              className="filter-select"
+              value={typeFilter}
               onChange={e => {
-                setSearchTerm(e.target.value);
+                setTypeFilter(e.target.value);
                 setCurrentPage(1);
               }}
-            />
+              style={{ padding: '0.5rem 0.75rem', borderRadius: '20px', border: '1px solid #e2e8f0', background: '#f8fafc', fontSize: '0.85rem', outline: 'none' }}
+            >
+              <option value="All Types">All Client Types</option>
+              <option value="Corporate / Business">Corporate / Business</option>
+              <option value="Individual">Individual</option>
+            </select>
+
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '20px', padding: '0.35rem 0.75rem' }}>
+              <span style={{ fontSize: '0.8rem', color: '#64748b', fontWeight: 600 }}>From:</span>
+              <input 
+                type="date" 
+                value={fromDate} 
+                onChange={e => {
+                  setFromDate(e.target.value);
+                  setCurrentPage(1);
+                }}
+                style={{ border: 'none', background: 'transparent', fontSize: '0.82rem', color: '#1e293b', outline: 'none' }}
+              />
+              <span style={{ fontSize: '0.8rem', color: '#64748b', fontWeight: 600 }}>To:</span>
+              <input 
+                type="date" 
+                value={toDate} 
+                onChange={e => {
+                  setToDate(e.target.value);
+                  setCurrentPage(1);
+                }}
+                style={{ border: 'none', background: 'transparent', fontSize: '0.82rem', color: '#1e293b', outline: 'none' }}
+              />
+              {(fromDate || toDate) && (
+                <button 
+                  onClick={() => { setFromDate(''); setToDate(''); setCurrentPage(1); }}
+                  style={{ border: 'none', background: 'transparent', color: '#ef4444', cursor: 'pointer', fontSize: '0.8rem', fontWeight: 'bold', marginLeft: '0.25rem' }}
+                  title="Clear Date Filter"
+                >
+                  ✕
+                </button>
+              )}
+            </div>
           </div>
-          <button className="btn-primary" onClick={openAddModal} style={{ borderRadius: '20px', fontSize: '0.85rem' }}>
+
+          <button className="btn-primary" onClick={openAddModal} style={{ borderRadius: '20px', fontSize: '0.85rem', whiteSpace: 'nowrap' }}>
             <Plus size={16} /> Add New Client
           </button>
         </div>

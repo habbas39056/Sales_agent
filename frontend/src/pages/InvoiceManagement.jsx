@@ -16,6 +16,8 @@ export default function InvoiceManagement() {
   // Filters
   const [statusFilter, setStatusFilter] = useState('All Statuses');
   const [clientFilter, setClientFilter] = useState('All Clients');
+  const [fromDate, setFromDate] = useState('');
+  const [toDate, setToDate] = useState('');
   
   // Pagination
   const [currentPage, setCurrentPage] = useState(1);
@@ -32,8 +34,6 @@ export default function InvoiceManagement() {
     payment_method: 'Bank Transfer',
     notes: ''
   });
-  
-
 
   useEffect(() => {
     fetchData();
@@ -62,8 +62,6 @@ export default function InvoiceManagement() {
       console.error('Failed to fetch data:', error);
     }
   };
-
-
 
   const openPreview = async (id) => {
     try {
@@ -116,33 +114,43 @@ export default function InvoiceManagement() {
   };
 
   const filteredInvoices = invoices.filter(inv => {
-    const matchesSearch = inv.invoice_number.toLowerCase().includes(searchTerm.toLowerCase()) || 
-                          (inv.client_name && inv.client_name.toLowerCase().includes(searchTerm.toLowerCase()));
+    const term = searchTerm.trim().toLowerCase();
+
+    // Multi-field search across Invoice #, Client Name, Project Title, Amount, Balance, ID
+    const matchesSearch = !term || 
+      (inv.invoice_number && inv.invoice_number.toLowerCase().includes(term)) || 
+      (inv.client_name && inv.client_name.toLowerCase().includes(term)) || 
+      (inv.project_title && inv.project_title.toLowerCase().includes(term)) || 
+      (inv.amount && inv.amount.toString().includes(term)) || 
+      (inv.balance && inv.balance.toString().includes(term)) || 
+      (inv.id && inv.id.toString().includes(term));
+
     const matchesStatus = statusFilter === 'All Statuses' || inv.status === statusFilter;
     const matchesClient = clientFilter === 'All Clients' || inv.client_name === clientFilter;
+
+    // Date Range Filter
+    let matchesDate = true;
+    if (inv.issue_date) {
+      const invDateStr = new Date(inv.issue_date).toISOString().slice(0, 10);
+      if (fromDate && invDateStr < fromDate) matchesDate = false;
+      if (toDate && invDateStr > toDate) matchesDate = false;
+    }
     
-    return matchesSearch && matchesStatus && matchesClient;
+    return matchesSearch && matchesStatus && matchesClient && matchesDate;
   });
 
   const currentInvoices = filteredInvoices.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
 
   return (
     <div className="invoice-management-container modern-ui">
-      <div className="page-header">
-        <div>
-          <h1>Invoice Management</h1>
-          <p className="subtitle">Create and manage client invoices</p>
-        </div>
-      </div>
-
-      <div className="recent-orders-panel" style={{ marginTop: '2rem' }}>
-        <div className="panel-header-ref" style={{ flexWrap: 'wrap', gap: '1rem' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', flexWrap: 'wrap', flex: 1 }}>
-            <div className="search-box-ref">
+      <div className="recent-orders-panel" style={{ marginTop: '0' }}>
+        <div className="panel-header-ref" style={{ flexWrap: 'wrap', gap: '1rem', alignItems: 'center', justifyContent: 'space-between' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap', flex: 1 }}>
+            <div className="search-box-ref" style={{ flex: '1 1 220px', minWidth: '200px' }}>
               <Search size={16} />
               <input 
                 type="text" 
-                placeholder="Search invoices..." 
+                placeholder="Search by inv #, client, project, amount..." 
                 value={searchTerm}
                 onChange={e => {
                   setSearchTerm(e.target.value);
@@ -150,6 +158,7 @@ export default function InvoiceManagement() {
                 }}
               />
             </div>
+
             <select 
               className="filter-select"
               value={statusFilter}
@@ -157,13 +166,14 @@ export default function InvoiceManagement() {
                 setStatusFilter(e.target.value);
                 setCurrentPage(1);
               }}
-              style={{ padding: '0.5rem', borderRadius: '6px', border: '1px solid var(--border-color)', outline: 'none' }}
+              style={{ padding: '0.5rem 0.75rem', borderRadius: '20px', border: '1px solid #e2e8f0', background: '#f8fafc', fontSize: '0.85rem', outline: 'none' }}
             >
               <option value="All Statuses">All Statuses</option>
               <option value="Paid">Paid</option>
               <option value="Unpaid">Unpaid</option>
               <option value="Overdue">Overdue</option>
             </select>
+
             <select 
               className="filter-select"
               value={clientFilter}
@@ -171,12 +181,45 @@ export default function InvoiceManagement() {
                 setClientFilter(e.target.value);
                 setCurrentPage(1);
               }}
-              style={{ padding: '0.5rem', borderRadius: '6px', border: '1px solid var(--border-color)', outline: 'none', maxWidth: '200px' }}
+              style={{ padding: '0.5rem 0.75rem', borderRadius: '20px', border: '1px solid #e2e8f0', background: '#f8fafc', fontSize: '0.85rem', outline: 'none', maxWidth: '180px' }}
             >
               <option value="All Clients">All Clients</option>
               {clients.map(c => <option key={c.id} value={c.full_name}>{c.full_name}</option>)}
             </select>
+
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '20px', padding: '0.35rem 0.75rem' }}>
+              <span style={{ fontSize: '0.8rem', color: '#64748b', fontWeight: 600 }}>From:</span>
+              <input 
+                type="date" 
+                value={fromDate} 
+                onChange={e => {
+                  setFromDate(e.target.value);
+                  setCurrentPage(1);
+                }}
+                style={{ border: 'none', background: 'transparent', fontSize: '0.82rem', color: '#1e293b', outline: 'none' }}
+              />
+              <span style={{ fontSize: '0.8rem', color: '#64748b', fontWeight: 600 }}>To:</span>
+              <input 
+                type="date" 
+                value={toDate} 
+                onChange={e => {
+                  setToDate(e.target.value);
+                  setCurrentPage(1);
+                }}
+                style={{ border: 'none', background: 'transparent', fontSize: '0.82rem', color: '#1e293b', outline: 'none' }}
+              />
+              {(fromDate || toDate) && (
+                <button 
+                  onClick={() => { setFromDate(''); setToDate(''); setCurrentPage(1); }}
+                  style={{ border: 'none', background: 'transparent', color: '#ef4444', cursor: 'pointer', fontSize: '0.8rem', fontWeight: 'bold', marginLeft: '0.25rem' }}
+                  title="Clear Date Filter"
+                >
+                  ✕
+                </button>
+              )}
+            </div>
           </div>
+
           <button className="btn-primary" onClick={() => navigate('/invoices/new')} style={{ borderRadius: '20px', fontSize: '0.85rem', whiteSpace: 'nowrap' }}>
             <Plus size={16} /> Create Invoice
           </button>
@@ -269,8 +312,8 @@ export default function InvoiceManagement() {
               
               <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '2rem' }}>
                 <div style={{ flex: 1 }}>
-                  <div style={{ backgroundColor: '#0f172a', padding: '1rem', borderRadius: '8px', display: 'inline-block', marginBottom: '2rem', WebkitPrintColorAdjust: 'exact', printColorAdjust: 'exact' }}>
-                    <img src="/Adwise Labs White Logo.png" alt="Adwise Labs Logo" style={{ maxWidth: '200px', display: 'block' }} />
+                  <div style={{ marginBottom: '1.5rem' }}>
+                    <img src="/Adwise-Labs-Primary-Logo.png" alt="Adwise Labs Logo" style={{ maxWidth: '220px', height: 'auto', display: 'block' }} />
                   </div>
                   <h2 style={{ fontSize: '1.2rem', marginBottom: '1.5rem' }}>Invoice {previewInvoice.invoice_number}</h2>
                   

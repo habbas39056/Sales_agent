@@ -1,7 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import axios from 'axios';
-import { ArrowLeft, FileText, UploadCloud, Download, CheckCircle, Clock, Plus, X, Check, ExternalLink } from 'lucide-react';
+import { ArrowLeft, FileText, UploadCloud, Download, CheckCircle, Clock, Plus, X, Check, ExternalLink, Image, FileCode, Film, Music, Archive, Upload, Edit, Link2 } from 'lucide-react';
+import StepComments from '../components/StepComments';
+import StepActivityLog from '../components/StepActivityLog';
 import './ProjectDetails.css';
 import './Modal.css';
 
@@ -240,20 +242,133 @@ export default function ProjectDetails() {
 
                         {activeTab === 'Invoices' && (
                           <div className="tab-pane-invoices">
-                            {step.requires_payment ? (
-                              project.invoice ? (
-                                <div className="linked-invoice-box">
-                                  <FileText size={20} />
-                                  <div className="inv-info">
-                                    <strong>{project.invoice.invoice_number}</strong>
-                                    <span>PKR {project.invoice.amount} - {project.invoice.status}</span>
+                            {project.invoice ? (
+                              <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                                {/* Top Dropdown Selector + Link Button matching screenshot */}
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                                  <select 
+                                    style={{
+                                      flex: 1,
+                                      padding: '0.65rem 1rem',
+                                      borderRadius: '10px',
+                                      border: '1px solid #e2e8f0',
+                                      backgroundColor: '#ffffff',
+                                      fontSize: '0.9rem',
+                                      fontWeight: '500',
+                                      color: '#1e293b',
+                                      outline: 'none',
+                                      cursor: 'pointer',
+                                      boxShadow: '0 1px 2px rgba(0,0,0,0.03)'
+                                    }}
+                                    value={project.invoice.id}
+                                    onChange={() => {}}
+                                  >
+                                    <option value={project.invoice.id}>
+                                      #{project.invoice.invoice_number} · Rs.{Number(project.invoice.amount).toFixed(2)} · {project.invoice.status.toLowerCase()}
+                                    </option>
+                                  </select>
+
+                                  <button 
+                                    type="button" 
+                                    title="Open Linked Invoice"
+                                    style={{
+                                      width: '42px',
+                                      height: '42px',
+                                      borderRadius: '10px',
+                                      backgroundColor: '#4f46e5',
+                                      color: '#ffffff',
+                                      border: 'none',
+                                      display: 'flex',
+                                      alignItems: 'center',
+                                      justify: 'center',
+                                      cursor: 'pointer',
+                                      flexShrink: 0,
+                                      boxShadow: '0 4px 10px rgba(79, 70, 229, 0.3)',
+                                      transition: 'transform 0.2s'
+                                    }}
+                                    onClick={() => navigate(`/invoices/edit/${project.invoice.id}`)}
+                                  >
+                                    <Link2 size={18} />
+                                  </button>
+                                </div>
+
+                                {/* Invoice Summary Card matching screenshot layout */}
+                                <div style={{
+                                  backgroundColor: '#f8fafc',
+                                  borderRadius: '12px',
+                                  padding: '1.25rem 1.5rem',
+                                  border: '1px solid #f1f5f9',
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  justify: 'space-between',
+                                  gap: '1rem',
+                                  flexWrap: 'wrap'
+                                }}>
+                                  <div style={{ flex: 1, minWidth: '240px' }}>
+                                    <div style={{ display: 'flex', alignItems: 'baseline', gap: '0.5rem', marginBottom: '0.5rem' }}>
+                                      <span style={{ fontSize: '1.1rem', fontWeight: '800', color: '#4f46e5' }}>
+                                        #{project.invoice.invoice_number}
+                                      </span>
+                                      <span style={{ fontSize: '1rem', color: '#64748b', fontWeight: '600' }}>
+                                        · Rs. {Number(project.invoice.amount).toLocaleString()}
+                                      </span>
+                                    </div>
+
+                                    {/* Detailed Line items summary */}
+                                    {project.invoice.items && project.invoice.items.length > 0 ? (
+                                      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem', marginTop: '0.5rem' }}>
+                                        {project.invoice.items.map((item, i) => (
+                                          <div key={i} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.82rem', color: '#64748b' }}>
+                                            <span>{item.description} (x{item.quantity})</span>
+                                            <span style={{ fontWeight: '600' }}>Rs. {Number(item.total).toLocaleString()}</span>
+                                          </div>
+                                        ))}
+                                      </div>
+                                    ) : (
+                                      <p style={{ margin: 0, fontSize: '0.85rem', color: '#94a3b8' }}>Linked project billing invoice</p>
+                                    )}
+                                  </div>
+
+                                  {/* Right side Badge & Edit Pencil Icon matching screenshot */}
+                                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                                    <span style={{
+                                      fontSize: '0.75rem',
+                                      fontWeight: '800',
+                                      letterSpacing: '0.05em',
+                                      padding: '0.35rem 0.75rem',
+                                      borderRadius: '20px',
+                                      backgroundColor: project.invoice.status.toLowerCase() === 'paid' ? '#dcfce7' : '#fef9c3',
+                                      color: project.invoice.status.toLowerCase() === 'paid' ? '#15803d' : '#a16207',
+                                      textTransform: 'UPPERCASE'
+                                    }}>
+                                      {project.invoice.status.toUpperCase()}
+                                    </span>
+
+                                    <button 
+                                      type="button" 
+                                      title="Edit Invoice"
+                                      style={{
+                                        background: 'none',
+                                        border: 'none',
+                                        color: '#cbd5e1',
+                                        cursor: 'pointer',
+                                        padding: '0.25rem',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        justify: 'center',
+                                        transition: 'color 0.2s'
+                                      }}
+                                      onMouseOver={(e) => e.currentTarget.style.color = '#4f46e5'}
+                                      onMouseOut={(e) => e.currentTarget.style.color = '#cbd5e1'}
+                                      onClick={() => navigate(`/invoices/edit/${project.invoice.id}`)}
+                                    >
+                                      <Edit size={16} />
+                                    </button>
                                   </div>
                                 </div>
-                              ) : (
-                                <p className="empty-tab-msg">Payment is required, but no invoice is linked to this project.</p>
-                              )
+                              </div>
                             ) : (
-                              <p className="empty-tab-msg">No payment required for this step.</p>
+                              <p className="empty-tab-msg">No invoice is linked to this project.</p>
                             )}
                           </div>
                         )}
@@ -298,17 +413,106 @@ export default function ProjectDetails() {
 
                         {activeTab === 'Documents' && (
                           <div className="tab-pane-documents">
+                            <div style={{ marginBottom: '1rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '1rem', flexWrap: 'wrap' }}>
+                              <h4 style={{ margin: 0, fontSize: '0.95rem', color: '#334155' }}>Step Files & Attachments</h4>
+                              <label className="btn-create" style={{ cursor: 'pointer', padding: '0.4rem 0.8rem', fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                                <Upload size={14} /> Add Files
+                                <input 
+                                  type="file" 
+                                  multiple 
+                                  style={{ display: 'none' }}
+                                  onChange={async (e) => {
+                                    if (!e.target.files || e.target.files.length === 0) return;
+                                    const fileData = new FormData();
+                                    Array.from(e.target.files).forEach(f => fileData.append('documents', f));
+                                    try {
+                                      await axios.post(`/api/projects/${id}/steps/${step.id}/documents`, fileData);
+                                      fetchProjectDetails();
+                                    } catch(err) {
+                                      console.error('Failed to upload documents', err);
+                                      alert('Failed to upload files');
+                                    }
+                                  }}
+                                />
+                              </label>
+                            </div>
+
                             {step.attachments ? (
-                              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '1rem' }}>
+                              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.75rem' }}>
                                 {(() => {
                                   try {
-                                    const files = JSON.parse(step.attachments);
+                                    let files = JSON.parse(step.attachments);
+                                    if (!Array.isArray(files)) files = [step.attachments];
+
                                     return files.map((file, idx) => {
                                       const fileName = file.split('/').pop();
-                                      const isImg = file.match(/\.(jpeg|jpg|gif|png)$/i);
+                                      const ext = fileName.split('.').pop().toLowerCase();
+                                      
+                                      let IconComp = FileText;
+                                      let tagColor = '#475569';
+                                      let tagBg = '#f1f5f9';
+
+                                      if (['jpg', 'jpeg', 'png', 'gif', 'svg', 'webp', 'bmp'].includes(ext)) {
+                                        IconComp = Image;
+                                        tagColor = '#2563eb';
+                                        tagBg = '#dbeafe';
+                                      } else if (['pdf'].includes(ext)) {
+                                        IconComp = FileText;
+                                        tagColor = '#dc2626';
+                                        tagBg = '#fee2e2';
+                                      } else if (['doc', 'docx', 'txt', 'rtf', 'odt'].includes(ext)) {
+                                        IconComp = FileText;
+                                        tagColor = '#1d4ed8';
+                                        tagBg = '#eff6ff';
+                                      } else if (['xls', 'xlsx', 'csv'].includes(ext)) {
+                                        IconComp = FileText;
+                                        tagColor = '#166534';
+                                        tagBg = '#dcfce7';
+                                      } else if (['zip', 'rar', '7z', 'tar', 'gz'].includes(ext)) {
+                                        IconComp = Archive;
+                                        tagColor = '#d97706';
+                                        tagBg = '#fef3c7';
+                                      } else if (['mp4', 'avi', 'mov', 'mkv', 'webm'].includes(ext)) {
+                                        IconComp = Film;
+                                        tagColor = '#9333ea';
+                                        tagBg = '#f3e8ff';
+                                      } else if (['mp3', 'wav', 'ogg', 'm4a'].includes(ext)) {
+                                        IconComp = Music;
+                                        tagColor = '#0891b2';
+                                        tagBg = '#cff4fc';
+                                      } else if (['html', 'js', 'json', 'css', 'py', 'php'].includes(ext)) {
+                                        IconComp = FileCode;
+                                        tagColor = '#4f46e5';
+                                        tagBg = '#e0e7ff';
+                                      }
+
                                       return (
-                                        <a key={idx} href={`${file}`} target="_blank" rel="noopener noreferrer" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.5rem 1rem', backgroundColor: '#f1f5f9', border: '1px solid #cbd5e1', borderRadius: '4px', textDecoration: 'none', color: 'var(--primary-color)' }}>
-                                          <ExternalLink size={16} /> {fileName}
+                                        <a 
+                                          key={idx} 
+                                          href={`${file}`} 
+                                          target="_blank" 
+                                          rel="noopener noreferrer" 
+                                          style={{ 
+                                            display: 'flex', 
+                                            alignItems: 'center', 
+                                            gap: '0.6rem', 
+                                            padding: '0.6rem 1rem', 
+                                            backgroundColor: '#ffffff', 
+                                            border: '1px solid #cbd5e1', 
+                                            borderRadius: '6px', 
+                                            textDecoration: 'none', 
+                                            color: '#1e293b',
+                                            fontSize: '0.9rem',
+                                            fontWeight: '500',
+                                            boxShadow: '0 1px 2px rgba(0,0,0,0.03)',
+                                            transition: 'border-color 0.2s'
+                                          }}
+                                        >
+                                          <IconComp size={18} style={{ color: tagColor }} /> 
+                                          <span>{fileName}</span>
+                                          <span style={{ fontSize: '0.7rem', textTransform: 'uppercase', padding: '0.15rem 0.4rem', borderRadius: '4px', backgroundColor: tagBg, color: tagColor, fontWeight: '700', marginLeft: '0.25rem' }}>
+                                            {ext}
+                                          </span>
                                         </a>
                                       );
                                     });
@@ -316,15 +520,17 @@ export default function ProjectDetails() {
                                 })()}
                               </div>
                             ) : (
-                              <p className="empty-tab-msg">No documents attached to this step.</p>
+                              <p className="empty-tab-msg">No documents attached to this step yet. Click "Add Files" above to upload.</p>
                             )}
                           </div>
                         )}
 
-                        {['Comments', 'Activity'].includes(activeTab) && (
-                          <div className="tab-pane-placeholder">
-                            <p className="empty-tab-msg">No {activeTab.toLowerCase()} yet.</p>
-                          </div>
+                        {activeTab === 'Comments' && (
+                          <StepComments stepId={step.id} />
+                        )}
+
+                        {activeTab === 'Activity' && (
+                          <StepActivityLog stepId={step.id} />
                         )}
                       </div>
                     </div>

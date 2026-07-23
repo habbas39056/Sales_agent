@@ -47,6 +47,29 @@ export default function Header() {
     return () => clearTimeout(timer);
   }, [searchQuery]);
 
+  const [user, setUser] = useState(() => {
+    const userStr = localStorage.getItem('user');
+    return userStr ? JSON.parse(userStr) : null;
+  });
+
+  useEffect(() => {
+    const updateUserState = () => {
+      const userStr = localStorage.getItem('user');
+      setUser(userStr ? JSON.parse(userStr) : null);
+    };
+
+    window.addEventListener('user-updated', updateUserState);
+    window.addEventListener('storage', updateUserState);
+    return () => {
+      window.removeEventListener('user-updated', updateUserState);
+      window.removeEventListener('storage', updateUserState);
+    };
+  }, []);
+
+  const userName = user?.name || user?.username || 'Admin User';
+  const userRole = user?.username ? `@${user.username}` : (user?.role || 'Administrator');
+  const userInitial = userName.charAt(0).toUpperCase();
+
   let title = '';
   let subtitle = '';
 
@@ -68,6 +91,15 @@ export default function Header() {
   } else if (location.pathname === '/projects') {
     title = 'Project Management';
     subtitle = 'Track all active projects';
+  } else if (location.pathname === '/settings') {
+    title = 'Settings & Configuration';
+    subtitle = 'Manage company details, billing options, bank accounts, and security';
+  } else if (location.pathname === '/commissions') {
+    title = 'Commissions Dashboard';
+    subtitle = 'Track agent performance and commission payouts';
+  } else if (location.pathname === '/reports') {
+    title = 'System Reports';
+    subtitle = '360-degree view of clients and team performance';
   }
 
   return (
@@ -165,13 +197,21 @@ export default function Header() {
             <span className="notification-dot"></span>
           </button>
           
-          <div className="user-profile">
-            <div className="avatar" style={{ fontWeight: 'bold' }}>
-              A
-            </div>
+          <div className="user-profile" style={{ cursor: 'pointer' }} onClick={() => navigate('/settings')}>
+            {user?.profile_image_url ? (
+              <img 
+                src={user.profile_image_url} 
+                alt={userName} 
+                style={{ width: '36px', height: '36px', borderRadius: '50%', objectFit: 'cover', border: '2px solid var(--primary-color)' }} 
+              />
+            ) : (
+              <div className="avatar" style={{ fontWeight: 'bold' }}>
+                {userInitial}
+              </div>
+            )}
             <div className="user-info">
-              <span className="user-name">Admin User</span>
-              <span className="user-role">Administrator</span>
+              <span className="user-name">{userName}</span>
+              <span className="user-role">{userRole}</span>
             </div>
           </div>
         </div>

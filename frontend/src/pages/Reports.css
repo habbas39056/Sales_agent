@@ -187,11 +187,60 @@
 .quick-filters {
     display: flex;
     gap: 0.5rem;
+    align-items: center;
+    flex-wrap: wrap;
 }
 
-.quick-filters .btn-secondary {
-    padding: 0.4rem 0.8rem;
+.quick-filters .btn-secondary,
+.quick-filters .btn-quick,
+.btn-quick {
+    padding: 0.45rem 0.95rem;
     font-size: 0.85rem;
+    font-weight: 600;
+    border-radius: 20px;
+    border: 1px solid #cbd5e1;
+    background: #ffffff;
+    color: #475569;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    outline: none;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.03);
+}
+
+.quick-filters .btn-secondary:hover,
+.quick-filters .btn-quick:hover,
+.btn-quick:hover {
+    background: #f1f5f9;
+    border-color: #94a3b8;
+    color: #1e293b;
+    transform: translateY(-1px);
+}
+
+.quick-filters .btn-secondary.active,
+.quick-filters .btn-quick.active,
+.btn-quick.active {
+    background: #4f46e5;
+    color: #ffffff;
+    border-color: #4f46e5;
+    box-shadow: 0 2px 6px rgba(79, 70, 229, 0.25);
+}
+
+.btn-clear-date {
+    padding: 0.45rem 0.85rem;
+    font-size: 0.82rem;
+    font-weight: 600;
+    border-radius: 20px;
+    border: 1px solid #fca5a5;
+    background: #fef2f2;
+    color: #ef4444;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    outline: none;
+}
+
+.btn-clear-date:hover {
+    background: #fee2e2;
+    color: #dc2626;
 }
 
 /* Chart Overlay Summary */
