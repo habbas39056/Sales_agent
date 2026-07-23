@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { useNavigate } from 'react-router-dom';
-import { Search, Folder, Plus, X, FileSpreadsheet } from 'lucide-react';
+import { Search, Folder, Plus, X, FileSpreadsheet, Edit2, Trash2, Eye } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import Pagination from '../components/Pagination';
 import './ProjectsList.css';
@@ -18,6 +18,9 @@ export default function ProjectsList() {
   const [statusFilter, setStatusFilter] = useState('All Statuses');
   const [serviceFilter, setServiceFilter] = useState('All Services');
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [editingProject, setEditingProject] = useState(null);
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [editFormData, setEditFormData] = useState({});
   
   // Pagination
   const [currentPage, setCurrentPage] = useState(1);
@@ -198,6 +201,46 @@ export default function ProjectsList() {
     }
   };
 
+  const handleEditClick = (e, project) => {
+    e.stopPropagation();
+    setEditFormData({
+      title: project.title || '',
+      description: project.description || '',
+      client_id: project.client_id || '',
+      pm_id: project.pm_id || '',
+      service_type: project.service_type || '',
+      revision_cycles_included: project.revision_cycles_included || 0,
+      terms_and_conditions: project.terms_and_conditions || ''
+    });
+    setEditingProject(project);
+    setIsEditModalOpen(true);
+  };
+
+  const handleEditSubmit = async (e) => {
+    e.preventDefault();
+    try {
+      await axios.put(`/api/projects/${editingProject.id}`, editFormData);
+      setIsEditModalOpen(false);
+      setEditingProject(null);
+      fetchProjects();
+    } catch (error) {
+      console.error('Error updating project', error);
+      alert('Error updating project');
+    }
+  };
+
+  const handleDeleteClick = async (e, project) => {
+    e.stopPropagation();
+    if (!window.confirm(`Are you sure you want to delete "${project.title}"? This will also delete all steps, comments, and deliverables.`)) return;
+    try {
+      await axios.delete(`/api/projects/${project.id}`);
+      fetchProjects();
+    } catch (error) {
+      console.error('Error deleting project', error);
+      alert('Error deleting project');
+    }
+  };
+
   const filteredProjects = projects.filter(project => {
     const matchesSearch = project.title.toLowerCase().includes(searchTerm.toLowerCase()) || 
                           (project.client_name && project.client_name.toLowerCase().includes(searchTerm.toLowerCase()));
@@ -318,7 +361,25 @@ export default function ProjectsList() {
                       </span>
                     </td>
                     <td style={{ textAlign: 'right', paddingRight: '1.25rem' }}>
-                      <button className="btn-view-link">View</button>
+                      <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'flex-end', alignItems: 'center' }}>
+                        <button className="btn-view-link" style={{ display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
+                          <Eye size={14} /> View
+                        </button>
+                        <button 
+                          onClick={(e) => handleEditClick(e, project)} 
+                          style={{ background: 'none', border: '1px solid #e2e8f0', borderRadius: '6px', padding: '0.4rem', cursor: 'pointer', color: '#6366f1', display: 'flex', alignItems: 'center' }}
+                          title="Edit Project"
+                        >
+                          <Edit2 size={14} />
+                        </button>
+                        <button 
+                          onClick={(e) => handleDeleteClick(e, project)} 
+                          style={{ background: 'none', border: '1px solid #fecaca', borderRadius: '6px', padding: '0.4rem', cursor: 'pointer', color: '#ef4444', display: 'flex', alignItems: 'center' }}
+                          title="Delete Project"
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 );
@@ -412,6 +473,106 @@ export default function ProjectsList() {
               <div className="modal-actions">
                 <button type="button" className="btn-secondary" onClick={() => setIsModalOpen(false)}>Cancel</button>
                 <button type="submit" className="btn-create">Create Project</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {isEditModalOpen && (
+        <div className="modal-overlay">
+          <div className="modal-content">
+            <div className="modal-header">
+              <h2>Edit Project</h2>
+              <button className="btn-close" onClick={() => setIsEditModalOpen(false)}><X size={24} /></button>
+            </div>
+            <form onSubmit={handleEditSubmit}>
+              <div className="form-group">
+                <label>Project Title *</label>
+                <input 
+                  type="text" 
+                  name="title" 
+                  value={editFormData.title} 
+                  onChange={(e) => setEditFormData({ ...editFormData, title: e.target.value })} 
+                  required 
+                />
+              </div>
+              
+              <div className="form-row">
+                <div className="form-group">
+                  <label>Client *</label>
+                  <select 
+                    name="client_id" 
+                    value={editFormData.client_id} 
+                    onChange={(e) => setEditFormData({ ...editFormData, client_id: e.target.value })} 
+                    required
+                  >
+                    <option value="">Select a Client...</option>
+                    {clients.map(c => <option key={c.id} value={c.id}>{c.full_name} ({c.business_name || 'Individual'})</option>)}
+                  </select>
+                </div>
+
+                <div className="form-group">
+                  <label>Assign To (Team Member)</label>
+                  <select 
+                    name="pm_id" 
+                    value={editFormData.pm_id} 
+                    onChange={(e) => setEditFormData({ ...editFormData, pm_id: e.target.value })}
+                  >
+                    <option value="">Unassigned</option>
+                    {teamMembers.map(m => <option key={m.id} value={m.id}>{m.full_name} ({m.role})</option>)}
+                  </select>
+                </div>
+              </div>
+
+              <div className="form-row">
+                <div className="form-group">
+                  <label>Service Type *</label>
+                  <select 
+                    name="service_type" 
+                    value={editFormData.service_type} 
+                    onChange={(e) => setEditFormData({ ...editFormData, service_type: e.target.value })} 
+                    required
+                  >
+                    {availableServices.map(s => <option key={s} value={s}>{s}</option>)}
+                  </select>
+                </div>
+                
+                <div className="form-group">
+                  <label>Revision Cycles Included</label>
+                  <input 
+                    type="number" 
+                    name="revision_cycles_included" 
+                    value={editFormData.revision_cycles_included} 
+                    onChange={(e) => setEditFormData({ ...editFormData, revision_cycles_included: e.target.value })} 
+                    min="0" 
+                  />
+                </div>
+              </div>
+
+              <div className="form-group">
+                <label>Terms & Conditions</label>
+                <textarea 
+                  name="terms_and_conditions" 
+                  value={editFormData.terms_and_conditions} 
+                  onChange={(e) => setEditFormData({ ...editFormData, terms_and_conditions: e.target.value })} 
+                  rows="3"
+                ></textarea>
+              </div>
+
+              <div className="form-group">
+                <label>Description</label>
+                <textarea 
+                  name="description" 
+                  value={editFormData.description} 
+                  onChange={(e) => setEditFormData({ ...editFormData, description: e.target.value })} 
+                  rows="3"
+                ></textarea>
+              </div>
+
+              <div className="modal-actions">
+                <button type="button" className="btn-secondary" onClick={() => setIsEditModalOpen(false)}>Cancel</button>
+                <button type="submit" className="btn-create">Update Project</button>
               </div>
             </form>
           </div>

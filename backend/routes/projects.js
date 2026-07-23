@@ -101,6 +101,56 @@ router.post('/', async (req, res) => {
   }
 });
 
+// Update a project
+router.put('/:id', async (req, res) => {
+  const projectId = req.params.id;
+  const { title, description, client_id, pm_id, service_type, revision_cycles_included, terms_and_conditions } = req.body;
+  try {
+    await db.query(
+      'UPDATE projects SET title = ?, description = ?, client_id = ?, pm_id = ?, service_type = ?, revision_cycles_included = ?, terms_and_conditions = ? WHERE id = ?',
+      [title, description, client_id, pm_id || null, service_type, revision_cycles_included || 0, terms_and_conditions || '', projectId]
+    );
+    res.json({ message: 'Project updated successfully' });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Delete a project
+router.delete('/:id', async (req, res) => {
+  const projectId = req.params.id;
+  const connection = await db.getConnection();
+  try {
+    await connection.beginTransaction();
+
+    // Delete related data
+    await connection.query('DELETE FROM step_comments WHERE step_id IN (SELECT id FROM project_steps WHERE project_id = ?)', [projectId]);
+    await connection.query('DELETE FROM step_activity WHERE step_id IN (SELECT id FROM project_steps WHERE project_id = ?)', [projectId]);
+    await connection.query('DELETE FROM project_steps WHERE project_id = ?', [projectId]);
+    await connection.query('DELETE FROM deliverables WHERE project_id = ?', [projectId]);
+    await connection.query('DELETE FROM revisions WHERE project_id = ?', [projectId]);
+    
+    // Unlink invoices
+    await connection.query('UPDATE invoices SET project_id = NULL WHERE project_id = ?', [projectId]);
+
+    // Delete the project
+    const [result] = await connection.query('DELETE FROM projects WHERE id = ?', [projectId]);
+
+    if (result.affectedRows === 0) {
+      await connection.rollback();
+      return res.status(404).json({ error: 'Project not found' });
+    }
+
+    await connection.commit();
+    res.json({ message: 'Project deleted successfully' });
+  } catch (error) {
+    await connection.rollback();
+    res.status(500).json({ error: error.message });
+  } finally {
+    connection.release();
+  }
+});
+
 // Add a workflow step
 router.post('/:id/steps', upload.array('attachments', 5), async (req, res) => {
   const { title, description, assignee_id, deadline, requires_client_form, client_form_schema, requires_payment, allow_revision } = req.body;
