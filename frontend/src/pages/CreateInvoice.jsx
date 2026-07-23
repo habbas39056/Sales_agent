@@ -206,6 +206,17 @@ export default function CreateInvoice() {
     }
   };
 
+  const handleDeletePayment = async (paymentId) => {
+    if (!window.confirm('Are you sure you want to delete this payment? This will also remove its cashbook entry.')) return;
+    try {
+      await axios.delete(`/api/invoices/${id}/payments/${paymentId}`);
+      fetchData(); // Refresh to get updated payments and balance
+    } catch (error) {
+      console.error('Failed to delete payment:', error);
+      alert(error.response?.data?.error || 'Error deleting payment.');
+    }
+  };
+
   const totalPaid = payments.reduce((sum, p) => sum + parseFloat(p.amount), 0);
   const invoiceTotal = calculateTotal();
   const remainingBalance = Math.max(0, invoiceTotal - totalPaid);
@@ -238,7 +249,13 @@ export default function CreateInvoice() {
           <form onSubmit={handleSubmit}>
           {/* HEADER ACTIONS */}
           <div className="invoice-editor-header">
-            <span className="invoice-badge-unpaid">UNPAID</span>
+            {remainingBalance <= 0 && invoiceTotal > 0 ? (
+              <span className="invoice-badge-paid">PAID</span>
+            ) : totalPaid > 0 ? (
+              <span className="invoice-badge-partial">PARTIAL</span>
+            ) : (
+              <span className="invoice-badge-unpaid">UNPAID</span>
+            )}
             <div className="invoice-editor-actions print-hide">
               <button type="button" className="btn-icon-outline" onClick={() => window.print()}>
                 <Printer size={16} />
@@ -632,6 +649,7 @@ export default function CreateInvoice() {
                       <th style={{ padding: '1rem', fontSize: '0.75rem', fontWeight: '800', color: '#94a3b8', textTransform: 'uppercase' }}>Payment Mode</th>
                       <th style={{ padding: '1rem', fontSize: '0.75rem', fontWeight: '800', color: '#94a3b8', textTransform: 'uppercase' }}>Date</th>
                       <th style={{ padding: '1rem', fontSize: '0.75rem', fontWeight: '800', color: '#94a3b8', textTransform: 'uppercase', textAlign: 'right' }}>Amount</th>
+                      <th style={{ padding: '1rem', width: '50px' }}></th>
                     </tr>
                   </thead>
                   <tbody>
@@ -641,6 +659,16 @@ export default function CreateInvoice() {
                         <td style={{ padding: '1rem', color: '#0f172a', fontSize: '0.9rem', fontWeight: '600' }}>{p.payment_method}</td>
                         <td style={{ padding: '1rem', color: '#64748b', fontSize: '0.9rem', fontWeight: '600' }}>{new Date(p.payment_date).toLocaleDateString()}</td>
                         <td style={{ padding: '1rem', color: '#10b981', fontSize: '0.9rem', fontWeight: '800', textAlign: 'right' }}>PKR {parseFloat(p.amount).toFixed(2)}</td>
+                        <td style={{ padding: '1rem', textAlign: 'center' }}>
+                          <button 
+                            type="button" 
+                            onClick={() => handleDeletePayment(p.id)}
+                            style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                            title="Delete Payment"
+                          >
+                            <Trash2 size={16} />
+                          </button>
+                        </td>
                       </tr>
                     ))}
                   </tbody>

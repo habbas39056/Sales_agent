@@ -16,7 +16,7 @@ router.get('/', async (req, res) => {
         u.commission_percentage,
         COUNT(i.id) as total_invoices,
         COALESCE(SUM(i.commission_amount), 0) as total_earned,
-        COALESCE(SUM(CASE WHEN i.status = 'Paid' THEN i.commission_amount ELSE 0 END), 0) as total_paid_out
+        COALESCE(SUM(CASE WHEN i.amount > 0 THEN i.commission_amount * ((i.amount - i.balance) / i.amount) ELSE 0 END), 0) as total_paid_out
       FROM users u
       LEFT JOIN invoices i ON u.id = i.agent_id
     `;

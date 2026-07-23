@@ -38,14 +38,23 @@ async function updateLiveDb() {
     // 3. Commissions
     await addColumnIfNotExists('invoices', 'agent_id', 'INT NULL');
     await addColumnIfNotExists('invoices', 'commission_amount', 'DECIMAL(10,2) DEFAULT 0.00');
+    await addColumnIfNotExists('invoice_items', 'category', "VARCHAR(50) DEFAULT 'SERVICE'");
 
     // 4. Settings Table
     await connection.query(`
       CREATE TABLE IF NOT EXISTS settings (
         setting_key VARCHAR(100) NOT NULL PRIMARY KEY,
-        setting_value TEXT NOT NULL
+        setting_value MEDIUMTEXT NOT NULL
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
     `);
+    
+    try {
+      await connection.query(`ALTER TABLE settings MODIFY COLUMN setting_value MEDIUMTEXT NOT NULL`);
+      console.log('✅ Updated setting_value to MEDIUMTEXT.');
+    } catch (e) {
+      console.log('⚠️ Error updating setting_value:', e.message);
+    }
+    
     console.log('✅ Ensured settings table exists.');
 
     // Seed default settings if empty

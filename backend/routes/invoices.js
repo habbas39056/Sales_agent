@@ -97,8 +97,8 @@ router.post('/', async (req, res) => {
     for (const item of items) {
       const itemTotal = item.quantity * item.unit_price;
       await connection.query(
-        'INSERT INTO invoice_items (invoice_id, description, details, quantity, unit, unit_price, total) VALUES (?, ?, ?, ?, ?, ?, ?)',
-        [invoiceId, item.description, item.details || '', item.quantity, item.unit || '', item.unit_price, itemTotal]
+        'INSERT INTO invoice_items (invoice_id, description, details, quantity, unit, unit_price, total, category) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+        [invoiceId, item.description, item.details || '', item.quantity, item.unit || '', item.unit_price, itemTotal, item.category || 'SERVICE']
       );
     }
 
@@ -218,6 +218,59 @@ router.post('/:id/payments', async (req, res) => {
   }
 });
 
+// Delete a Payment
+router.delete('/:id/payments/:paymentId', async (req, res) => {
+  const invoiceId = req.params.id;
+  const paymentId = req.params.paymentId;
+
+  const connection = await db.getConnection();
+  try {
+    await connection.beginTransaction();
+
+    // 1. Get payment details
+    const [[payment]] = await connection.query('SELECT * FROM invoice_payments WHERE id = ? AND invoice_id = ?', [paymentId, invoiceId]);
+    if (!payment) throw new Error('Payment not found');
+
+    // 2. Delete payment
+    await connection.query('DELETE FROM invoice_payments WHERE id = ?', [paymentId]);
+
+    // 3. Update invoice balance
+    const [[invoice]] = await connection.query('SELECT balance, amount, invoice_number FROM invoices WHERE id = ? FOR UPDATE', [invoiceId]);
+    if (!invoice) throw new Error('Invoice not found');
+
+    const newBalance = parseFloat(invoice.balance) + parseFloat(payment.amount);
+    let newStatus = 'Unpaid';
+    if (newBalance <= 0) {
+      newStatus = 'Paid';
+    } else if (newBalance < parseFloat(invoice.amount)) {
+      newStatus = 'Unpaid'; // Or 'Partial' if you support it
+    }
+
+    await connection.query(
+      'UPDATE invoices SET balance = ?, status = ? WHERE id = ?',
+      [newBalance, newStatus, invoiceId]
+    );
+
+    // 4. Delete corresponding expense (Cashbook entry)
+    const expenseDescPrefix = `Payment for Invoice #${invoice.invoice_number}%`;
+    await connection.query(`
+      DELETE FROM expenses 
+      WHERE receipt_amount = ? 
+      AND date = ? 
+      AND description LIKE ? 
+      LIMIT 1
+    `, [payment.amount, payment.payment_date, expenseDescPrefix]);
+
+    await connection.commit();
+    res.json({ message: 'Payment deleted successfully', newBalance, newStatus });
+  } catch (error) {
+    await connection.rollback();
+    res.status(500).json({ error: error.message });
+  } finally {
+    connection.release();
+  }
+});
+
 // Update an existing invoice
 router.put('/:id', async (req, res) => {
   const invoiceId = req.params.id;
@@ -279,8 +332,8 @@ router.put('/:id', async (req, res) => {
     for (const item of items) {
       const itemTotal = item.quantity * item.unit_price;
       await connection.query(
-        'INSERT INTO invoice_items (invoice_id, description, details, quantity, unit, unit_price, total) VALUES (?, ?, ?, ?, ?, ?, ?)',
-        [invoiceId, item.description, item.details || '', item.quantity, item.unit || '', item.unit_price, itemTotal]
+        'INSERT INTO invoice_items (invoice_id, description, details, quantity, unit, unit_price, total, category) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+        [invoiceId, item.description, item.details || '', item.quantity, item.unit || '', item.unit_price, itemTotal, item.category || 'SERVICE']
       );
     }
 
