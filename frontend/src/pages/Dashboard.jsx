@@ -211,51 +211,6 @@ export default function Dashboard() {
   return (
     <div className="dashboard-container modern-ui">
       
-      {/* Monthly Goal Progress Bar Card */}
-      <div className="monthly-goal-card">
-        <div className="monthly-goal-header">
-          <div className="monthly-goal-title-group">
-            <span className="monthly-goal-title">{monthGoalTitle}</span>
-            {isAdmin && (
-              <select 
-                className="monthly-goal-select"
-                value={selectedGoalUser}
-                onChange={(e) => setSelectedGoalUser(e.target.value)}
-              >
-                <option value="all">Overall Team Goal</option>
-                {teamMembers.map(member => (
-                  <option key={member.id} value={member.id}>{member.name} ({member.role})</option>
-                ))}
-              </select>
-            )}
-          </div>
-          <span className="monthly-goal-percent">{goalPercent}%</span>
-        </div>
-
-        <div className="monthly-goal-progress-track">
-          <div className="monthly-goal-progress-bar" style={{ width: `${goalPercent}%` }}></div>
-        </div>
-
-        <div className="monthly-goal-stats-row">
-          <div className="monthly-goal-stat-item">
-            <span className="monthly-goal-stat-label">Received:</span>
-            <span className="monthly-goal-stat-value">PKR {goalReceived.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}</span>
-          </div>
-          <div className="monthly-goal-stat-item">
-            <span className="monthly-goal-stat-label">Target:</span>
-            <span className="monthly-goal-stat-value">PKR {goalTarget.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}</span>
-          </div>
-          <div className="monthly-goal-stat-item">
-            <span className="monthly-goal-stat-label">Remaining:</span>
-            <span className="monthly-goal-stat-value">PKR {goalRemaining.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}</span>
-          </div>
-          <div className="monthly-goal-stat-item">
-            <span className="monthly-goal-stat-label">Avg:</span>
-            <span className="monthly-goal-stat-value">PKR {goalAvgDaily.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}</span>
-          </div>
-        </div>
-      </div>
-
       {/* Top Stat Cards Grid */}
       <div className="stats-grid-4">
         <div className="stat-card-ref primary-card">
@@ -311,6 +266,51 @@ export default function Dashboard() {
           </div>
           <div className="stat-icon-ref icon-purple">
             <ShoppingCart size={20} />
+          </div>
+        </div>
+      </div>
+
+      {/* Monthly Goal Progress Bar Card */}
+      <div className="monthly-goal-card">
+        <div className="monthly-goal-header">
+          <div className="monthly-goal-title-group">
+            <span className="monthly-goal-title">{monthGoalTitle}</span>
+            {isAdmin && (
+              <select 
+                className="monthly-goal-select"
+                value={selectedGoalUser}
+                onChange={(e) => setSelectedGoalUser(e.target.value)}
+              >
+                <option value="all">Overall Team Goal</option>
+                {teamMembers.map(member => (
+                  <option key={member.id} value={member.id}>{member.name} ({member.role})</option>
+                ))}
+              </select>
+            )}
+          </div>
+          <span className="monthly-goal-percent">{goalPercent}%</span>
+        </div>
+
+        <div className="monthly-goal-progress-track">
+          <div className="monthly-goal-progress-bar" style={{ width: `${goalPercent}%` }}></div>
+        </div>
+
+        <div className="monthly-goal-stats-row">
+          <div className="monthly-goal-stat-item">
+            <span className="monthly-goal-stat-label">Received:</span>
+            <span className="monthly-goal-stat-value">PKR {goalReceived.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}</span>
+          </div>
+          <div className="monthly-goal-stat-item">
+            <span className="monthly-goal-stat-label">Target:</span>
+            <span className="monthly-goal-stat-value">PKR {goalTarget.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}</span>
+          </div>
+          <div className="monthly-goal-stat-item">
+            <span className="monthly-goal-stat-label">Remaining:</span>
+            <span className="monthly-goal-stat-value">PKR {goalRemaining.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}</span>
+          </div>
+          <div className="monthly-goal-stat-item">
+            <span className="monthly-goal-stat-label">Avg:</span>
+            <span className="monthly-goal-stat-value">PKR {goalAvgDaily.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}</span>
           </div>
         </div>
       </div>
