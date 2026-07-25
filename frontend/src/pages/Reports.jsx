@@ -691,7 +691,7 @@ export default function Reports() {
                   <TrendingUp size={24} />
                 </div>
                 <div className="stat-content">
-                  <p className="stat-label">Total Revenue (Income)</p>
+                  <p className="stat-label">Total Revenue (Collected Income)</p>
                   <h3 className="stat-value text-success">PKR {Number(profitReport.summary?.total_revenue || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</h3>
                 </div>
               </div>
