@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
-import { DollarSign, User, Filter, Calendar, RotateCcw, Search } from 'lucide-react';
+import { Banknote, User, Filter, Calendar, RotateCcw, Search } from 'lucide-react';
 import Pagination from '../components/Pagination';
 import './InvoiceManagement.css'; // Reuse styles
 

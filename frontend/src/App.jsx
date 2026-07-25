@@ -1,6 +1,6 @@
 import React from 'react';
 import { BrowserRouter as Router, Routes, Route, Link, useLocation, useNavigate, Navigate } from 'react-router-dom';
-import { LayoutDashboard, Users, FileText, PlusCircle, Calendar, Clock, CheckSquare, MessageSquare, RotateCcw, DollarSign, LogOut, Shield, Settings as SettingsIcon } from 'lucide-react';
+import { LayoutDashboard, Users, FileText, PlusCircle, Calendar, Clock, CheckSquare, MessageSquare, RotateCcw, CreditCard, Banknote, LogOut, Shield, Settings as SettingsIcon } from 'lucide-react';
 import Dashboard from './pages/Dashboard';
 import Login from './pages/Login';
 import ClientsList from './pages/ClientsList';
@@ -139,11 +139,11 @@ function AppContent() {
             )}
             
             {(!user || user.role === 'Admin' || (user.modules_access && user.modules_access.includes('CASHBOOK'))) && (
-              <li><Link to="/expenses" className={`sidebar-link ${location.pathname === '/expenses' ? 'active' : ''}`}><DollarSign size={20} /> Expenses</Link></li>
+              <li><Link to="/expenses" className={`sidebar-link ${location.pathname === '/expenses' ? 'active' : ''}`}><CreditCard size={20} /> Expenses</Link></li>
             )}
             
             {(!user || user.role === 'Admin' || (user.modules_access && user.modules_access.includes('COMMISSIONS'))) && (
-              <li><Link to="/commissions" className={location.pathname.startsWith('/commissions') ? 'active' : ''}><DollarSign size={20} /> Commissions</Link></li>
+              <li><Link to="/commissions" className={location.pathname.startsWith('/commissions') ? 'active' : ''}><Banknote size={20} /> Commissions</Link></li>
             )}
             
             {(!user || user.role === 'Admin' || (user.modules_access && user.modules_access.includes('REPORTS'))) && (

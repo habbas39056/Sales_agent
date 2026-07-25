@@ -432,7 +432,7 @@ export default function ProjectsList() {
                   <select name="invoice_id" value={formData.invoice_id} onChange={handleInputChange}>
                     <option value="">No Invoice Linked</option>
                     {invoices.filter(i => i.client_id === parseInt(formData.client_id)).map(i => (
-                      <option key={i.id} value={i.id}>{i.invoice_number} - ${i.amount}</option>
+                      <option key={i.id} value={i.id}>{i.invoice_number} - PKR {i.amount}</option>
                     ))}
                   </select>
                 </div>

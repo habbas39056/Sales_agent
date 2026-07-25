@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
-import { Plus, Download, Briefcase, CreditCard, DollarSign, X, Building2, FileText, AlertCircle, Search } from 'lucide-react';
+import { Plus, Download, Briefcase, CreditCard, Banknote, X, Building2, FileText, AlertCircle, Search } from 'lucide-react';
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import Select from 'react-select';
@@ -353,7 +353,7 @@ export default function Expenses() {
         </div>
         <div className="expense-card" style={{ flex: '1 1 300px' }}>
           <div className="expense-card-icon bg-gray">
-            <DollarSign size={24} />
+            <Banknote size={24} />
           </div>
           <div className="expense-card-info">
             <p>TOTAL NET BALANCE {isFiltered ? '(FILTERED)' : ''}</p>

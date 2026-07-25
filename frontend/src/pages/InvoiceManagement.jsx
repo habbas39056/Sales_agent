@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { useNavigate } from 'react-router-dom';
-import { Search, Plus, FileText, Eye, X, Check, Trash2, Printer, DollarSign, Edit } from 'lucide-react';
+import { Search, Plus, FileText, Eye, X, Check, Trash2, Printer, Banknote, Edit } from 'lucide-react';
 import Pagination from '../components/Pagination';
 import './InvoiceManagement.css';
 
@@ -301,7 +301,7 @@ export default function InvoiceManagement() {
               <div style={{display: 'flex', alignItems: 'center', gap: '1rem'}}>
                 {previewInvoice.status !== 'Paid' && (
                   <button className="btn-success" onClick={openPaymentModal}>
-                    <DollarSign size={18} style={{marginRight:'0.5rem', verticalAlign:'middle'}}/> Record Payment
+                    <Banknote size={18} style={{marginRight:'0.5rem', verticalAlign:'middle'}}/> Record Payment
                   </button>
                 )}
                 <button className="btn" style={{backgroundColor: '#e2e8f0', color: '#1e293b', display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.5rem 1rem', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: '500'}} onClick={() => window.print()}><Printer size={18} /> Print</button>

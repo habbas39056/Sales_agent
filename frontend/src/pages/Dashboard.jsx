@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Search, ChevronDown, ShoppingCart, Users, Package, DollarSign, MoreHorizontal } from 'lucide-react';
+import { Search, ChevronDown, ShoppingCart, Users, Package, Banknote, MoreHorizontal } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
@@ -245,10 +245,10 @@ export default function Dashboard() {
               <span className="stat-number-ref">PKR {totalRevenue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
               <span className="stat-badge-ref positive">↑ 4.9%</span>
             </div>
-            <span className="stat-subtitle-ref">Last month: $12,045</span>
+            <span className="stat-subtitle-ref">Last month: PKR 12,045</span>
           </div>
           <div className="stat-icon-ref icon-white">
-            <DollarSign size={20} />
+            <Banknote size={20} />
           </div>
         </div>
 

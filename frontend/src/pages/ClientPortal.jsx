@@ -263,7 +263,7 @@ export default function ClientPortal() {
                         <td>{new Date(pay.payment_date).toLocaleDateString()}</td>
                         <td><strong>{pay.invoice_number}</strong></td>
                         <td>{pay.payment_method}</td>
-                        <td style={{ color: 'var(--success)', fontWeight: 'bold' }}>+ ${Number(pay.amount).toFixed(2)}</td>
+                        <td style={{ color: 'var(--success)', fontWeight: 'bold' }}>+ PKR {Number(pay.amount).toFixed(2)}</td>
                       </tr>
                     ))}
                     {payments.length === 0 && <tr><td colSpan="4" className="empty-state">No payment history found.</td></tr>}

@@ -4,7 +4,7 @@ import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { useNavigate } from 'react-router-dom';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
-import { Download, Users, Shield, Loader, FileText, CheckCircle, Clock, X, Filter, DollarSign, TrendingUp, CreditCard, Search } from 'lucide-react';
+import { Download, Users, Shield, Loader, FileText, CheckCircle, Clock, X, Filter, Banknote, TrendingUp, CreditCard, Search } from 'lucide-react';
 import Pagination from '../components/Pagination';
 import './Reports.css';
 
@@ -385,7 +385,7 @@ export default function Reports() {
           className={`tab-btn ${activeTab === 'sales' ? 'active' : ''}`}
           onClick={() => setActiveTab('sales')}
         >
-          <DollarSign size={18} /> Sales Overview
+          <Banknote size={18} /> Sales Overview
         </button>
         <button 
           className={`tab-btn ${activeTab === 'clients' ? 'active' : ''}`}
@@ -708,7 +708,7 @@ export default function Reports() {
 
               <div className="dashboard-stat-card">
                 <div className="stat-icon-wrapper blue">
-                  <DollarSign size={24} />
+                  <Banknote size={24} />
                 </div>
                 <div className="stat-content">
                   <p className="stat-label">Net Profit / (Loss)</p>
