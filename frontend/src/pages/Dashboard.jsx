@@ -150,7 +150,6 @@ export default function Dashboard() {
     .slice(0, 5);
 
   // Calculate Monthly Goal Stats for current month & year
-  const now = new Date();
   const currentMonthName = now.toLocaleString('en-US', { month: 'short' });
   const currentYear = now.getFullYear();
   const monthGoalTitle = `Monthly Goal — ${currentMonthName} ${currentYear}`;
