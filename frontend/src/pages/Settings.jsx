@@ -24,9 +24,6 @@ export default function Settings() {
   const [saving, setSaving] = useState(false);
   const [alert, setAlert] = useState({ type: '', message: '' });
 
-  // Terms & Conditions State
-  const [termsAndConditions, setTermsAndConditions] = useState('');
-
   // Project Categories State
   const [categories, setCategories] = useState([]);
   const [newCategoryName, setNewCategoryName] = useState('');
@@ -71,33 +68,10 @@ export default function Settings() {
       // Load project categories
       const categoriesRes = await axios.get('/api/project-categories');
       setCategories(categoriesRes.data || []);
-
-      // Load system settings (Terms & Conditions)
-      const settingsRes = await axios.get('/api/settings');
-      if (settingsRes.data && settingsRes.data.terms_and_conditions !== undefined) {
-        setTermsAndConditions(settingsRes.data.terms_and_conditions);
-      }
     } catch (err) {
       console.error('Error loading settings data:', err);
     } finally {
       setLoading(false);
-    }
-  };
-
-  const handleSaveTerms = async (e) => {
-    e.preventDefault();
-    setSaving(true);
-    try {
-      await axios.post('/api/settings', {
-        terms_and_conditions: termsAndConditions
-      });
-      showAlert('success', 'Terms & Conditions saved successfully!');
-    } catch (err) {
-      console.error('Error saving terms:', err);
-      const serverMsg = err.response?.data?.error || err.message || 'Failed to save terms & conditions';
-      showAlert('error', serverMsg);
-    } finally {
-      setSaving(false);
     }
   };
 
@@ -237,12 +211,6 @@ export default function Settings() {
           <FolderPlus size={18} /> Project Categories
         </button>
         <button 
-          className={`tab-btn ${activeTab === 'terms' ? 'active' : ''}`} 
-          onClick={() => setActiveTab('terms')}
-        >
-          <FileText size={18} /> Terms & Conditions
-        </button>
-        <button 
           className={`tab-btn ${activeTab === 'profile' ? 'active' : ''}`} 
           onClick={() => setActiveTab('profile')}
         >
@@ -299,57 +267,6 @@ export default function Settings() {
             />
             <button type="submit" className="save-btn" style={{ padding: '0.75rem 1.25rem', whiteSpace: 'nowrap' }}>
               <Plus size={18} /> Add Category
-            </button>
-          </form>
-        </div>
-      )}
-
-      {/* SECTION 2: TERMS & CONDITIONS */}
-      {activeTab === 'terms' && (
-        <div className="settings-card">
-          <div className="card-title-section">
-            <FileText size={24} style={{ color: 'var(--primary-color)' }} />
-            <div>
-              <h3 className="card-title">Invoice Terms & Conditions</h3>
-              <p className="card-description">Specify standard terms and conditions. These will automatically print on a dedicated second page of every client invoice PDF.</p>
-            </div>
-          </div>
-
-          <form onSubmit={handleSaveTerms}>
-            <div style={{ marginBottom: '1.5rem' }}>
-              <label style={{ display: 'block', fontWeight: '600', marginBottom: '0.5rem', color: '#1e293b' }}>
-                Company Terms & Conditions
-              </label>
-              <textarea 
-                value={termsAndConditions} 
-                onChange={(e) => setTermsAndConditions(e.target.value)}
-                rows={12}
-                placeholder="Write company payment terms, cancellation policy, warranty & liability rules..."
-                style={{ 
-                  width: '100%', 
-                  padding: '1rem', 
-                  borderRadius: '10px', 
-                  border: '1px solid #cbd5e1', 
-                  fontSize: '0.95rem', 
-                  fontFamily: 'inherit', 
-                  lineHeight: '1.6',
-                  outline: 'none',
-                  resize: 'vertical',
-                  boxSizing: 'border-box'
-                }}
-              />
-              <small style={{ color: '#64748b', fontSize: '0.82rem', marginTop: '0.5rem', display: 'block' }}>
-                ℹ️ Standard terms & conditions will be attached on Page 2 when printing or exporting invoices to PDF.
-              </small>
-            </div>
-
-            <button 
-              type="submit" 
-              disabled={saving} 
-              className="save-btn" 
-              style={{ display: 'inline-flex', alignItems: 'center', gap: '0.5rem', padding: '0.75rem 1.5rem' }}
-            >
-              <Save size={18} /> {saving ? 'Saving Terms...' : 'Save Terms & Conditions'}
             </button>
           </form>
         </div>

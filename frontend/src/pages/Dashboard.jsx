@@ -11,6 +11,7 @@ export default function Dashboard() {
   const [invoices, setInvoices] = useState([]);
   const [teamMembers, setTeamMembers] = useState([]);
   const [selectedGoalUser, setSelectedGoalUser] = useState('all');
+  const [selectedGoalMonth, setSelectedGoalMonth] = useState('current');
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [performanceFilter, setPerformanceFilter] = useState('This Year');
@@ -149,16 +150,40 @@ export default function Dashboard() {
                    (inv.client_name && inv.client_name.toLowerCase().includes(searchTerm.toLowerCase())))
     .slice(0, 5);
 
-  // Calculate Monthly Goal Stats for current month & year
-  const currentMonthName = now.toLocaleString('en-US', { month: 'short' });
-  const currentYear = now.getFullYear();
+  // Calculate Monthly Goal Stats for selected month & year
+  const monthOptions = [];
+  for (let i = 0; i < 12; i++) {
+    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    const val = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+    const label = d.toLocaleString('en-US', { month: 'short', year: 'numeric' });
+    monthOptions.push({ val, label, year: d.getFullYear(), month: d.getMonth() });
+  }
+
+  let targetYear = now.getFullYear();
+  let targetMonth = now.getMonth();
+
+  if (selectedGoalMonth && selectedGoalMonth !== 'current') {
+    const [y, m] = selectedGoalMonth.split('-').map(Number);
+    targetYear = y;
+    targetMonth = m - 1;
+  }
+
+  const targetDateObj = new Date(targetYear, targetMonth, 1);
+  const currentMonthName = targetDateObj.toLocaleString('en-US', { month: 'short' });
+  const currentYear = targetDateObj.getFullYear();
   const monthGoalTitle = `Monthly Goal — ${currentMonthName} ${currentYear}`;
 
   const currentMonthInvoices = invoices.filter(inv => {
     if (!inv.issue_date && !inv.created_at) return false;
     const d = new Date(inv.issue_date || inv.created_at);
-    return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
+    return d.getMonth() === targetMonth && d.getFullYear() === targetYear;
   });
+
+  const parseGoal = (val) => {
+    if (val === null || val === undefined || val === '') return 0;
+    const parsed = parseFloat(val);
+    return isNaN(parsed) ? 0 : parsed;
+  };
 
   let goalTarget = 0;
   let goalReceived = 0;
@@ -166,8 +191,7 @@ export default function Dashboard() {
   if (isAdmin) {
     if (selectedGoalUser === 'all') {
       // Overall Team Target
-      goalTarget = teamMembers.reduce((sum, member) => sum + (parseFloat(member.monthly_goal) || 1000000), 0);
-      if (goalTarget === 0) goalTarget = 1000000;
+      goalTarget = teamMembers.reduce((sum, member) => sum + parseGoal(member.monthly_goal), 0);
       
       goalReceived = currentMonthInvoices.reduce((sum, inv) => {
         const amount = parseFloat(inv.amount || 0);
@@ -177,7 +201,7 @@ export default function Dashboard() {
     } else {
       // Specific Selected Team Member
       const selectedMember = teamMembers.find(m => String(m.id) === String(selectedGoalUser));
-      goalTarget = parseFloat(selectedMember?.monthly_goal) || 1000000;
+      goalTarget = parseGoal(selectedMember?.monthly_goal);
       
       const memberInvoices = currentMonthInvoices.filter(inv => 
         String(inv.agent_id) === String(selectedGoalUser) || String(inv.created_by) === String(selectedGoalUser)
@@ -191,7 +215,7 @@ export default function Dashboard() {
     }
   } else {
     // Non-Admin (Sales Rep / Employee)
-    goalTarget = parseFloat(currentUser?.monthly_goal) || 1000000;
+    goalTarget = parseGoal(currentUser?.monthly_goal);
     goalReceived = currentMonthInvoices.reduce((sum, inv) => {
       const amount = parseFloat(inv.amount || 0);
       const balance = parseFloat(inv.balance || 0);
@@ -199,10 +223,11 @@ export default function Dashboard() {
     }, 0);
   }
 
-  const goalRemaining = Math.max(0, goalTarget - goalReceived);
+  const goalRemaining = goalTarget > 0 ? Math.max(0, goalTarget - goalReceived) : 0;
   const goalPercent = goalTarget > 0 ? Math.min(100, Math.round((goalReceived / goalTarget) * 100)) : 0;
-  const currentDayOfMonth = now.getDate();
-  const goalAvgDaily = currentDayOfMonth > 0 ? Math.round(goalReceived / currentDayOfMonth) : 0;
+  const isCurrentMonth = targetYear === now.getFullYear() && targetMonth === now.getMonth();
+  const daysInTargetMonth = isCurrentMonth ? now.getDate() : new Date(targetYear, targetMonth + 1, 0).getDate();
+  const goalAvgDaily = daysInTargetMonth > 0 ? Math.round(goalReceived / daysInTargetMonth) : 0;
 
   if (loading) {
     return <div className="dashboard-loading">Loading Dashboard...</div>;
@@ -287,6 +312,15 @@ export default function Dashboard() {
                 ))}
               </select>
             )}
+            <select
+              className="monthly-goal-select"
+              value={selectedGoalMonth}
+              onChange={(e) => setSelectedGoalMonth(e.target.value)}
+            >
+              {monthOptions.map(opt => (
+                <option key={opt.val} value={opt.val}>{opt.label}</option>
+              ))}
+            </select>
           </div>
           <span className="monthly-goal-percent">{goalPercent}%</span>
         </div>

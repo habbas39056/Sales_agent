@@ -16,7 +16,7 @@ export default function TeamManagement() {
     password: '',
     role: 'Employee',
     commission_percentage: 0,
-    monthly_goal: 1000000,
+    monthly_goal: 0,
     modules_access: []
   });
   const [editingUserId, setEditingUserId] = useState(null);
@@ -106,7 +106,7 @@ export default function TeamManagement() {
       password: '',
       role: 'Employee',
       commission_percentage: 0,
-      monthly_goal: 1000000,
+      monthly_goal: 0,
       modules_access: []
     });
   };
@@ -120,7 +120,7 @@ export default function TeamManagement() {
       password: '', // Leave blank for edit, only update if provided
       role: member.role || 'Employee',
       commission_percentage: member.commission_percentage || 0,
-      monthly_goal: member.monthly_goal || 1000000,
+      monthly_goal: member.monthly_goal !== undefined && member.monthly_goal !== null ? member.monthly_goal : 0,
       modules_access: member.modules_access || []
     });
     setEditingUserId(member.id);

@@ -41,19 +41,12 @@ export default function CreateInvoice() {
     items: []
   });
 
-  const [termsAndConditions, setTermsAndConditions] = useState('');
-
   useEffect(() => {
     fetchDropdowns();
   }, [id]);
 
   const fetchDropdowns = async () => {
     try {
-      axios.get('/api/settings').then(res => {
-        if (res.data && res.data.terms_and_conditions) {
-          setTermsAndConditions(res.data.terms_and_conditions);
-        }
-      }).catch(err => console.error(err));
 
       const userStr = localStorage.getItem('user');
       const user = userStr ? JSON.parse(userStr) : null;
@@ -219,7 +212,7 @@ export default function CreateInvoice() {
     }
   };
 
-  const totalPaid = payments.reduce((sum, p) => sum + parseFloat(p.amount), 0);
+  const totalPaid = (payments || []).reduce((sum, p) => sum + (parseFloat(p?.amount) || 0), 0);
   const invoiceTotal = calculateTotal();
   const remainingBalance = Math.max(0, invoiceTotal - totalPaid);
 
@@ -335,13 +328,12 @@ export default function CreateInvoice() {
               
               <div className="bill-to-row" style={{ minWidth: '300px' }}>
                 <Select
-                  options={clients.map(c => ({ value: c.id, label: `${c.full_name} (${c.business_name || 'Individual'})` }))}
-                  value={formData.client_id ? { 
-                    value: formData.client_id, 
-                    label: clients.find(c => c.id === formData.client_id) 
-                      ? `${clients.find(c => c.id === formData.client_id).full_name} (${clients.find(c => c.id === formData.client_id).business_name || 'Individual'})` 
-                      : 'Select Client...' 
-                  } : null}
+                  options={(clients || []).map(c => ({ value: c.id, label: `${c.full_name} (${c.business_name || 'Individual'})` }))}
+                  value={(() => {
+                    if (!formData.client_id) return null;
+                    const found = (clients || []).find(c => String(c.id) === String(formData.client_id));
+                    return found ? { value: found.id, label: `${found.full_name} (${found.business_name || 'Individual'})` } : null;
+                  })()}
                   onChange={(selectedOption) => handleInputChange({ target: { name: 'client_id', value: selectedOption ? selectedOption.value : '' } })}
                   placeholder="Select Client..."
                   isSearchable={true}
@@ -599,9 +591,36 @@ export default function CreateInvoice() {
             </div>
           </div>
 
+          {/* TERMS & CONDITIONS FOR THIS SPECIFIC INVOICE */}
+          <div style={{ marginTop: '2rem', backgroundColor: '#ffffff', padding: '1.5rem', borderRadius: '12px', border: '1px solid #e2e8f0' }}>
+            <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: '800', color: '#1e293b', textTransform: 'uppercase', marginBottom: '0.75rem' }}>
+              Terms & Conditions (Specific to this Invoice)
+            </label>
+            <textarea 
+              name="terms_and_conditions"
+              value={formData.terms_and_conditions || ''}
+              onChange={handleInputChange}
+              rows="4"
+              placeholder="Enter terms and conditions for this invoice..."
+              style={{
+                width: '100%',
+                padding: '0.75rem 1rem',
+                borderRadius: '8px',
+                border: '1px solid #cbd5e1',
+                fontSize: '0.9rem',
+                fontFamily: 'inherit',
+                color: '#334155',
+                resize: 'vertical',
+                outline: 'none',
+                backgroundColor: '#f8fafc',
+                boxSizing: 'border-box'
+              }}
+            />
+          </div>
+
           <div className="bottom-actions print-hide">
             <button type="button" className="btn-cancel-text" onClick={() => navigate('/invoices')}>Cancel</button>
-            <button type="submit" className="btn-purple" style={{ padding: '0.75rem 2rem' }}>Save Update</button>
+            <button type="submit" className="btn-purple" style={{ padding: '0.75rem 2rem' }}>Save Invoice</button>
           </div>
 
         </form>
@@ -896,7 +915,7 @@ export default function CreateInvoice() {
               </div>
 
               {/* SEPARATE PAGE: TERMS & CONDITIONS */}
-              {termsAndConditions && (
+              {formData.terms_and_conditions && (
                 <div className="terms-page-break">
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem', borderBottom: '2px solid #0f172a', paddingBottom: '1rem' }}>
                     <img src="/Adwise-Labs-Primary-Logo.png" alt="Adwise Labs Logo" style={{ maxWidth: '180px', height: 'auto' }} />
@@ -904,7 +923,7 @@ export default function CreateInvoice() {
                   </div>
                   
                   <div style={{ fontSize: '0.92rem', color: '#334155', lineHeight: '1.8', whiteSpace: 'pre-wrap' }}>
-                    {termsAndConditions}
+                    {formData.terms_and_conditions}
                   </div>
                 </div>
               )}

@@ -10,10 +10,12 @@ router.get('/', async (req, res) => {
     let query = `
       SELECT i.*, 
              c.full_name as client_name, 
-             p.title as project_title
+             p.title as project_title,
+             u.name as agent_name
       FROM invoices i
       JOIN clients c ON i.client_id = c.id
       LEFT JOIN projects p ON i.project_id = p.id
+      LEFT JOIN users u ON i.agent_id = u.id
     `;
     const params = [];
 

@@ -13,6 +13,7 @@ export default function Expenses() {
   const [clients, setClients] = useState([]);
   const [banks, setBanks] = useState([]);
   const [summary, setSummary] = useState({ cashInHand: 0, otherExpenses: 0, totalNetBalance: 0, bankTotals: {} });
+  const [invoices, setInvoices] = useState([]);
   const [searchTerm, setSearchTerm] = useState('');
   
   // Filters
@@ -44,7 +45,23 @@ export default function Expenses() {
     fetchExpenses();
     fetchClients();
     fetchBanks();
+    fetchInvoices();
   }, []);
+
+  const fetchInvoices = async () => {
+    try {
+      const userStr = localStorage.getItem('user');
+      const user = userStr ? JSON.parse(userStr) : null;
+      let queryParams = '';
+      if (user) {
+        queryParams = `?user_id=${user.id}&role=${encodeURIComponent(user.role)}`;
+      }
+      const res = await axios.get(`/api/invoices${queryParams}`);
+      setInvoices(res.data || []);
+    } catch (err) {
+      console.error('Failed to fetch invoices', err);
+    }
+  };
 
   const fetchBanks = async () => {
     try {
@@ -166,9 +183,9 @@ export default function Expenses() {
     
     doc.setFontSize(11);
     doc.text(`Generated: ${new Date().toLocaleDateString()}`, 14, 32);
-    doc.text(`Cash in Hand: $${summary.cashInHand?.toFixed(2) || '0.00'}`, 14, 40);
-    doc.text(`Other Expenses: $${summary.otherExpenses?.toFixed(2) || '0.00'}`, 14, 46);
-    doc.text(`Total Net Balance: $${summary.totalNetBalance?.toFixed(2) || '0.00'}`, 14, 52);
+    doc.text(`Total Receipts: PKR ${dynamicTotalReceipts.toFixed(2)}`, 14, 40);
+    doc.text(`Total Expenses: PKR ${dynamicOtherExpenses.toFixed(2)}`, 14, 46);
+    doc.text(`Total Net Balance: PKR ${dynamicNetBalance.toFixed(2)}`, 14, 52);
 
     const tableColumn = ["Date", "Client/Party", "Description", "Mode", "Bank", "Ref", "Receipt", "Payment", "Balance"];
     const tableRows = filteredExpenses.map(exp => [
@@ -225,6 +242,67 @@ export default function Expenses() {
     return matchesSearch && matchesType && matchesBank && matchesDate;
   });
 
+  const filteredInvoices = invoices.filter(inv => {
+    if (!inv.issue_date && !inv.created_at) return false;
+    const invDateStr = new Date(inv.issue_date || inv.created_at).toISOString().slice(0, 10);
+    if (fromDate && invDateStr < fromDate) return false;
+    if (toDate && invDateStr > toDate) return false;
+    return true;
+  });
+
+  // Calculate dynamic stats based on filtered data
+  const isFiltered = Boolean(fromDate || toDate || bankFilter !== 'All Banks' || typeFilter !== 'All Types' || searchTerm.trim());
+
+  const dynamicOtherExpenses = filteredExpenses.reduce((sum, exp) => sum + Number(exp.payment_amount || 0), 0);
+  const dynamicTotalReceipts = filteredExpenses.reduce((sum, exp) => sum + Number(exp.receipt_amount || 0), 0);
+  const dynamicNetBalance = isFiltered ? (dynamicTotalReceipts - dynamicOtherExpenses) : Number(summary.totalNetBalance || 0);
+
+  const dynamicTotalInvoiced = (fromDate || toDate)
+    ? filteredInvoices.reduce((sum, inv) => sum + Number(inv.amount || 0), 0)
+    : Number(summary.totalInvoiced || 0);
+
+  const dynamicUnpaidInvoices = (fromDate || toDate)
+    ? filteredInvoices.reduce((sum, inv) => sum + Number(inv.balance || 0), 0)
+    : Number(summary.totalInvoiceBalance || 0);
+
+  const dynamicBankTotals = {};
+  if (isFiltered) {
+    filteredExpenses.forEach(exp => {
+      if (exp.bank && exp.bank.trim() !== '') {
+        if (!dynamicBankTotals[exp.bank]) dynamicBankTotals[exp.bank] = 0;
+        dynamicBankTotals[exp.bank] += Number(exp.receipt_amount || 0) - Number(exp.payment_amount || 0);
+      }
+    });
+  }
+
+  const handlePresetDate = (preset) => {
+    const now = new Date();
+    if (preset === 'all') {
+      setFromDate('');
+      setToDate('');
+    } else if (preset === 'today') {
+      const dateStr = now.toISOString().split('T')[0];
+      setFromDate(dateStr);
+      setToDate(dateStr);
+    } else if (preset === 'thisMonth') {
+      const firstDay = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split('T')[0];
+      const lastDay = new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString().split('T')[0];
+      setFromDate(firstDay);
+      setToDate(lastDay);
+    } else if (preset === 'lastMonth') {
+      const firstDay = new Date(now.getFullYear(), now.getMonth() - 1, 1).toISOString().split('T')[0];
+      const lastDay = new Date(now.getFullYear(), now.getMonth(), 0).toISOString().split('T')[0];
+      setFromDate(firstDay);
+      setToDate(lastDay);
+    } else if (preset === 'thisYear') {
+      const firstDay = new Date(now.getFullYear(), 0, 1).toISOString().split('T')[0];
+      const lastDay = new Date(now.getFullYear(), 11, 31).toISOString().split('T')[0];
+      setFromDate(firstDay);
+      setToDate(lastDay);
+    }
+    setCurrentPage(1);
+  };
+
   const currentExpenses = filteredExpenses.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
 
   const clientOptions = clients.map(c => ({
@@ -269,8 +347,8 @@ export default function Expenses() {
             <Building2 size={24} />
           </div>
           <div className="expense-card-info">
-            <p>OTHER EXPENSES</p>
-            <h3>PKR {summary.otherExpenses?.toFixed(2) || '0.00'}</h3>
+            <p>OTHER EXPENSES {isFiltered ? '(FILTERED)' : ''}</p>
+            <h3>PKR {dynamicOtherExpenses.toFixed(2)}</h3>
           </div>
         </div>
         <div className="expense-card" style={{ flex: '1 1 300px' }}>
@@ -278,8 +356,8 @@ export default function Expenses() {
             <DollarSign size={24} />
           </div>
           <div className="expense-card-info">
-            <p>TOTAL NET BALANCE</p>
-            <h3>PKR {summary.totalNetBalance?.toFixed(2) || '0.00'}</h3>
+            <p>TOTAL NET BALANCE {isFiltered ? '(FILTERED)' : ''}</p>
+            <h3>PKR {dynamicNetBalance.toFixed(2)}</h3>
           </div>
         </div>
 
@@ -288,8 +366,8 @@ export default function Expenses() {
             <FileText size={24} />
           </div>
           <div className="expense-card-info">
-            <p>TOTAL INVOICED</p>
-            <h3 style={{ color: '#0891b2' }}>PKR {Number(summary.totalInvoiced || 0).toFixed(2)}</h3>
+            <p>TOTAL INVOICED {(fromDate || toDate) ? '(FILTERED)' : ''}</p>
+            <h3 style={{ color: '#0891b2' }}>PKR {dynamicTotalInvoiced.toFixed(2)}</h3>
           </div>
         </div>
 
@@ -298,21 +376,23 @@ export default function Expenses() {
             <AlertCircle size={24} />
           </div>
           <div className="expense-card-info">
-            <p>UNPAID INVOICES</p>
-            <h3 style={{ color: '#e11d48' }}>PKR {Number(summary.totalInvoiceBalance || 0).toFixed(2)}</h3>
+            <p>UNPAID INVOICES {(fromDate || toDate) ? '(FILTERED)' : ''}</p>
+            <h3 style={{ color: '#e11d48' }}>PKR {dynamicUnpaidInvoices.toFixed(2)}</h3>
           </div>
         </div>
 
         {/* Dynamic Bank Cards */}
         {banks.map(bank => {
-          const bankBalance = summary.bankTotals?.[bank.name] || 0;
+          const bankBalance = isFiltered 
+            ? (dynamicBankTotals[bank.name] || 0) 
+            : (summary.bankTotals?.[bank.name] || 0);
           return (
             <div className="expense-card" key={bank.id} style={{ flex: '1 1 300px' }}>
               <div className="expense-card-icon" style={{ backgroundColor: '#e0e7ff', color: '#4f46e5' }}>
                 <Building2 size={24} />
               </div>
               <div className="expense-card-info">
-                <p>{bank.name.toUpperCase()}</p>
+                <p>{bank.name.toUpperCase()} {isFiltered ? '(FILTERED)' : ''}</p>
                 <h3 style={{ color: bankBalance < 0 ? 'var(--danger)' : 'var(--text-primary)' }}>PKR {bankBalance.toFixed(2)}
                 </h3>
               </div>
@@ -323,72 +403,118 @@ export default function Expenses() {
 
       {/* Expenses Table */}
       <div className="recent-orders-panel" style={{ marginTop: '2rem' }}>
-        <div className="panel-header-ref" style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap', marginBottom: '1rem', alignItems: 'center' }}>
-          <div className="search-box-ref" style={{ margin: 0, flex: '1 1 220px', minWidth: '200px' }}>
-            <Search size={16} />
-            <input 
-              type="text" 
-              placeholder="Search by client, description, mode, bank, ref, amount..." 
-              value={searchTerm}
-              onChange={handleSearchChange}
-            />
+        <div className="panel-header-ref" style={{ display: 'flex', flexDirection: 'column', gap: '0.85rem', marginBottom: '1.25rem', alignItems: 'stretch' }}>
+          {/* ROW 1: SEARCH & FILTER SELECTS */}
+          <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center', flexWrap: 'wrap' }}>
+            <div className="search-box-ref" style={{ margin: 0, flex: '1 1 250px', minWidth: '220px' }}>
+              <Search size={16} />
+              <input 
+                type="text" 
+                placeholder="Search by client, description, mode, bank, ref, amount..." 
+                value={searchTerm}
+                onChange={handleSearchChange}
+              />
+            </div>
+            <select 
+              className="filter-select"
+              value={typeFilter}
+              onChange={(e) => {
+                setTypeFilter(e.target.value);
+                setCurrentPage(1);
+              }}
+              style={{ padding: '0.5rem 0.75rem', borderRadius: '20px', border: '1px solid #e2e8f0', background: '#f8fafc', fontSize: '0.85rem', outline: 'none' }}
+            >
+              <option value="All Types">All Types</option>
+              <option value="Receipts">Receipts</option>
+              <option value="Payments">Payments</option>
+            </select>
+            <select 
+              className="filter-select"
+              value={bankFilter}
+              onChange={(e) => {
+                setBankFilter(e.target.value);
+                setCurrentPage(1);
+              }}
+              style={{ padding: '0.5rem 0.75rem', borderRadius: '20px', border: '1px solid #e2e8f0', background: '#f8fafc', fontSize: '0.85rem', outline: 'none', maxWidth: '180px' }}
+            >
+              <option value="All Banks">All Banks</option>
+              {banks.map(b => <option key={b.id} value={b.name}>{b.name}</option>)}
+            </select>
           </div>
-          <select 
-            className="filter-select"
-            value={typeFilter}
-            onChange={(e) => {
-              setTypeFilter(e.target.value);
-              setCurrentPage(1);
-            }}
-            style={{ padding: '0.5rem 0.75rem', borderRadius: '20px', border: '1px solid #e2e8f0', background: '#f8fafc', fontSize: '0.85rem', outline: 'none' }}
-          >
-            <option value="All Types">All Types</option>
-            <option value="Receipts">Receipts</option>
-            <option value="Payments">Payments</option>
-          </select>
-          <select 
-            className="filter-select"
-            value={bankFilter}
-            onChange={(e) => {
-              setBankFilter(e.target.value);
-              setCurrentPage(1);
-            }}
-            style={{ padding: '0.5rem 0.75rem', borderRadius: '20px', border: '1px solid #e2e8f0', background: '#f8fafc', fontSize: '0.85rem', outline: 'none', maxWidth: '180px' }}
-          >
-            <option value="All Banks">All Banks</option>
-            {banks.map(b => <option key={b.id} value={b.name}>{b.name}</option>)}
-          </select>
 
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '20px', padding: '0.35rem 0.75rem' }}>
-            <span style={{ fontSize: '0.8rem', color: '#64748b', fontWeight: 600 }}>From:</span>
-            <input 
-              type="date" 
-              value={fromDate} 
-              onChange={e => {
-                setFromDate(e.target.value);
-                setCurrentPage(1);
-              }}
-              style={{ border: 'none', background: 'transparent', fontSize: '0.82rem', color: '#1e293b', outline: 'none' }}
-            />
-            <span style={{ fontSize: '0.8rem', color: '#64748b', fontWeight: 600 }}>To:</span>
-            <input 
-              type="date" 
-              value={toDate} 
-              onChange={e => {
-                setToDate(e.target.value);
-                setCurrentPage(1);
-              }}
-              style={{ border: 'none', background: 'transparent', fontSize: '0.82rem', color: '#1e293b', outline: 'none' }}
-            />
-            {(fromDate || toDate) && (
+          {/* ROW 2: FIXED DATE PRESETS & DATE RANGE */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap', background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '14px', padding: '0.4rem 0.85rem' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', flexWrap: 'wrap' }}>
               <button 
-                onClick={() => { setFromDate(''); setToDate(''); setCurrentPage(1); }}
-                style={{ border: 'none', background: 'transparent', color: '#ef4444', cursor: 'pointer', fontSize: '0.8rem', fontWeight: 'bold', marginLeft: '0.25rem' }}
-                title="Clear Date Filter"
+                type="button"
+                onClick={() => handlePresetDate('all')}
+                style={{ padding: '0.25rem 0.65rem', borderRadius: '12px', border: 'none', background: (!fromDate && !toDate) ? '#0f172a' : '#e2e8f0', color: (!fromDate && !toDate) ? '#fff' : '#475569', fontSize: '0.78rem', fontWeight: 600, cursor: 'pointer' }}
               >
-                ✕
+                All
               </button>
-            )}
+              <button 
+                type="button"
+                onClick={() => handlePresetDate('today')}
+                style={{ padding: '0.25rem 0.65rem', borderRadius: '12px', border: 'none', background: '#e2e8f0', color: '#475569', fontSize: '0.78rem', fontWeight: 600, cursor: 'pointer' }}
+              >
+                Today
+              </button>
+              <button 
+                type="button"
+                onClick={() => handlePresetDate('thisMonth')}
+                style={{ padding: '0.25rem 0.65rem', borderRadius: '12px', border: 'none', background: '#e2e8f0', color: '#475569', fontSize: '0.78rem', fontWeight: 600, cursor: 'pointer' }}
+              >
+                This Month
+              </button>
+              <button 
+                type="button"
+                onClick={() => handlePresetDate('lastMonth')}
+                style={{ padding: '0.25rem 0.65rem', borderRadius: '12px', border: 'none', background: '#e2e8f0', color: '#475569', fontSize: '0.78rem', fontWeight: 600, cursor: 'pointer' }}
+              >
+                Last Month
+              </button>
+              <button 
+                type="button"
+                onClick={() => handlePresetDate('thisYear')}
+                style={{ padding: '0.25rem 0.65rem', borderRadius: '12px', border: 'none', background: '#e2e8f0', color: '#475569', fontSize: '0.78rem', fontWeight: 600, cursor: 'pointer' }}
+              >
+                This Year
+              </button>
+            </div>
+
+            <div style={{ width: '1px', height: '18px', background: '#cbd5e1', margin: '0 0.2rem' }}></div>
+
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+              <span style={{ fontSize: '0.8rem', color: '#64748b', fontWeight: 600 }}>From:</span>
+              <input 
+                type="date" 
+                value={fromDate} 
+                onChange={e => {
+                  setFromDate(e.target.value);
+                  setCurrentPage(1);
+                }}
+                style={{ border: '1px solid #cbd5e1', background: '#ffffff', borderRadius: '6px', padding: '0.2rem 0.4rem', fontSize: '0.82rem', color: '#1e293b', outline: 'none' }}
+              />
+              <span style={{ fontSize: '0.8rem', color: '#64748b', fontWeight: 600 }}>To:</span>
+              <input 
+                type="date" 
+                value={toDate} 
+                onChange={e => {
+                  setToDate(e.target.value);
+                  setCurrentPage(1);
+                }}
+                style={{ border: '1px solid #cbd5e1', background: '#ffffff', borderRadius: '6px', padding: '0.2rem 0.4rem', fontSize: '0.82rem', color: '#1e293b', outline: 'none' }}
+              />
+              {(fromDate || toDate) && (
+                <button 
+                  onClick={() => { setFromDate(''); setToDate(''); setCurrentPage(1); }}
+                  style={{ border: 'none', background: 'transparent', color: '#ef4444', cursor: 'pointer', fontSize: '0.82rem', fontWeight: 'bold', marginLeft: '0.25rem' }}
+                  title="Clear Date Filter"
+                >
+                  ✕ Clear
+                </button>
+              )}
+            </div>
           </div>
         </div>
 

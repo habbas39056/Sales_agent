@@ -88,7 +88,7 @@ router.post('/', authMiddleware, async (req, res) => {
     return res.status(400).json({ error: 'Name, email, password and role are required' });
   }
   const commPct = commission_percentage || 0.00;
-  const goalVal = monthly_goal !== undefined && monthly_goal !== '' ? parseFloat(monthly_goal) : 1000000.00;
+  const goalVal = monthly_goal !== undefined && monthly_goal !== '' ? parseFloat(monthly_goal) : 0.00;
   const modulesAccessJson = modules_access ? JSON.stringify(modules_access) : null;
   
   try {
@@ -119,7 +119,7 @@ router.put('/:id', authMiddleware, async (req, res) => {
     return res.status(400).json({ error: 'Name, email, and role are required' });
   }
   const commPct = commission_percentage || 0.00;
-  const goalVal = monthly_goal !== undefined && monthly_goal !== '' ? parseFloat(monthly_goal) : 1000000.00;
+  const goalVal = monthly_goal !== undefined && monthly_goal !== '' ? parseFloat(monthly_goal) : 0.00;
   const modulesAccessJson = modules_access ? JSON.stringify(modules_access) : null;
   
   try {

@@ -15,7 +15,8 @@ export default function InvoiceManagement() {
   
   // Filters
   const [statusFilter, setStatusFilter] = useState('All Statuses');
-  const [clientFilter, setClientFilter] = useState('All Clients');
+  const [salesPersonFilter, setSalesPersonFilter] = useState('All Sales Persons');
+  const [salesPersons, setSalesPersons] = useState([]);
   const [fromDate, setFromDate] = useState('');
   const [toDate, setToDate] = useState('');
   
@@ -35,21 +36,12 @@ export default function InvoiceManagement() {
     notes: ''
   });
 
-  const [termsAndConditions, setTermsAndConditions] = useState('');
-
   useEffect(() => {
     fetchData();
   }, []);
 
   const fetchData = async () => {
     try {
-      // Load terms and conditions
-      axios.get('/api/settings').then(res => {
-        if (res.data && res.data.terms_and_conditions) {
-          setTermsAndConditions(res.data.terms_and_conditions);
-        }
-      }).catch(err => console.error(err));
-
       const userStr = localStorage.getItem('user');
       const user = userStr ? JSON.parse(userStr) : null;
       let queryParams = '';
@@ -57,16 +49,18 @@ export default function InvoiceManagement() {
         queryParams = `?user_id=${user.id}&role=${encodeURIComponent(user.role)}`;
       }
 
-      const [invRes, cliRes, projRes, prodRes] = await Promise.all([
+      const [invRes, cliRes, projRes, prodRes, salesRes] = await Promise.all([
         axios.get(`/api/invoices${queryParams}`),
         axios.get(`/api/clients${queryParams}`),
         axios.get('/api/projects'),
-        axios.get('/api/products')
+        axios.get('/api/products'),
+        axios.get('/api/users/specialists')
       ]);
       setInvoices(invRes.data);
       setClients(cliRes.data);
       setProjects(projRes.data);
       setProducts(prodRes.data);
+      setSalesPersons(salesRes.data || []);
     } catch (error) {
       console.error('Failed to fetch data:', error);
     }
@@ -125,17 +119,18 @@ export default function InvoiceManagement() {
   const filteredInvoices = invoices.filter(inv => {
     const term = searchTerm.trim().toLowerCase();
 
-    // Multi-field search across Invoice #, Client Name, Project Title, Amount, Balance, ID
+    // Multi-field search across Invoice #, Client Name, Sales Person, Project Title, Amount, Balance, ID
     const matchesSearch = !term || 
       (inv.invoice_number && inv.invoice_number.toLowerCase().includes(term)) || 
       (inv.client_name && inv.client_name.toLowerCase().includes(term)) || 
+      (inv.agent_name && inv.agent_name.toLowerCase().includes(term)) || 
       (inv.project_title && inv.project_title.toLowerCase().includes(term)) || 
       (inv.amount && inv.amount.toString().includes(term)) || 
       (inv.balance && inv.balance.toString().includes(term)) || 
       (inv.id && inv.id.toString().includes(term));
 
     const matchesStatus = statusFilter === 'All Statuses' || inv.status === statusFilter;
-    const matchesClient = clientFilter === 'All Clients' || inv.client_name === clientFilter;
+    const matchesSalesPerson = salesPersonFilter === 'All Sales Persons' || inv.agent_name === salesPersonFilter;
 
     // Date Range Filter
     let matchesDate = true;
@@ -145,7 +140,7 @@ export default function InvoiceManagement() {
       if (toDate && invDateStr > toDate) matchesDate = false;
     }
     
-    return matchesSearch && matchesStatus && matchesClient && matchesDate;
+    return matchesSearch && matchesStatus && matchesSalesPerson && matchesDate;
   });
 
   const currentInvoices = filteredInvoices.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
@@ -185,15 +180,15 @@ export default function InvoiceManagement() {
 
             <select 
               className="filter-select"
-              value={clientFilter}
+              value={salesPersonFilter}
               onChange={(e) => {
-                setClientFilter(e.target.value);
+                setSalesPersonFilter(e.target.value);
                 setCurrentPage(1);
               }}
               style={{ padding: '0.5rem 0.75rem', borderRadius: '20px', border: '1px solid #e2e8f0', background: '#f8fafc', fontSize: '0.85rem', outline: 'none', maxWidth: '180px' }}
             >
-              <option value="All Clients">All Clients</option>
-              {clients.map(c => <option key={c.id} value={c.full_name}>{c.full_name}</option>)}
+              <option value="All Sales Persons">All Sales Persons</option>
+              {salesPersons.map(sp => <option key={sp.id} value={sp.full_name}>{sp.full_name}</option>)}
             </select>
 
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '20px', padding: '0.35rem 0.75rem' }}>
@@ -242,6 +237,7 @@ export default function InvoiceManagement() {
                 <th>AMOUNT</th>
                 <th>DATE</th>
                 <th>CUSTOMER</th>
+                <th>SALES PERSON</th>
                 <th>PROJECT</th>
                 <th>DUE DATE</th>
                 <th>BALANCE</th>
@@ -256,6 +252,7 @@ export default function InvoiceManagement() {
                   <td><strong>PKR {Number(inv.amount).toFixed(2)}</strong></td>
                   <td>{new Date(inv.issue_date).toLocaleDateString()}</td>
                   <td><strong>{inv.client_name}</strong></td>
+                  <td><span style={{ color: '#4f46e5', fontWeight: '500' }}>{inv.agent_name || 'Unassigned'}</span></td>
                   <td>{inv.project_title || '-'}</td>
                   <td>{new Date(inv.due_date).toLocaleDateString()}</td>
                   <td style={{ color: inv.balance > 0 ? '#dc2626' : '#16a34a', fontWeight: 'bold' }}>PKR {Number(inv.balance).toFixed(2)}
@@ -392,7 +389,7 @@ export default function InvoiceManagement() {
               </div>
 
               {/* SEPARATE PAGE: TERMS & CONDITIONS */}
-              {termsAndConditions && (
+              {previewInvoice?.terms_and_conditions && (
                 <div className="terms-page-break">
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem', borderBottom: '2px solid #0f172a', paddingBottom: '1rem' }}>
                     <img src="/Adwise-Labs-Primary-Logo.png" alt="Adwise Labs Logo" style={{ maxWidth: '180px', height: 'auto' }} />
@@ -400,7 +397,7 @@ export default function InvoiceManagement() {
                   </div>
                   
                   <div style={{ fontSize: '0.92rem', color: '#334155', lineHeight: '1.8', whiteSpace: 'pre-wrap' }}>
-                    {termsAndConditions}
+                    {previewInvoice.terms_and_conditions}
                   </div>
                 </div>
               )}
