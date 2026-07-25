@@ -200,84 +200,52 @@ router.get('/team/:userId/details', async (req, res) => {
 router.get('/profit', async (req, res) => {
     try {
         const { start_date, end_date } = req.query;
-        let invoiceWhere = '';
         let expenseWhere = '';
-        const invParams = [];
         const expParams = [];
 
         if (start_date) {
-            invoiceWhere += ' AND issue_date >= ?';
             expenseWhere += ' AND date >= ?';
-            invParams.push(start_date);
             expParams.push(start_date);
         }
         if (end_date) {
-            invoiceWhere += ' AND issue_date <= ?';
             expenseWhere += ' AND date <= ?';
-            invParams.push(end_date);
             expParams.push(end_date);
         }
 
-        // Total Collections (Revenue from Invoices paid + Receipts)
-        const [invRows] = await db.query(
-            `SELECT COALESCE(SUM(amount - balance), 0) as total_revenue, COALESCE(SUM(amount), 0) as total_invoiced FROM invoices WHERE 1=1 ${invoiceWhere}`,
-            invParams
-        );
-
+        // Total Collections (all receipts in date range) & Total Expenses (all payments in date range)
         const [expRows] = await db.query(
             `SELECT 
-                COALESCE(SUM(payment_amount), 0) as total_expense,
-                COALESCE(SUM(receipt_amount), 0) as extra_receipts
+                COALESCE(SUM(receipt_amount), 0) as total_revenue,
+                COALESCE(SUM(payment_amount), 0) as total_expense
             FROM expenses WHERE 1=1 ${expenseWhere}`,
             expParams
         );
 
-        const totalRevenue = parseFloat(invRows[0].total_revenue || 0) + parseFloat(expRows[0].extra_receipts || 0);
+        const totalRevenue = parseFloat(expRows[0].total_revenue || 0);
         const totalExpenses = parseFloat(expRows[0].total_expense || 0);
         const netProfit = totalRevenue - totalExpenses;
         const profitMargin = totalRevenue > 0 ? (netProfit / totalRevenue) * 100 : 0;
 
-        // Monthly trends query
-        const [monthlyRev] = await db.query(
-            `SELECT DATE_FORMAT(issue_date, '%Y-%m') as month_key, COALESCE(SUM(amount - balance), 0) as revenue FROM invoices WHERE 1=1 ${invoiceWhere} GROUP BY month_key ORDER BY month_key ASC`,
-            invParams
-        );
-
+        // Monthly trend aggregated by receipt/expense date
         const [monthlyExp] = await db.query(
-            `SELECT DATE_FORMAT(date, '%Y-%m') as month_key, COALESCE(SUM(payment_amount), 0) as expense, COALESCE(SUM(receipt_amount), 0) as receipt FROM expenses WHERE 1=1 ${expenseWhere} GROUP BY month_key ORDER BY month_key ASC`,
+            `SELECT 
+                DATE_FORMAT(date, '%Y-%m') as month_key, 
+                COALESCE(SUM(receipt_amount), 0) as revenue, 
+                COALESCE(SUM(payment_amount), 0) as expense 
+            FROM expenses 
+            WHERE 1=1 ${expenseWhere} 
+            GROUP BY month_key 
+            ORDER BY month_key ASC`,
             expParams
         );
 
-        // Combine monthly data
-        const monthMap = {};
-
-        monthlyRev.forEach(r => {
-            if (r.month_key) {
-                monthMap[r.month_key] = {
-                    month: r.month_key,
-                    revenue: parseFloat(r.revenue || 0),
-                    expenses: 0
-                };
-            }
-        });
-
-        monthlyExp.forEach(e => {
-            if (e.month_key) {
-                if (!monthMap[e.month_key]) {
-                    monthMap[e.month_key] = { month: e.month_key, revenue: 0, expenses: 0 };
-                }
-                monthMap[e.month_key].revenue += parseFloat(e.receipt || 0);
-                monthMap[e.month_key].expenses += parseFloat(e.expense || 0);
-            }
-        });
-
-        const monthlyTrend = Object.keys(monthMap).sort().map(key => {
-            const rev = monthMap[key].revenue;
-            const exp = monthMap[key].expenses;
+        const monthlyTrend = monthlyExp.filter(e => e.month_key).map(e => {
+            const rev = parseFloat(e.revenue || 0);
+            const exp = parseFloat(e.expense || 0);
             const prof = rev - exp;
             const marg = rev > 0 ? (prof / rev) * 100 : 0;
             return {
-                month: key,
+                month: e.month_key,
                 revenue: Number(rev.toFixed(2)),
                 expenses: Number(exp.toFixed(2)),
                 profit: Number(prof.toFixed(2)),
