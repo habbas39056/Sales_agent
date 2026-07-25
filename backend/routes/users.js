@@ -62,7 +62,7 @@ router.get('/specialists', authMiddleware, async (req, res) => {
 // Get team members (excluding clients)
 router.get('/', authMiddleware, async (req, res) => {
   try {
-    const [rows] = await db.query("SELECT id, name, username, email, role, modules_access, created_at, commission_percentage FROM users WHERE role != 'Client' ORDER BY created_at DESC");
+    const [rows] = await db.query("SELECT id, name, username, email, role, modules_access, created_at, commission_percentage, monthly_goal FROM users WHERE role != 'Client' ORDER BY created_at DESC");
     res.json(rows);
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -73,7 +73,7 @@ router.get('/', authMiddleware, async (req, res) => {
 router.get('/:id', authMiddleware, async (req, res) => {
   if (req.params.id === 'specialists') return; // Skip if it's the specialists route
   try {
-    const [rows] = await db.query("SELECT id, name, username, email, role, modules_access, created_at, commission_percentage FROM users WHERE id = ?", [req.params.id]);
+    const [rows] = await db.query("SELECT id, name, username, email, role, modules_access, created_at, commission_percentage, monthly_goal FROM users WHERE id = ?", [req.params.id]);
     if (rows.length === 0) return res.status(404).json({ error: 'User not found' });
     res.json(rows[0]);
   } catch (error) {
@@ -83,11 +83,12 @@ router.get('/:id', authMiddleware, async (req, res) => {
 
 // Create a team member
 router.post('/', authMiddleware, async (req, res) => {
-  const { name, username, email, password, role, commission_percentage, modules_access } = req.body;
+  const { name, username, email, password, role, commission_percentage, monthly_goal, modules_access } = req.body;
   if (!name || !email || !password || !role) {
     return res.status(400).json({ error: 'Name, email, password and role are required' });
   }
   const commPct = commission_percentage || 0.00;
+  const goalVal = monthly_goal !== undefined && monthly_goal !== '' ? parseFloat(monthly_goal) : 1000000.00;
   const modulesAccessJson = modules_access ? JSON.stringify(modules_access) : null;
   
   try {
@@ -95,10 +96,10 @@ router.post('/', authMiddleware, async (req, res) => {
     const password_hash = await bcrypt.hash(password, saltRounds);
     
     const [result] = await db.query(
-      'INSERT INTO users (name, username, email, password_hash, role, commission_percentage, modules_access) VALUES (?, ?, ?, ?, ?, ?, ?)',
-      [name, username || null, email, password_hash, role, commPct, modulesAccessJson]
+      'INSERT INTO users (name, username, email, password_hash, role, commission_percentage, monthly_goal, modules_access) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+      [name, username || null, email, password_hash, role, commPct, goalVal, modulesAccessJson]
     );
-    res.status(201).json({ id: result.insertId, name, username, email, role, modules_access });
+    res.status(201).json({ id: result.insertId, name, username, email, role, commission_percentage: commPct, monthly_goal: goalVal, modules_access });
   } catch (error) {
     if (error.code === 'ER_DUP_ENTRY') {
       if (error.message.includes('username')) {
@@ -113,11 +114,12 @@ router.post('/', authMiddleware, async (req, res) => {
 // Update a team member
 router.put('/:id', authMiddleware, async (req, res) => {
   const userId = req.params.id;
-  const { name, username, email, password, role, commission_percentage, modules_access } = req.body;
+  const { name, username, email, password, role, commission_percentage, monthly_goal, modules_access } = req.body;
   if (!name || !email || !role) {
     return res.status(400).json({ error: 'Name, email, and role are required' });
   }
   const commPct = commission_percentage || 0.00;
+  const goalVal = monthly_goal !== undefined && monthly_goal !== '' ? parseFloat(monthly_goal) : 1000000.00;
   const modulesAccessJson = modules_access ? JSON.stringify(modules_access) : null;
   
   try {
@@ -125,13 +127,13 @@ router.put('/:id', authMiddleware, async (req, res) => {
       const saltRounds = 10;
       const password_hash = await bcrypt.hash(password, saltRounds);
       await db.query(
-        'UPDATE users SET name = ?, username = ?, email = ?, password_hash = ?, role = ?, commission_percentage = ?, modules_access = ? WHERE id = ?',
-        [name, username || null, email, password_hash, role, commPct, modulesAccessJson, userId]
+        'UPDATE users SET name = ?, username = ?, email = ?, password_hash = ?, role = ?, commission_percentage = ?, monthly_goal = ?, modules_access = ? WHERE id = ?',
+        [name, username || null, email, password_hash, role, commPct, goalVal, modulesAccessJson, userId]
       );
     } else {
       await db.query(
-        'UPDATE users SET name = ?, username = ?, email = ?, role = ?, commission_percentage = ?, modules_access = ? WHERE id = ?',
-        [name, username || null, email, role, commPct, modulesAccessJson, userId]
+        'UPDATE users SET name = ?, username = ?, email = ?, role = ?, commission_percentage = ?, monthly_goal = ?, modules_access = ? WHERE id = ?',
+        [name, username || null, email, role, commPct, goalVal, modulesAccessJson, userId]
       );
     }
     res.json({ message: 'User updated successfully' });

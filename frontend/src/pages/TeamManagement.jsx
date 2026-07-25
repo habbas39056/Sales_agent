@@ -15,8 +15,8 @@ export default function TeamManagement() {
     email: '',
     password: '',
     role: 'Employee',
-    role: 'Employee',
     commission_percentage: 0,
+    monthly_goal: 1000000,
     modules_access: []
   });
   const [editingUserId, setEditingUserId] = useState(null);
@@ -106,6 +106,7 @@ export default function TeamManagement() {
       password: '',
       role: 'Employee',
       commission_percentage: 0,
+      monthly_goal: 1000000,
       modules_access: []
     });
   };
@@ -119,6 +120,7 @@ export default function TeamManagement() {
       password: '', // Leave blank for edit, only update if provided
       role: member.role || 'Employee',
       commission_percentage: member.commission_percentage || 0,
+      monthly_goal: member.monthly_goal || 1000000,
       modules_access: member.modules_access || []
     });
     setEditingUserId(member.id);
@@ -377,8 +379,8 @@ export default function TeamManagement() {
                 </div>
               </div>
 
-              <div style={{ display: 'flex', gap: '1rem', marginTop: '1rem' }}>
-                <div className="form-group" style={{ width: '25%' }}>
+              <div style={{ display: 'flex', gap: '1rem', marginTop: '1rem', flexWrap: 'wrap' }}>
+                <div className="form-group" style={{ flex: '1 1 200px' }}>
                   <label>ROLE</label>
                   <select name="role" value={formData.role} onChange={handleInputChange} required>
                     {availableRoles.map(role => (
@@ -387,8 +389,21 @@ export default function TeamManagement() {
                   </select>
                 </div>
 
+                <div className="form-group" style={{ flex: '1 1 200px' }}>
+                  <label>MONTHLY SALES GOAL (PKR)</label>
+                  <input 
+                    type="number" 
+                    name="monthly_goal" 
+                    value={formData.monthly_goal} 
+                    onChange={handleInputChange} 
+                    min="0" 
+                    step="1000"
+                    placeholder="e.g. 1000000"
+                  />
+                </div>
+
                 {formData.role === 'Sales Rep' && (
-                  <div className="form-group" style={{ width: '25%' }}>
+                  <div className="form-group" style={{ flex: '1 1 200px' }}>
                     <label>COMMISSION PERCENTAGE (%) *</label>
                     <input 
                       type="number" 

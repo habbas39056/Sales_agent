@@ -13,6 +13,7 @@ CREATE TABLE `users` (
   `username` varchar(255) DEFAULT NULL,
   `modules_access` json DEFAULT NULL,
   `commission_percentage` decimal(5,2) DEFAULT '0.00',
+  `monthly_goal` decimal(12,2) DEFAULT '1000000.00',
   `profile_image_url` varchar(255) DEFAULT NULL,
   `created_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`),

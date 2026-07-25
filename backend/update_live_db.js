@@ -20,6 +20,7 @@ async function updateLiveDb() {
     await addColumnIfNotExists('users', 'username', 'VARCHAR(255) NULL');
     await addColumnIfNotExists('users', 'modules_access', 'JSON NULL');
     await addColumnIfNotExists('users', 'commission_percentage', 'DECIMAL(5,2) DEFAULT 0.00');
+    await addColumnIfNotExists('users', 'monthly_goal', 'DECIMAL(12,2) DEFAULT 1000000.00');
     await addColumnIfNotExists('users', 'profile_image_url', 'VARCHAR(255) NULL');
 
     // Update Enum

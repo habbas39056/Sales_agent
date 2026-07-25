@@ -9,10 +9,16 @@ export default function Dashboard() {
   const [clients, setClients] = useState([]);
   const [projects, setProjects] = useState([]);
   const [invoices, setInvoices] = useState([]);
+  const [teamMembers, setTeamMembers] = useState([]);
+  const [selectedGoalUser, setSelectedGoalUser] = useState('all');
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [performanceFilter, setPerformanceFilter] = useState('This Year');
   const navigate = useNavigate();
+
+  const currentUserStr = localStorage.getItem('user');
+  const currentUser = currentUserStr ? JSON.parse(currentUserStr) : null;
+  const isAdmin = currentUser?.role === 'Admin';
 
   useEffect(() => {
     const fetchData = async () => {
@@ -23,14 +29,22 @@ export default function Dashboard() {
         if (user) {
           queryParams = `?user_id=${user.id}&role=${encodeURIComponent(user.role)}`;
         }
-        const [clientsRes, projectsRes, invoicesRes] = await Promise.all([
+        const requests = [
           axios.get(`/api/clients${queryParams}`),
           axios.get(`/api/projects${queryParams}`),
           axios.get(`/api/invoices${queryParams}`)
-        ]);
-        setClients(clientsRes.data);
-        setProjects(projectsRes.data);
-        setInvoices(invoicesRes.data);
+        ];
+        if (user?.role === 'Admin') {
+          requests.push(axios.get('/api/users'));
+        }
+
+        const results = await Promise.all(requests);
+        setClients(results[0].data);
+        setProjects(results[1].data);
+        setInvoices(results[2].data);
+        if (results[3]) {
+          setTeamMembers(results[3].data || []);
+        }
       } catch (error) {
         console.error('Failed to fetch dashboard data:', error);
       } finally {
@@ -135,6 +149,62 @@ export default function Dashboard() {
                    (inv.client_name && inv.client_name.toLowerCase().includes(searchTerm.toLowerCase())))
     .slice(0, 5);
 
+  // Calculate Monthly Goal Stats for current month & year
+  const now = new Date();
+  const currentMonthName = now.toLocaleString('en-US', { month: 'short' });
+  const currentYear = now.getFullYear();
+  const monthGoalTitle = `Monthly Goal — ${currentMonthName} ${currentYear}`;
+
+  const currentMonthInvoices = invoices.filter(inv => {
+    if (!inv.issue_date && !inv.created_at) return false;
+    const d = new Date(inv.issue_date || inv.created_at);
+    return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
+  });
+
+  let goalTarget = 0;
+  let goalReceived = 0;
+
+  if (isAdmin) {
+    if (selectedGoalUser === 'all') {
+      // Overall Team Target
+      goalTarget = teamMembers.reduce((sum, member) => sum + (parseFloat(member.monthly_goal) || 1000000), 0);
+      if (goalTarget === 0) goalTarget = 1000000;
+      
+      goalReceived = currentMonthInvoices.reduce((sum, inv) => {
+        const amount = parseFloat(inv.amount || 0);
+        const balance = parseFloat(inv.balance || 0);
+        return sum + (amount - balance);
+      }, 0);
+    } else {
+      // Specific Selected Team Member
+      const selectedMember = teamMembers.find(m => String(m.id) === String(selectedGoalUser));
+      goalTarget = parseFloat(selectedMember?.monthly_goal) || 1000000;
+      
+      const memberInvoices = currentMonthInvoices.filter(inv => 
+        String(inv.agent_id) === String(selectedGoalUser) || String(inv.created_by) === String(selectedGoalUser)
+      );
+      
+      goalReceived = memberInvoices.reduce((sum, inv) => {
+        const amount = parseFloat(inv.amount || 0);
+        const balance = parseFloat(inv.balance || 0);
+        return sum + (amount - balance);
+      }, 0);
+    }
+  } else {
+    // Non-Admin (Sales Rep / Employee)
+    goalTarget = parseFloat(currentUser?.monthly_goal) || 1000000;
+    goalReceived = currentMonthInvoices.reduce((sum, inv) => {
+      const amount = parseFloat(inv.amount || 0);
+      const balance = parseFloat(inv.balance || 0);
+      return sum + (amount - balance);
+    }, 0);
+  }
+
+  const goalRemaining = Math.max(0, goalTarget - goalReceived);
+  const goalPercent = goalTarget > 0 ? Math.min(100, Math.round((goalReceived / goalTarget) * 100)) : 0;
+  const currentDayOfMonth = now.getDate();
+  const goalAvgDaily = currentDayOfMonth > 0 ? Math.round(goalReceived / currentDayOfMonth) : 0;
+
   if (loading) {
     return <div className="dashboard-loading">Loading Dashboard...</div>;
   }
@@ -142,6 +212,51 @@ export default function Dashboard() {
   return (
     <div className="dashboard-container modern-ui">
       
+      {/* Monthly Goal Progress Bar Card */}
+      <div className="monthly-goal-card">
+        <div className="monthly-goal-header">
+          <div className="monthly-goal-title-group">
+            <span className="monthly-goal-title">{monthGoalTitle}</span>
+            {isAdmin && (
+              <select 
+                className="monthly-goal-select"
+                value={selectedGoalUser}
+                onChange={(e) => setSelectedGoalUser(e.target.value)}
+              >
+                <option value="all">Overall Team Goal</option>
+                {teamMembers.map(member => (
+                  <option key={member.id} value={member.id}>{member.name} ({member.role})</option>
+                ))}
+              </select>
+            )}
+          </div>
+          <span className="monthly-goal-percent">{goalPercent}%</span>
+        </div>
+
+        <div className="monthly-goal-progress-track">
+          <div className="monthly-goal-progress-bar" style={{ width: `${goalPercent}%` }}></div>
+        </div>
+
+        <div className="monthly-goal-stats-row">
+          <div className="monthly-goal-stat-item">
+            <span className="monthly-goal-stat-label">Received:</span>
+            <span className="monthly-goal-stat-value">PKR {goalReceived.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}</span>
+          </div>
+          <div className="monthly-goal-stat-item">
+            <span className="monthly-goal-stat-label">Target:</span>
+            <span className="monthly-goal-stat-value">PKR {goalTarget.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}</span>
+          </div>
+          <div className="monthly-goal-stat-item">
+            <span className="monthly-goal-stat-label">Remaining:</span>
+            <span className="monthly-goal-stat-value">PKR {goalRemaining.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}</span>
+          </div>
+          <div className="monthly-goal-stat-item">
+            <span className="monthly-goal-stat-label">Avg:</span>
+            <span className="monthly-goal-stat-value">PKR {goalAvgDaily.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}</span>
+          </div>
+        </div>
+      </div>
+
       {/* Top Stat Cards Grid */}
       <div className="stats-grid-4">
         <div className="stat-card-ref primary-card">
