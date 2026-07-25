@@ -4,7 +4,8 @@ import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { useNavigate } from 'react-router-dom';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
-import { Download, Users, Shield, Loader, FileText, CheckCircle, Clock, X, Filter, DollarSign, TrendingUp, CreditCard } from 'lucide-react';
+import { Download, Users, Shield, Loader, FileText, CheckCircle, Clock, X, Filter, DollarSign, TrendingUp, CreditCard, Search } from 'lucide-react';
+import Pagination from '../components/Pagination';
 import './Reports.css';
 
 const API_URL = import.meta.env.VITE_API_URL || '/api';
@@ -17,6 +18,9 @@ export default function Reports() {
   const [salesStartDate, setSalesStartDate] = useState('');
   const [salesEndDate, setSalesEndDate] = useState('');
   const [clientReports, setClientReports] = useState([]);
+  const [clientSearchTerm, setClientSearchTerm] = useState('');
+  const [clientCurrentPage, setClientCurrentPage] = useState(1);
+  const clientItemsPerPage = 15;
   const [teamReports, setTeamReports] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -482,52 +486,87 @@ export default function Reports() {
               )}
             </div>
           </div>
-        ) : activeTab === 'clients' ? (
-          <div className="report-panel fade-in">
-            <div className="panel-header">
-              <h2>Client Performance (360 View)</h2>
-              <button className="download-btn btn-primary" onClick={downloadClientPDF}>
-                <Download size={18} /> Export PDF
-              </button>
-            </div>
-            
-            <div className="table-responsive">
-              <table className="modern-table">
-                <thead>
-                  <tr>
-                    <th>Client Name</th>
-                    <th>Invoices</th>
-                    <th>Total Invoiced</th>
-                    <th>Total Paid</th>
-                    <th>Balance Due</th>
-                    <th>Next Due Date</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {clientReports.length === 0 ? (
+        ) : activeTab === 'clients' ? (() => {
+          const filteredClientReports = clientReports.filter(client => {
+            if (!clientSearchTerm.trim()) return true;
+            const term = clientSearchTerm.trim().toLowerCase();
+            return (client.full_name && client.full_name.toLowerCase().includes(term)) ||
+                   (client.business_name && client.business_name.toLowerCase().includes(term));
+          });
+
+          const currentClientReports = filteredClientReports.slice(
+            (clientCurrentPage - 1) * clientItemsPerPage,
+            clientCurrentPage * clientItemsPerPage
+          );
+
+          return (
+            <div className="report-panel fade-in">
+              <div className="panel-header" style={{ flexWrap: 'wrap', gap: '1rem', alignItems: 'center', justifyContent: 'space-between' }}>
+                <h2>Client Performance & Ledger Summary</h2>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', flexWrap: 'wrap' }}>
+                  <div className="search-box-ref" style={{ margin: 0, minWidth: '220px' }}>
+                    <Search size={16} />
+                    <input 
+                      type="text" 
+                      placeholder="Search by client name..." 
+                      value={clientSearchTerm}
+                      onChange={(e) => {
+                        setClientSearchTerm(e.target.value);
+                        setClientCurrentPage(1);
+                      }}
+                    />
+                  </div>
+                  <button className="download-btn btn-blue" onClick={downloadClientPDF}>
+                    <Download size={18} /> Export PDF
+                  </button>
+                </div>
+              </div>
+              
+              <div className="table-responsive">
+                <table className="modern-table">
+                  <thead>
                     <tr>
-                      <td colSpan="6" className="empty-state">No client data found.</td>
+                      <th>Client Name</th>
+                      <th>Invoices</th>
+                      <th>Total Invoiced</th>
+                      <th>Total Paid</th>
+                      <th>Balance Due</th>
+                      <th>Next Due Date</th>
                     </tr>
-                  ) : (
-                    clientReports.map(client => (
-                      <tr key={client.client_id} onClick={() => openClientDetails(client)} className="clickable-row">
-                        <td className="fw-600">{client.full_name || client.business_name}</td>
-                        <td>{client.total_invoices}</td>
-                        <td className="text-blue">PKR {parseFloat(client.total_invoiced_amount).toFixed(2)}</td>
-                        <td className="text-success">PKR {parseFloat(client.total_paid).toFixed(2)}</td>
-                        <td className={parseFloat(client.total_balance) > 0 ? 'text-danger fw-600' : 'text-success'}>PKR {parseFloat(client.total_balance).toFixed(2)}
-                        </td>
-                        <td>
-                          {client.next_due_date ? new Date(client.next_due_date).toLocaleDateString() : '-'}
-                        </td>
+                  </thead>
+                  <tbody>
+                    {currentClientReports.length === 0 ? (
+                      <tr>
+                        <td colSpan="6" className="empty-state">No client data found.</td>
                       </tr>
-                    ))
-                  )}
-                </tbody>
-              </table>
+                    ) : (
+                      currentClientReports.map(client => (
+                        <tr key={client.client_id} onClick={() => openClientDetails(client)} className="clickable-row">
+                          <td className="fw-600">{client.full_name || client.business_name}</td>
+                          <td>{client.total_invoices}</td>
+                          <td className="text-blue">PKR {parseFloat(client.total_invoiced_amount).toFixed(2)}</td>
+                          <td className="text-success">PKR {parseFloat(client.total_paid).toFixed(2)}</td>
+                          <td className={parseFloat(client.total_balance) > 0 ? 'text-danger fw-600' : 'text-success'}>PKR {parseFloat(client.total_balance).toFixed(2)}
+                          </td>
+                          <td>
+                            {client.next_due_date ? new Date(client.next_due_date).toLocaleDateString() : '-'}
+                          </td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
+
+              <Pagination 
+                currentPage={clientCurrentPage}
+                totalItems={filteredClientReports.length}
+                itemsPerPage={clientItemsPerPage}
+                onPageChange={setClientCurrentPage}
+              />
             </div>
-          </div>
-        ) : activeTab === 'team' ? (
+          );
+        })() : activeTab === 'team' ? (
           <div className="report-panel fade-in">
             <div className="panel-header">
               <h2>Team Performance & Commissions</h2>
