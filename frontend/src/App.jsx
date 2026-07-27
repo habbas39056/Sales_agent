@@ -19,6 +19,7 @@ import RequestRevision from './pages/RequestRevision';
 import TeamManagement from './pages/TeamManagement';
 import Commissions from './pages/Commissions';
 import Reports from './pages/Reports';
+import Payroll from './pages/Payroll';
 import Expenses from './pages/Expenses';
 import Settings from './pages/Settings';
 import Header from './components/Header';
@@ -145,6 +146,10 @@ function AppContent() {
             {(!user || user.role === 'Admin' || (user.modules_access && user.modules_access.includes('COMMISSIONS'))) && (
               <li><Link to="/commissions" className={location.pathname.startsWith('/commissions') ? 'active' : ''}><Banknote size={20} /> Commissions</Link></li>
             )}
+
+            {(!user || user.role === 'Admin' || (user.modules_access && user.modules_access.includes('PAYROLL'))) && (
+              <li><Link to="/payroll" className={location.pathname.startsWith('/payroll') ? 'active' : ''}><Banknote size={20} /> Payroll</Link></li>
+            )}
             
             {(!user || user.role === 'Admin' || (user.modules_access && user.modules_access.includes('REPORTS'))) && (
               <li><Link to="/reports" className={location.pathname.startsWith('/reports') ? 'active' : ''}><FileText size={20} /> System Reports</Link></li>
@@ -195,6 +200,7 @@ function AppContent() {
             <Route path="/employee/:id" element={<ProtectedRoute><EmployeePortal /></ProtectedRoute>} />
             <Route path="/expenses" element={<ProtectedRoute><Expenses /></ProtectedRoute>} />
             <Route path="/commissions" element={<ProtectedRoute><Commissions /></ProtectedRoute>} />
+            <Route path="/payroll" element={<ProtectedRoute><Payroll /></ProtectedRoute>} />
             <Route path="/reports" element={<ProtectedRoute><Reports /></ProtectedRoute>} />
             <Route path="/settings" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
           </Routes>

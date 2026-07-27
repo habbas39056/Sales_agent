@@ -14,6 +14,7 @@ CREATE TABLE `users` (
   `modules_access` json DEFAULT NULL,
   `commission_percentage` decimal(5,2) DEFAULT '0.00',
   `monthly_goal` decimal(12,2) DEFAULT '1000000.00',
+  `base_salary` decimal(10,2) DEFAULT '0.00',
   `profile_image_url` varchar(255) DEFAULT NULL,
   `created_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`),
@@ -221,6 +222,56 @@ CREATE TABLE `commissions` (
   KEY `user_id` (`user_id`),
   CONSTRAINT `commissions_ibfk_1` FOREIGN KEY (`project_id`) REFERENCES `projects` (`id`),
   CONSTRAINT `commissions_ibfk_2` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- ============================================
+-- PAYROLLS TABLE
+-- ============================================
+CREATE TABLE `payrolls` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `user_id` int(11) NOT NULL,
+  `month` varchar(7) NOT NULL,
+  `base_salary` decimal(10,2) DEFAULT '0.00',
+  `overtime_allowance` decimal(10,2) DEFAULT '0.00',
+  `bonus` decimal(10,2) DEFAULT '0.00',
+  `gross_salary` decimal(10,2) DEFAULT '0.00',
+  `advance_salary` decimal(10,2) DEFAULT '0.00',
+  `tax_deduction` decimal(10,2) DEFAULT '0.00',
+  `other_deductions` decimal(10,2) DEFAULT '0.00',
+  `deductions` decimal(10,2) DEFAULT '0.00',
+  `net_salary` decimal(10,2) DEFAULT '0.00',
+  `status` enum('Pending','Paid') DEFAULT 'Pending',
+  `payment_date` date DEFAULT NULL,
+  `payment_method` varchar(50) DEFAULT NULL,
+  `bank_name` varchar(100) DEFAULT NULL,
+  `expense_id` int(11) DEFAULT NULL,
+  `notes` text,
+  `created_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `user_month` (`user_id`,`month`),
+  KEY `user_id` (`user_id`),
+  KEY `expense_id` (`expense_id`),
+  CONSTRAINT `payrolls_user_fk` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- ============================================
+-- SALARY ADVANCES TABLE
+-- ============================================
+CREATE TABLE `salary_advances` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `user_id` int(11) NOT NULL,
+  `month` varchar(7) NOT NULL,
+  `advance_date` date NOT NULL,
+  `amount` decimal(10,2) NOT NULL DEFAULT '0.00',
+  `payment_method` varchar(50) DEFAULT 'Cash',
+  `bank_name` varchar(100) DEFAULT NULL,
+  `expense_id` int(11) DEFAULT NULL,
+  `notes` text,
+  `created_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  KEY `user_id` (`user_id`),
+  KEY `month` (`month`),
+  CONSTRAINT `salary_advances_user_fk` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- ============================================

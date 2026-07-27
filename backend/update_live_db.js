@@ -157,6 +157,56 @@ async function updateLiveDb() {
     `);
     console.log('✅ Ensured step_activity table exists.');
 
+    // 8. Payroll Table & Users base_salary
+    await addColumnIfNotExists('users', 'base_salary', 'DECIMAL(10,2) DEFAULT 0.00');
+
+    await connection.query(`
+      CREATE TABLE IF NOT EXISTS payrolls (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        user_id INT NOT NULL,
+        month VARCHAR(7) NOT NULL,
+        base_salary DECIMAL(10,2) DEFAULT 0.00,
+        bonus DECIMAL(10,2) DEFAULT 0.00,
+        deductions DECIMAL(10,2) DEFAULT 0.00,
+        net_salary DECIMAL(10,2) DEFAULT 0.00,
+        status ENUM('Pending', 'Paid') DEFAULT 'Pending',
+        payment_date DATE NULL,
+        payment_method VARCHAR(50) NULL,
+        bank_name VARCHAR(100) NULL,
+        expense_id INT NULL,
+        notes TEXT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE KEY user_month (user_id, month),
+        KEY user_id (user_id),
+        KEY expense_id (expense_id),
+        CONSTRAINT payrolls_user_fk FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+    `);
+    await addColumnIfNotExists('payrolls', 'overtime_allowance', 'DECIMAL(10,2) DEFAULT 0.00');
+    await addColumnIfNotExists('payrolls', 'advance_salary', 'DECIMAL(10,2) DEFAULT 0.00');
+    await addColumnIfNotExists('payrolls', 'tax_deduction', 'DECIMAL(10,2) DEFAULT 0.00');
+    await addColumnIfNotExists('payrolls', 'other_deductions', 'DECIMAL(10,2) DEFAULT 0.00');
+    await addColumnIfNotExists('payrolls', 'gross_salary', 'DECIMAL(10,2) DEFAULT 0.00');
+
+    await connection.query(`
+      CREATE TABLE IF NOT EXISTS salary_advances (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        user_id INT NOT NULL,
+        month VARCHAR(7) NOT NULL,
+        advance_date DATE NOT NULL,
+        amount DECIMAL(10,2) NOT NULL DEFAULT 0.00,
+        payment_method VARCHAR(50) DEFAULT 'Cash',
+        bank_name VARCHAR(100) DEFAULT NULL,
+        expense_id INT DEFAULT NULL,
+        notes TEXT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        KEY user_id (user_id),
+        KEY month (month),
+        CONSTRAINT salary_advances_user_fk FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+    `);
+    console.log('✅ Ensured salary_advances table exists.');
+
     console.log('\n🎉 Live database update completed successfully!');
   } catch (error) {
     console.error('\n❌ Migration failed:', error);

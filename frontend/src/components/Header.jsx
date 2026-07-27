@@ -97,6 +97,9 @@ export default function Header() {
   } else if (location.pathname === '/commissions') {
     title = 'Commissions Dashboard';
     subtitle = 'Track agent performance and commission payouts';
+  } else if (location.pathname === '/payroll') {
+    title = 'Payroll & Salary Management';
+    subtitle = 'Generate monthly employee salaries, manage bonuses, process payments, and generate payslips.';
   } else if (location.pathname === '/reports') {
     title = 'System Reports';
     subtitle = '360-degree view of clients and team performance';
