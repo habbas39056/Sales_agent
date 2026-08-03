@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { Phone, Mail, Globe, MapPin } from 'lucide-react';
@@ -8,8 +8,28 @@ export default function Login() {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const navigate = useNavigate();
-
   const [errorMsg, setErrorMsg] = useState('');
+
+  useEffect(() => {
+    const userStr = localStorage.getItem('user');
+    const token = localStorage.getItem('token');
+    if (userStr && token) {
+      try {
+        const user = JSON.parse(userStr);
+        if (user.role === 'Client') {
+          navigate('/client-portal');
+        } else if (user.role === 'Sales' || user.role === 'Sales Rep') {
+          navigate('/sales');
+        } else if (user.role === 'Production') {
+          navigate('/production');
+        } else if (user.role === 'Product Manager' || user.role === 'PM' || user.role === 'Project Manager') {
+          navigate('/pm-portal');
+        } else {
+          navigate('/dashboard');
+        }
+      } catch (e) {}
+    }
+  }, [navigate]);
 
   const handleLogin = async (e) => {
     e.preventDefault();
@@ -29,28 +49,12 @@ export default function Login() {
       // Role-based redirection
       if (user.role === 'Client') {
         navigate('/client-portal');
-      } else if (user.role === 'Project Manager') {
-        navigate('/pm');
-      } else if (user.role === 'Sales Rep') {
+      } else if (user.role === 'Sales' || user.role === 'Sales Rep') {
         navigate('/sales');
       } else if (user.role === 'Production') {
         navigate('/production');
-      } else if (user.role === 'Employee') {
-        if (!user.modules_access || user.modules_access.length === 0) {
-          navigate('/dashboard');
-        } else if (user.modules_access.includes('DASHBOARD')) {
-          navigate('/dashboard');
-        } else if (user.modules_access.includes('CLIENTS')) {
-          navigate('/clients');
-        } else if (user.modules_access.includes('PROJECTS')) {
-          navigate('/projects');
-        } else if (user.modules_access.includes('INVOICES')) {
-          navigate('/invoices');
-        } else if (user.modules_access.includes('CASHBOOK')) {
-          navigate('/expenses');
-        } else {
-          navigate('/dashboard');
-        }
+      } else if (user.role === 'Product Manager' || user.role === 'PM' || user.role === 'Project Manager') {
+        navigate('/pm-portal');
       } else {
         navigate('/dashboard'); // Admin or default
       }

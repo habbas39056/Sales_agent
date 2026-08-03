@@ -22,6 +22,7 @@ import Reports from './pages/Reports';
 import Payroll from './pages/Payroll';
 import Expenses from './pages/Expenses';
 import Settings from './pages/Settings';
+import DeadlineWorkflow from './pages/DeadlineWorkflow';
 import Header from './components/Header';
 import './App.css';
 import './App.css';
@@ -96,6 +97,15 @@ function AppContent() {
     }
   };
 
+  const getDashboardPath = () => {
+    if (!user) return '/dashboard';
+    if (user.role === 'Production') return '/production';
+    if (user.role === 'Product Manager' || user.role === 'PM' || user.role === 'Project Manager') return '/pm-portal';
+    if (user.role === 'Sales' || user.role === 'Sales Rep') return '/sales';
+    if (user.role === 'Client') return '/client-portal';
+    return '/dashboard';
+  };
+
   return (
     <div className="app-container" style={{ display: 'flex', flexDirection: 'column', height: '100vh' }}>
       {originalAdminStr && (
@@ -115,9 +125,7 @@ function AppContent() {
           
           <div className="sidebar-menu-title">Main Menu</div>
           <ul className="nav-links">
-            {(!user || user.role === 'Admin' || (user.modules_access && user.modules_access.includes('DASHBOARD'))) && (
-              <li><Link to="/dashboard" className={location.pathname === '/dashboard' ? 'active' : ''}><LayoutDashboard size={20} /> Dashboard</Link></li>
-            )}
+            <li><Link to={getDashboardPath()} className={location.pathname === getDashboardPath() ? 'active' : ''}><LayoutDashboard size={20} /> Dashboard</Link></li>
             
             {(!user || user.role === 'Admin' || (user.modules_access && user.modules_access.includes('CLIENTS'))) && (
               <li><Link to="/clients" className={`sidebar-link ${location.pathname === '/clients' ? 'active' : ''}`}><Users size={20} /> Client Management</Link></li>
@@ -192,9 +200,11 @@ function AppContent() {
             <Route path="/projects" element={<ProtectedRoute><ProjectsList /></ProtectedRoute>} />
             <Route path="/projects/:id" element={<ProtectedRoute><ProjectDetails /></ProtectedRoute>} />
             <Route path="/projects/:id/steps/new" element={<ProtectedRoute><AddStep /></ProtectedRoute>} />
+            <Route path="/deadlines" element={<ProtectedRoute><DeadlineWorkflow /></ProtectedRoute>} />
             <Route path="/client-portal" element={<ProtectedRoute><ClientPortal /></ProtectedRoute>} />
             <Route path="/client-portal/revision/:projectId/:stepId" element={<ProtectedRoute><RequestRevision /></ProtectedRoute>} />
             <Route path="/pm" element={<ProtectedRoute><PmPortal /></ProtectedRoute>} />
+            <Route path="/pm-portal" element={<ProtectedRoute><PmPortal /></ProtectedRoute>} />
             <Route path="/sales" element={<ProtectedRoute><SalesPortal /></ProtectedRoute>} />
             <Route path="/production" element={<ProtectedRoute><ProductionPortal /></ProtectedRoute>} />
             <Route path="/employee/:id" element={<ProtectedRoute><EmployeePortal /></ProtectedRoute>} />

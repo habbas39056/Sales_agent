@@ -7,7 +7,7 @@ CREATE TABLE IF NOT EXISTS users (
     username VARCHAR(255) UNIQUE,
     email VARCHAR(255) UNIQUE NOT NULL,
     password_hash VARCHAR(255) NOT NULL,
-    role ENUM('Admin', 'Project Manager', 'Sales Rep', 'Production', 'QA', 'Client', 'Employee') NOT NULL,
+    role VARCHAR(100) NOT NULL,
     modules_access JSON,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );

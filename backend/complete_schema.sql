@@ -9,7 +9,7 @@ CREATE TABLE `users` (
   `name` varchar(255) NOT NULL,
   `email` varchar(255) NOT NULL,
   `password_hash` varchar(255) NOT NULL,
-  `role` enum('Admin','Project Manager','Sales Rep','Production','QA','Client','Employee') NOT NULL,
+  `role` enum('Admin','Sales','Sales Rep','Production','Project Manager','QA','Client','Employee') NOT NULL,
   `username` varchar(255) DEFAULT NULL,
   `modules_access` json DEFAULT NULL,
   `commission_percentage` decimal(5,2) DEFAULT '0.00',
@@ -95,6 +95,22 @@ CREATE TABLE `projects` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- ============================================
+-- PROJECT MEMBERS TABLE
+-- ============================================
+CREATE TABLE `project_members` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `project_id` int(11) NOT NULL,
+  `user_id` int(11) NOT NULL,
+  `created_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `project_user` (`project_id`,`user_id`),
+  KEY `project_id` (`project_id`),
+  KEY `user_id` (`user_id`),
+  CONSTRAINT `project_members_ibfk_1` FOREIGN KEY (`project_id`) REFERENCES `projects` (`id`) ON DELETE CASCADE,
+  CONSTRAINT `project_members_ibfk_2` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- ============================================
 -- PROJECT STEPS TABLE
 -- ============================================
 CREATE TABLE `project_steps` (
@@ -106,6 +122,11 @@ CREATE TABLE `project_steps` (
   `created_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
   `assignee_id` int(11) DEFAULT NULL,
   `deadline` date DEFAULT NULL,
+  `deadline_status` enum('Accepted','Pending Acceptance','Appealed','Rejected') DEFAULT 'Pending Acceptance',
+  `proposed_deadline` date DEFAULT NULL,
+  `deadline_appeal_reason` text DEFAULT NULL,
+  `appealed_by` int(11) DEFAULT NULL,
+  `appealed_at` timestamp NULL DEFAULT NULL,
   `requires_client_form` tinyint(1) DEFAULT '0',
   `client_form_schema` json DEFAULT NULL,
   `requires_payment` tinyint(1) DEFAULT '0',

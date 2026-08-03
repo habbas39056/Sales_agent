@@ -457,12 +457,25 @@ export default function AddStep() {
               </select>
             </div>
             <div className="form-group">
-              <label className="as-label">ASSIGN SPECIALIST</label>
+              <label className="as-label">ASSIGN STEP TO TEAM MEMBER</label>
               <select name="assignee_id" className="as-select" value={formData.assignee_id} onChange={handleInputChange}>
-                <option value="">Unassigned</option>
-                {specialists.map(s => (
-                  <option key={s.id} value={s.id}>{s.full_name}</option>
-                ))}
+                <option value="">Unassigned (Open for all team members)</option>
+                {project && project.assigned_members && project.assigned_members.length > 0 && (
+                  <optgroup label="⭐ Assigned Project Members">
+                    {project.assigned_members.map(m => (
+                      <option key={`proj-mem-${m.id}`} value={m.id}>
+                        {m.name} ({m.role}) — Project Member
+                      </option>
+                    ))}
+                  </optgroup>
+                )}
+                <optgroup label="All Team Members / Specialists">
+                  {specialists
+                    .filter(s => !(project?.assigned_members || []).some(pm => pm.id === s.id))
+                    .map(s => (
+                      <option key={s.id} value={s.id}>{s.full_name} ({s.role})</option>
+                    ))}
+                </optgroup>
               </select>
             </div>
             <div className="form-group">

@@ -32,6 +32,7 @@ export default function ProjectsList() {
     client_id: '',
     invoice_id: '',
     pm_id: '',
+    team_member_ids: [],
     service_type: '',
     revision_cycles_included: 0,
     terms_and_conditions: ''
@@ -190,6 +191,7 @@ export default function ProjectsList() {
         client_id: '',
         invoice_id: '',
         pm_id: '',
+        team_member_ids: [],
         service_type: categories.length > 0 ? categories[0].name : '',
         revision_cycles_included: 0,
         terms_and_conditions: ''
@@ -203,11 +205,16 @@ export default function ProjectsList() {
 
   const handleEditClick = (e, project) => {
     e.stopPropagation();
+    const existingMemberIds = project.assigned_members && project.assigned_members.length > 0
+      ? project.assigned_members.map(m => m.id)
+      : (project.pm_id ? [project.pm_id] : []);
+
     setEditFormData({
       title: project.title || '',
       description: project.description || '',
       client_id: project.client_id || '',
       pm_id: project.pm_id || '',
+      team_member_ids: existingMemberIds,
       service_type: project.service_type || '',
       revision_cycles_included: project.revision_cycles_included || 0,
       terms_and_conditions: project.terms_and_conditions || ''
@@ -343,7 +350,19 @@ export default function ProjectsList() {
                       </div>
                     </td>
                     <td style={{ color: '#475569', fontWeight: '500' }}>{project.client_name || 'No Client'}</td>
-                    <td style={{ color: '#475569', fontWeight: '500' }}>{project.assigned_name || 'Unassigned'}</td>
+                    <td style={{ color: '#475569', fontWeight: '500' }}>
+                      {project.assigned_members && project.assigned_members.length > 0 ? (
+                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.25rem' }}>
+                          {project.assigned_members.map(m => (
+                            <span key={m.id} className="team-member-badge" title={`${m.name} (${m.role})`}>
+                              {m.name}
+                            </span>
+                          ))}
+                        </div>
+                      ) : (
+                        project.assigned_name || 'Unassigned'
+                      )}
+                    </td>
                     <td>
                       <span className="service-tag">{project.service_type || 'Unspecified'}</span>
                     </td>
@@ -437,11 +456,59 @@ export default function ProjectsList() {
                   </select>
                 </div>
 
-                <div className="form-group">
-                  <label>Assign To (Team Member)</label>
-                  <select name="pm_id" value={formData.pm_id} onChange={handleInputChange}>
-                    <option value="">Unassigned</option>
-                    {teamMembers.map(m => <option key={m.id} value={m.id}>{m.full_name} ({m.role})</option>)}
+              </div>
+
+              <div className="form-group">
+                <label>Assign Team Members</label>
+                <div className="multi-select-container">
+                  <div className="selected-tags-box">
+                    {(formData.team_member_ids || []).length === 0 ? (
+                      <span style={{ color: '#94a3b8', fontSize: '0.85rem' }}>No team members assigned yet</span>
+                    ) : (
+                      (formData.team_member_ids || []).map(id => {
+                        const m = teamMembers.find(member => member.id === parseInt(id));
+                        if (!m) return null;
+                        return (
+                          <span key={id} className="member-tag">
+                            {m.full_name} ({m.role})
+                            <button 
+                              type="button" 
+                              className="tag-remove-btn" 
+                              onClick={() => {
+                                setFormData(prev => ({
+                                  ...prev,
+                                  team_member_ids: prev.team_member_ids.filter(mId => mId !== id),
+                                  pm_id: prev.pm_id === id ? (prev.team_member_ids.find(mId => mId !== id) || '') : prev.pm_id
+                                }));
+                              }}
+                            >
+                              <X size={12} />
+                            </button>
+                          </span>
+                        );
+                      })
+                    )}
+                  </div>
+                  <select 
+                    className="multi-select-dropdown"
+                    value=""
+                    onChange={(e) => {
+                      const val = parseInt(e.target.value);
+                      if (val && !formData.team_member_ids.includes(val)) {
+                        setFormData(prev => ({
+                          ...prev,
+                          team_member_ids: [...prev.team_member_ids, val],
+                          pm_id: prev.pm_id || val
+                        }));
+                      }
+                    }}
+                  >
+                    <option value="">+ Select Team Member to Assign...</option>
+                    {teamMembers
+                      .filter(m => !(formData.team_member_ids || []).includes(m.id))
+                      .map(m => (
+                        <option key={m.id} value={m.id}>{m.full_name} ({m.role})</option>
+                      ))}
                   </select>
                 </div>
               </div>
@@ -512,15 +579,59 @@ export default function ProjectsList() {
                   </select>
                 </div>
 
-                <div className="form-group">
-                  <label>Assign To (Team Member)</label>
+              </div>
+
+              <div className="form-group">
+                <label>Assign Team Members</label>
+                <div className="multi-select-container">
+                  <div className="selected-tags-box">
+                    {(editFormData.team_member_ids || []).length === 0 ? (
+                      <span style={{ color: '#94a3b8', fontSize: '0.85rem' }}>No team members assigned yet</span>
+                    ) : (
+                      (editFormData.team_member_ids || []).map(id => {
+                        const m = teamMembers.find(member => member.id === parseInt(id));
+                        if (!m) return null;
+                        return (
+                          <span key={id} className="member-tag">
+                            {m.full_name} ({m.role})
+                            <button 
+                              type="button" 
+                              className="tag-remove-btn" 
+                              onClick={() => {
+                                setEditFormData(prev => ({
+                                  ...prev,
+                                  team_member_ids: prev.team_member_ids.filter(mId => mId !== id),
+                                  pm_id: prev.pm_id === id ? (prev.team_member_ids.find(mId => mId !== id) || '') : prev.pm_id
+                                }));
+                              }}
+                            >
+                              <X size={12} />
+                            </button>
+                          </span>
+                        );
+                      })
+                    )}
+                  </div>
                   <select 
-                    name="pm_id" 
-                    value={editFormData.pm_id} 
-                    onChange={(e) => setEditFormData({ ...editFormData, pm_id: e.target.value })}
+                    className="multi-select-dropdown"
+                    value=""
+                    onChange={(e) => {
+                      const val = parseInt(e.target.value);
+                      if (val && !(editFormData.team_member_ids || []).includes(val)) {
+                        setEditFormData(prev => ({
+                          ...prev,
+                          team_member_ids: [...(prev.team_member_ids || []), val],
+                          pm_id: prev.pm_id || val
+                        }));
+                      }
+                    }}
                   >
-                    <option value="">Unassigned</option>
-                    {teamMembers.map(m => <option key={m.id} value={m.id}>{m.full_name} ({m.role})</option>)}
+                    <option value="">+ Select Team Member to Assign...</option>
+                    {teamMembers
+                      .filter(m => !(editFormData.team_member_ids || []).includes(m.id))
+                      .map(m => (
+                        <option key={m.id} value={m.id}>{m.full_name} ({m.role})</option>
+                      ))}
                   </select>
                 </div>
               </div>

@@ -23,12 +23,12 @@ async function updateLiveDb() {
     await addColumnIfNotExists('users', 'monthly_goal', 'DECIMAL(12,2) DEFAULT 1000000.00');
     await addColumnIfNotExists('users', 'profile_image_url', 'VARCHAR(255) NULL');
 
-    // Update Enum
+    // Update Role Column to VARCHAR(100) to support Product Manager and all role extensions
     try {
-      await connection.query(`ALTER TABLE users MODIFY COLUMN role ENUM('Admin', 'Project Manager', 'Sales Rep', 'Production', 'QA', 'Client', 'Employee') NOT NULL`);
-      console.log('✅ Updated role enum in users table.');
+      await connection.query(`ALTER TABLE users MODIFY COLUMN role VARCHAR(100) NOT NULL`);
+      console.log('✅ Updated role column to VARCHAR(100) in users table.');
     } catch (e) {
-      console.log('⚠️ Error updating role enum:', e.message);
+      console.log('⚠️ Error updating role column:', e.message);
     }
 
     // 2. Data Scoping (created_by)
@@ -206,6 +206,28 @@ async function updateLiveDb() {
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
     `);
     console.log('✅ Ensured salary_advances table exists.');
+
+    await connection.query(`
+      CREATE TABLE IF NOT EXISTS project_members (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        project_id INT NOT NULL,
+        user_id INT NOT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE KEY project_user (project_id, user_id),
+        KEY project_id (project_id),
+        KEY user_id (user_id),
+        CONSTRAINT project_members_project_fk FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE,
+        CONSTRAINT project_members_user_fk FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+    `);
+    console.log('✅ Ensured project_members table exists.');
+
+    await addColumnIfNotExists('project_steps', 'deadline_status', "ENUM('Accepted', 'Pending Acceptance', 'Appealed', 'Rejected') DEFAULT 'Pending Acceptance'");
+    await addColumnIfNotExists('project_steps', 'proposed_deadline', 'DATE NULL');
+    await addColumnIfNotExists('project_steps', 'deadline_appeal_reason', 'TEXT NULL');
+    await addColumnIfNotExists('project_steps', 'appealed_by', 'INT NULL');
+    await addColumnIfNotExists('project_steps', 'appealed_at', 'TIMESTAMP NULL');
+    console.log('✅ Ensured project_steps deadline workflow columns exist.');
 
     console.log('\n🎉 Live database update completed successfully!');
   } catch (error) {

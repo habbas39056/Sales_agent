@@ -42,8 +42,8 @@ router.get('/', async (req, res) => {
     let projectsQuery = `SELECT DISTINCT p.id, p.title, c.full_name as client_name, p.service_type FROM projects p JOIN clients c ON p.client_id = c.id LEFT JOIN invoices i ON c.id = i.client_id WHERE (p.title LIKE ? OR p.service_type LIKE ? OR c.full_name LIKE ?)`;
     const projectsParams = [searchTerm, searchTerm, searchTerm];
     if (isNonAdmin) {
-      projectsQuery += ` AND (c.created_by = ? OR i.agent_id = ?)`;
-      projectsParams.push(user_id, user_id);
+      projectsQuery += ` AND (c.created_by = ? OR i.agent_id = ? OR p.pm_id = ? OR p.production_id = ? OR p.id IN (SELECT project_id FROM project_members WHERE user_id = ?))`;
+      projectsParams.push(user_id, user_id, user_id, user_id, user_id);
     }
     projectsQuery += ` LIMIT 5`;
     const [projects] = await db.query(projectsQuery, projectsParams);

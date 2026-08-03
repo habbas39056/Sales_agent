@@ -14,7 +14,7 @@ export default function TeamManagement() {
     username: '',
     email: '',
     password: '',
-    role: 'Employee',
+    role: 'Sales',
     commission_percentage: 0,
     monthly_goal: 0,
     modules_access: []
@@ -31,11 +31,9 @@ export default function TeamManagement() {
 
   const availableRoles = [
     'Admin',
-    'Project Manager',
-    'Sales Rep',
-    'Production',
-    'QA',
-    'Employee'
+    'Product Manager',
+    'Sales',
+    'Production'
   ];
 
   const availableModules = [
@@ -165,28 +163,14 @@ export default function TeamManagement() {
       let destination = '/dashboard';
       if (member.role === 'Client') {
         destination = '/client-portal';
-      } else if (member.role === 'Project Manager') {
-        destination = '/pm';
-      } else if (member.role === 'Sales Rep') {
+      } else if (member.role === 'Sales' || member.role === 'Sales Rep') {
         destination = '/sales';
       } else if (member.role === 'Production') {
         destination = '/production';
-      } else if (member.role === 'Employee') {
-        if (!member.modules_access || member.modules_access.length === 0) {
-          destination = '/dashboard';
-        } else if (member.modules_access.includes('DASHBOARD')) {
-          destination = '/dashboard';
-        } else if (member.modules_access.includes('CLIENTS')) {
-          destination = '/clients';
-        } else if (member.modules_access.includes('PROJECTS')) {
-          destination = '/projects';
-        } else if (member.modules_access.includes('INVOICES')) {
-          destination = '/invoices';
-        } else if (member.modules_access.includes('CASHBOOK')) {
-          destination = '/expenses';
-        } else {
-          destination = '/dashboard';
-        }
+      } else if (member.role === 'Product Manager' || member.role === 'PM') {
+        destination = '/pm-portal';
+      } else {
+        destination = '/dashboard';
       }
       
       // Reload the page completely so the entire app re-initializes as this user
@@ -402,7 +386,7 @@ export default function TeamManagement() {
                   />
                 </div>
 
-                {formData.role === 'Sales Rep' && (
+                {(formData.role === 'Sales' || formData.role === 'Sales Rep') && (
                   <div className="form-group" style={{ flex: '1 1 200px' }}>
                     <label>COMMISSION PERCENTAGE (%) *</label>
                     <input 

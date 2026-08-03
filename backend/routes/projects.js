@@ -22,7 +22,7 @@ router.get('/', async (req, res) => {
 
     let query = `
       SELECT DISTINCT projects.*, clients.full_name as client_name,
-      assigned_user.name as assigned_name,
+      assigned_user.name as pm_name,
       (SELECT COUNT(*) FROM project_steps WHERE project_steps.project_id = projects.id) as dyn_total_steps,
       (SELECT COUNT(*) FROM project_steps WHERE project_steps.project_id = projects.id AND project_steps.status = 'Completed') as dyn_completed_steps
       FROM projects 
@@ -33,17 +33,51 @@ router.get('/', async (req, res) => {
     const params = [];
 
     if (user_id && role && role !== 'Admin') {
-      query += ` WHERE (clients.created_by = ? OR i.agent_id = ? OR projects.pm_id = ? OR projects.production_id = ?)`;
-      params.push(user_id, user_id, user_id, user_id);
+      query += ` WHERE (clients.created_by = ? OR i.agent_id = ? OR projects.pm_id = ? OR projects.production_id = ? OR projects.id IN (SELECT project_id FROM project_members WHERE user_id = ?) OR projects.id IN (SELECT project_id FROM project_steps WHERE assignee_id = ?))`;
+      params.push(user_id, user_id, user_id, user_id, user_id, user_id);
     }
     
     const [rows] = await db.query(query, params);
     
-    const processedRows = rows.map(r => ({
-      ...r,
-      total_steps: r.dyn_total_steps,
-      completed_steps: r.dyn_completed_steps
-    }));
+    // Fetch assigned team members and all project steps for all retrieved projects
+    let allMembers = [];
+    let allSteps = [];
+
+    if (rows.length > 0) {
+      const projectIds = rows.map(r => r.id);
+      const [membersRows] = await db.query(`
+        SELECT pm.project_id, u.id, u.name, u.email, u.role 
+        FROM project_members pm 
+        JOIN users u ON pm.user_id = u.id
+        WHERE pm.project_id IN (?)
+      `, [projectIds]);
+      allMembers = membersRows;
+
+      const [stepsRows] = await db.query(`
+        SELECT ps.*, u.name as assignee_name 
+        FROM project_steps ps 
+        LEFT JOIN users u ON ps.assignee_id = u.id
+        WHERE ps.project_id IN (?)
+        ORDER BY ps.id ASC
+      `, [projectIds]);
+      allSteps = stepsRows;
+    }
+
+    const processedRows = rows.map(r => {
+      const members = allMembers.filter(m => m.project_id === r.id);
+      const projectSteps = allSteps.filter(s => s.project_id === r.id);
+      const userSteps = user_id ? projectSteps.filter(s => s.assignee_id == user_id) : projectSteps;
+      const assignedNames = members.map(m => m.name).join(', ');
+      return {
+        ...r,
+        total_steps: r.dyn_total_steps,
+        completed_steps: r.dyn_completed_steps,
+        assigned_members: members,
+        steps: projectSteps,
+        user_assigned_steps: userSteps,
+        assigned_name: assignedNames || r.pm_name || 'Unassigned'
+      };
+    });
     res.json(processedRows);
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -55,15 +89,25 @@ router.get('/:id', async (req, res) => {
   try {
     const [[project]] = await db.query(`
       SELECT projects.*, 
+      clients.full_name as client_name,
       (SELECT COUNT(*) FROM project_steps WHERE project_steps.project_id = projects.id) as dyn_total_steps,
       (SELECT COUNT(*) FROM project_steps WHERE project_steps.project_id = projects.id AND project_steps.status = 'Completed') as dyn_completed_steps
-      FROM projects WHERE id = ?
+      FROM projects 
+      LEFT JOIN clients ON projects.client_id = clients.id
+      WHERE projects.id = ?
     `, [req.params.id]);
     if (!project) return res.status(404).json({ error: 'Project not found' });
     
     project.total_steps = project.dyn_total_steps;
     project.completed_steps = project.dyn_completed_steps;
     
+    const [assigned_members] = await db.query(`
+      SELECT u.id, u.name, u.email, u.role 
+      FROM project_members pm 
+      JOIN users u ON pm.user_id = u.id 
+      WHERE pm.project_id = ?
+    `, [req.params.id]);
+
     const [deliverables] = await db.query('SELECT * FROM deliverables WHERE project_id = ? ORDER BY submitted_at DESC', [req.params.id]);
     const [revisions] = await db.query('SELECT * FROM revisions WHERE project_id = ? ORDER BY requested_at DESC', [req.params.id]);
     const [[invoice]] = await db.query('SELECT * FROM invoices WHERE project_id = ? LIMIT 1', [req.params.id]);
@@ -75,7 +119,7 @@ router.get('/:id', async (req, res) => {
       ORDER BY ps.id ASC
     `, [req.params.id]);
     
-    res.json({ ...project, deliverables, revisions, invoice, steps });
+    res.json({ ...project, assigned_members: assigned_members || [], deliverables, revisions, invoice, steps });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
@@ -83,13 +127,28 @@ router.get('/:id', async (req, res) => {
 
 // Create a project
 router.post('/', async (req, res) => {
-  const { title, description, client_id, pm_id, revision_cycles_included, service_type, total_steps, completed_steps, terms_and_conditions, invoice_id } = req.body;
+  const { title, description, client_id, pm_id, team_member_ids, revision_cycles_included, service_type, total_steps, completed_steps, terms_and_conditions, invoice_id } = req.body;
   try {
+    let memberIds = Array.isArray(team_member_ids) ? team_member_ids : [];
+    if (typeof team_member_ids === 'string') {
+      try { memberIds = JSON.parse(team_member_ids); } catch(e) { memberIds = []; }
+    }
+
+    const primaryPmId = pm_id || (memberIds.length > 0 ? memberIds[0] : null);
+
     const [result] = await db.query(
       'INSERT INTO projects (title, description, client_id, pm_id, revision_cycles_included, revision_cycles_remaining, service_type, total_steps, completed_steps, terms_and_conditions) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-      [title, description, client_id, pm_id, revision_cycles_included || 0, revision_cycles_included || 0, service_type, total_steps || 0, completed_steps || 0, terms_and_conditions || '']
+      [title, description, client_id, primaryPmId, revision_cycles_included || 0, revision_cycles_included || 0, service_type, total_steps || 0, completed_steps || 0, terms_and_conditions || '']
     );
     const newProjectId = result.insertId;
+
+    // Insert assigned team members
+    if (memberIds.length > 0) {
+      const memberValues = memberIds.map(userId => [newProjectId, userId]);
+      await db.query('INSERT IGNORE INTO project_members (project_id, user_id) VALUES ?', [memberValues]);
+    } else if (pm_id) {
+      await db.query('INSERT IGNORE INTO project_members (project_id, user_id) VALUES (?, ?)', [newProjectId, pm_id]);
+    }
 
     if (invoice_id) {
       await db.query('UPDATE invoices SET project_id = ? WHERE id = ?', [newProjectId, invoice_id]);
@@ -104,12 +163,31 @@ router.post('/', async (req, res) => {
 // Update a project
 router.put('/:id', async (req, res) => {
   const projectId = req.params.id;
-  const { title, description, client_id, pm_id, service_type, revision_cycles_included, terms_and_conditions } = req.body;
+  const { title, description, client_id, pm_id, team_member_ids, service_type, revision_cycles_included, terms_and_conditions } = req.body;
   try {
+    let memberIds = Array.isArray(team_member_ids) ? team_member_ids : null;
+    if (typeof team_member_ids === 'string') {
+      try { memberIds = JSON.parse(team_member_ids); } catch(e) { memberIds = null; }
+    }
+
+    const primaryPmId = pm_id || (memberIds && memberIds.length > 0 ? memberIds[0] : null);
+
     await db.query(
       'UPDATE projects SET title = ?, description = ?, client_id = ?, pm_id = ?, service_type = ?, revision_cycles_included = ?, terms_and_conditions = ? WHERE id = ?',
-      [title, description, client_id, pm_id || null, service_type, revision_cycles_included || 0, terms_and_conditions || '', projectId]
+      [title, description, client_id, primaryPmId, service_type, revision_cycles_included || 0, terms_and_conditions || '', projectId]
     );
+
+    if (memberIds !== null) {
+      await db.query('DELETE FROM project_members WHERE project_id = ?', [projectId]);
+      if (memberIds.length > 0) {
+        const memberValues = memberIds.map(userId => [projectId, userId]);
+        await db.query('INSERT IGNORE INTO project_members (project_id, user_id) VALUES ?', [memberValues]);
+      }
+    } else if (pm_id) {
+      await db.query('DELETE FROM project_members WHERE project_id = ?', [projectId]);
+      await db.query('INSERT IGNORE INTO project_members (project_id, user_id) VALUES (?, ?)', [projectId, pm_id]);
+    }
+
     res.json({ message: 'Project updated successfully' });
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -243,6 +321,43 @@ router.put('/:id/steps/:step_id', async (req, res) => {
       );
     }
     res.json({ message: 'Step updated' });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Accept step deadline
+router.post('/:id/steps/:step_id/accept-deadline', async (req, res) => {
+  const { user_id } = req.body;
+  try {
+    await db.query(
+      'UPDATE project_steps SET deadline_status = "Accepted" WHERE id = ? AND project_id = ?',
+      [req.params.step_id, req.params.id]
+    );
+    await db.query('INSERT INTO step_activity (step_id, user_id, action_text) VALUES (?, ?, ?)',
+      [req.params.step_id, user_id || null, 'Accepted the step deadline']
+    );
+    res.json({ message: 'Deadline accepted successfully' });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Appeal step deadline
+router.post('/:id/steps/:step_id/appeal-deadline', async (req, res) => {
+  const { proposed_deadline, reason, user_id } = req.body;
+  if (!proposed_deadline) {
+    return res.status(400).json({ error: 'Proposed deadline date is required' });
+  }
+  try {
+    await db.query(
+      'UPDATE project_steps SET deadline_status = "Appealed", proposed_deadline = ?, deadline_appeal_reason = ?, appealed_by = ?, appealed_at = NOW() WHERE id = ? AND project_id = ?',
+      [proposed_deadline, reason || '', user_id || null, req.params.step_id, req.params.id]
+    );
+    await db.query('INSERT INTO step_activity (step_id, user_id, action_text) VALUES (?, ?, ?)',
+      [req.params.step_id, user_id || null, `Submitted a deadline extension appeal for ${proposed_deadline}`]
+    );
+    res.json({ message: 'Deadline appeal submitted to Admin for approval' });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }

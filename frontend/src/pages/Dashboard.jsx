@@ -26,6 +26,22 @@ export default function Dashboard() {
       try {
         const userStr = localStorage.getItem('user');
         const user = userStr ? JSON.parse(userStr) : null;
+        
+        if (user) {
+          if (user.role === 'Production') {
+            navigate('/production');
+            return;
+          }
+          if (user.role === 'Sales' || user.role === 'Sales Rep') {
+            navigate('/sales');
+            return;
+          }
+          if (user.role === 'Client') {
+            navigate('/client-portal');
+            return;
+          }
+        }
+
         let queryParams = '';
         if (user) {
           queryParams = `?user_id=${user.id}&role=${encodeURIComponent(user.role)}`;

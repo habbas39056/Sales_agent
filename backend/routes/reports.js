@@ -112,7 +112,7 @@ router.get('/team', async (req, res) => {
                 COALESCE(SUM(CASE WHEN c.status = 'Released' THEN c.final_amount ELSE 0 END), 0) as released_commissions,
                 COALESCE(SUM(CASE WHEN c.status = 'Hold' THEN c.final_amount ELSE 0 END), 0) as pending_commissions
             FROM users u
-            LEFT JOIN projects p ON (u.id = p.pm_id OR u.id = p.production_id)
+            LEFT JOIN projects p ON (u.id = p.pm_id OR u.id = p.production_id OR u.id IN (SELECT user_id FROM project_members WHERE project_id = p.id))
             LEFT JOIN commissions c ON u.id = c.user_id
             WHERE u.role != 'Client'
             GROUP BY u.id
@@ -183,11 +183,11 @@ router.get('/team/:userId/details', async (req, res) => {
             LEFT JOIN clients c ON p.client_id = c.id
             LEFT JOIN invoices i ON p.id = i.project_id
             LEFT JOIN commissions com ON p.id = com.project_id AND com.user_id = ?
-            WHERE (p.pm_id = ? OR p.production_id = ?)
+            WHERE (p.pm_id = ? OR p.production_id = ? OR p.id IN (SELECT project_id FROM project_members WHERE user_id = ?))
             ORDER BY p.created_at DESC
         `;
         
-        const [rows] = await db.query(query, [userId, userId, userId]);
+        const [rows] = await db.query(query, [userId, userId, userId, userId]);
         res.json(rows);
     } catch (err) {
         console.error('Error fetching team member details:', err);
@@ -196,56 +196,102 @@ router.get('/team/:userId/details', async (req, res) => {
 });
 
 // GET /api/reports/profit
-// Gets profit & loss analysis (revenue vs expenses and net profit)
+// Gets profit & loss analysis strictly calculated from INVOICES revenue vs EXPENSES payments
 router.get('/profit', async (req, res) => {
     try {
         const { start_date, end_date } = req.query;
-        let expenseWhere = '';
-        const expParams = [];
 
+        // 1. Calculate Revenue STRICTLY from INVOICES table (paid/collected amount: amount - balance)
+        let invoiceWhere = 'WHERE 1=1';
+        const invoiceParams = [];
         if (start_date) {
-            expenseWhere += ' AND date >= ?';
+            invoiceWhere += ' AND DATE(created_at) >= ?';
+            invoiceParams.push(start_date);
+        }
+        if (end_date) {
+            invoiceWhere += ' AND DATE(created_at) <= ?';
+            invoiceParams.push(end_date);
+        }
+
+        const [[invRow]] = await db.query(
+            `SELECT 
+                COALESCE(SUM(amount), 0) as total_invoiced,
+                COALESCE(SUM(amount - balance), 0) as total_collected
+            FROM invoices ${invoiceWhere}`,
+            invoiceParams
+        );
+
+        // Revenue is calculated strictly from Paid/Collected Invoice Amounts!
+        const totalRevenue = parseFloat(invRow.total_collected || 0);
+        const totalInvoiced = parseFloat(invRow.total_invoiced || 0);
+
+        // 2. Calculate Business Expenses from EXPENSES table (payment_amount)
+        let expenseWhere = 'WHERE 1=1';
+        const expParams = [];
+        if (start_date) {
+            expenseWhere += ' AND DATE(date) >= ?';
             expParams.push(start_date);
         }
         if (end_date) {
-            expenseWhere += ' AND date <= ?';
+            expenseWhere += ' AND DATE(date) <= ?';
             expParams.push(end_date);
         }
 
-        // Total Collections (all receipts in date range) & Total Expenses (all payments in date range)
-        const [expRows] = await db.query(
+        const [[expRow]] = await db.query(
             `SELECT 
-                COALESCE(SUM(receipt_amount), 0) as total_revenue,
                 COALESCE(SUM(payment_amount), 0) as total_expense
-            FROM expenses WHERE 1=1 ${expenseWhere}`,
+            FROM expenses ${expenseWhere}`,
             expParams
         );
 
-        const totalRevenue = parseFloat(expRows[0].total_revenue || 0);
-        const totalExpenses = parseFloat(expRows[0].total_expense || 0);
+        const totalExpenses = parseFloat(expRow.total_expense || 0);
         const netProfit = totalRevenue - totalExpenses;
         const profitMargin = totalRevenue > 0 ? (netProfit / totalRevenue) * 100 : 0;
 
-        // Monthly trend aggregated by receipt/expense date
-        const [monthlyExp] = await db.query(
+        // 3. Monthly Trend from Invoices (revenue) and Expenses (payments)
+        const [monthlyInvoices] = await db.query(
             `SELECT 
-                DATE_FORMAT(date, '%Y-%m') as month_key, 
-                COALESCE(SUM(receipt_amount), 0) as revenue, 
-                COALESCE(SUM(payment_amount), 0) as expense 
-            FROM expenses 
-            WHERE 1=1 ${expenseWhere} 
-            GROUP BY month_key 
-            ORDER BY month_key ASC`,
+                DATE_FORMAT(created_at, '%Y-%m') as month_key,
+                COALESCE(SUM(amount - balance), 0) as revenue
+            FROM invoices ${invoiceWhere}
+            GROUP BY month_key`,
+            invoiceParams
+        );
+
+        const [monthlyExpenses] = await db.query(
+            `SELECT 
+                DATE_FORMAT(date, '%Y-%m') as month_key,
+                COALESCE(SUM(payment_amount), 0) as expense
+            FROM expenses ${expenseWhere}
+            GROUP BY month_key`,
             expParams
         );
 
-        const monthlyTrend = monthlyExp.filter(e => e.month_key).map(e => {
-            const rev = parseFloat(e.revenue || 0);
-            const exp = parseFloat(e.expense || 0);
+        // Merge monthly invoice revenue and expenses by month_key
+        const monthsMap = {};
+        monthlyInvoices.forEach(r => {
+            if (r.month_key) {
+                monthsMap[r.month_key] = { month: r.month_key, revenue: parseFloat(r.revenue || 0), expenses: 0 };
+            }
+        });
+        monthlyExpenses.forEach(e => {
+            if (e.month_key) {
+                if (!monthsMap[e.month_key]) {
+                    monthsMap[e.month_key] = { month: e.month_key, revenue: 0, expenses: parseFloat(e.expense || 0) };
+                } else {
+                    monthsMap[e.month_key].expenses = parseFloat(e.expense || 0);
+                }
+            }
+        });
+
+        const sortedMonths = Object.keys(monthsMap).sort();
+        const monthlyTrend = sortedMonths.map(m => {
+            const rev = monthsMap[m].revenue;
+            const exp = monthsMap[m].expenses;
             const prof = rev - exp;
             const marg = rev > 0 ? (prof / rev) * 100 : 0;
             return {
-                month: e.month_key,
+                month: m,
                 revenue: Number(rev.toFixed(2)),
                 expenses: Number(exp.toFixed(2)),
                 profit: Number(prof.toFixed(2)),
@@ -256,6 +302,7 @@ router.get('/profit', async (req, res) => {
         res.json({
             summary: {
                 total_revenue: Number(totalRevenue.toFixed(2)),
+                total_invoiced: Number(totalInvoiced.toFixed(2)),
                 total_expenses: Number(totalExpenses.toFixed(2)),
                 net_profit: Number(netProfit.toFixed(2)),
                 profit_margin: Number(profitMargin.toFixed(1))

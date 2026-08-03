@@ -76,7 +76,7 @@ export default function Header() {
   if (location.pathname === '/expenses') {
     title = 'Expense';
     subtitle = 'Manage your project dashboard and performance';
-  } else if (location.pathname === '/dashboard') {
+  } else if (location.pathname === '/dashboard' || location.pathname === '/production' || location.pathname === '/sales' || location.pathname === '/pm' || location.pathname === '/pm-portal') {
     title = 'Dashboard';
     subtitle = 'Welcome back, here is your overview';
   } else if (location.pathname === '/clients') {

@@ -275,3 +275,73 @@
   color: #ffffff;
   border-color: var(--primary-color);
 }
+
+/* Multi-select Team Members Component */
+.multi-select-container {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  width: 100%;
+}
+
+.selected-tags-box {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  min-height: 38px;
+  padding: 0.4rem 0.6rem;
+  border: 1px solid var(--border-color, #cbd5e1);
+  border-radius: 8px;
+  background-color: #ffffff;
+  align-items: center;
+}
+
+.member-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  background-color: #e0e7ff;
+  color: #3730a3;
+  padding: 0.2rem 0.55rem;
+  border-radius: 16px;
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+
+.member-tag .tag-remove-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  background: transparent;
+  color: #4338ca;
+  cursor: pointer;
+  padding: 0;
+  border-radius: 50%;
+}
+
+.member-tag .tag-remove-btn:hover {
+  color: #ef4444;
+}
+
+.multi-select-dropdown {
+  width: 100%;
+  padding: 0.5rem 0.75rem;
+  border-radius: 8px;
+  border: 1px solid var(--border-color, #cbd5e1);
+  background-color: #ffffff;
+  font-size: 0.9rem;
+  color: var(--text-primary);
+  outline: none;
+}
+
+.team-member-badge {
+  display: inline-block;
+  background-color: #e0e7ff;
+  color: #3730a3;
+  padding: 0.15rem 0.5rem;
+  border-radius: 12px;
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+

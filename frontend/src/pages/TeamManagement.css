@@ -71,8 +71,8 @@
 }
 
 .team-role.role-admin { color: var(--danger); }
-.team-role.role-project-manager { color: var(--warning); }
-.team-role.role-sales-rep { color: var(--success); }
+.team-role.role-project-manager, .team-role.role-product-manager, .team-role.role-pm { color: var(--warning); }
+.team-role.role-sales-rep, .team-role.role-sales { color: var(--success); }
 .team-role.role-production { color: var(--primary-color); }
 .team-role.role-qa { color: #8b5cf6; }
 

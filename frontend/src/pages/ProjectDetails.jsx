@@ -19,6 +19,10 @@ export default function ProjectDetails() {
   // Expanded step state
   const [expandedStepId, setExpandedStepId] = useState(null);
   const [activeTab, setActiveTab] = useState('Details');
+  const [stepFilter, setStepFilter] = useState('All');
+
+  const currentUserStr = localStorage.getItem('user');
+  const currentUser = currentUserStr ? JSON.parse(currentUserStr) : null;
 
   useEffect(() => {
     fetchProjectDetails();
@@ -40,7 +44,7 @@ export default function ProjectDetails() {
     if (!uploadName) return;
     try {
       await axios.post(`/api/projects/${id}/submit-delivery`, {
-        user_id: 1, 
+        user_id: currentUser ? currentUser.id : 1, 
         file_url: `https://mock-storage.com/${uploadName.replace(/\s+/g, '_').toLowerCase()}.pdf`,
         file_name: uploadName
       });
@@ -73,9 +77,15 @@ export default function ProjectDetails() {
   if (loading) return <div style={{ padding: '2rem' }}>Loading Project...</div>;
   if (!project) return <div style={{ padding: '2rem' }}>Project Not Found</div>;
 
-  const steps = project.steps || [];
-  const totalSteps = steps.length;
-  const completedSteps = steps.filter(s => s.status === 'Completed').length;
+  const allSteps = project.steps || [];
+  const myAssignedSteps = currentUser 
+    ? allSteps.filter(s => s.assignee_id === currentUser.id)
+    : [];
+
+  const displaySteps = stepFilter === 'My Steps' ? myAssignedSteps : allSteps;
+
+  const totalSteps = allSteps.length;
+  const completedSteps = allSteps.filter(s => s.status === 'Completed').length;
   const percent = totalSteps > 0 ? Math.round((completedSteps / totalSteps) * 100) : 0;
 
   return (
@@ -95,6 +105,18 @@ export default function ProjectDetails() {
               <span className="subtitle-divider">·</span>
               <span className="subtitle-label">Service:</span> <span className="subtitle-value">{project.service_type || 'Unspecified'}</span>
             </p>
+            {project.assigned_members && project.assigned_members.length > 0 && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginTop: '0.5rem' }}>
+                <span style={{ fontSize: '0.85rem', color: '#64748b', fontWeight: '600' }}>Team Members:</span>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.35rem' }}>
+                  {project.assigned_members.map(m => (
+                    <span key={m.id} style={{ background: '#e0e7ff', color: '#3730a3', padding: '2px 10px', borderRadius: '12px', fontSize: '0.78rem', fontWeight: '600' }}>
+                      {m.name} ({m.role})
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
           
           <div className="pd-header-progress">
@@ -109,20 +131,60 @@ export default function ProjectDetails() {
 
       {/* Workflow Steps Section */}
       <div className="workflow-section">
-        <div className="workflow-header">
-          <h2>Workflow Steps ({totalSteps})</h2>
+        <div className="workflow-header" style={{ flexWrap: 'wrap', gap: '1rem' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', flexWrap: 'wrap' }}>
+            <h2 style={{ margin: 0 }}>Workflow Steps ({totalSteps})</h2>
+            {currentUser && myAssignedSteps.length > 0 && (
+              <div style={{ display: 'flex', gap: '0.5rem', background: '#f1f5f9', padding: '4px', borderRadius: '8px' }}>
+                <button 
+                  type="button"
+                  onClick={() => setStepFilter('All')}
+                  style={{ 
+                    border: 'none', 
+                    padding: '0.35rem 0.85rem', 
+                    borderRadius: '6px', 
+                    fontSize: '0.82rem', 
+                    fontWeight: '600', 
+                    cursor: 'pointer',
+                    backgroundColor: stepFilter === 'All' ? '#ffffff' : 'transparent',
+                    color: stepFilter === 'All' ? '#1e293b' : '#64748b',
+                    boxShadow: stepFilter === 'All' ? '0 1px 3px rgba(0,0,0,0.1)' : 'none'
+                  }}
+                >
+                  All Steps ({totalSteps})
+                </button>
+                <button 
+                  type="button"
+                  onClick={() => setStepFilter('My Steps')}
+                  style={{ 
+                    border: 'none', 
+                    padding: '0.35rem 0.85rem', 
+                    borderRadius: '6px', 
+                    fontSize: '0.82rem', 
+                    fontWeight: '600', 
+                    cursor: 'pointer',
+                    backgroundColor: stepFilter === 'My Steps' ? '#4f46e5' : 'transparent',
+                    color: stepFilter === 'My Steps' ? '#ffffff' : '#64748b',
+                    boxShadow: stepFilter === 'My Steps' ? '0 1px 3px rgba(79, 70, 229, 0.3)' : 'none'
+                  }}
+                >
+                  👤 My Assigned Steps ({myAssignedSteps.length})
+                </button>
+              </div>
+            )}
+          </div>
           <button className="btn-create" onClick={() => navigate(`/projects/${id}/steps/new`)}>
             <Plus size={16} /> Add Step
           </button>
         </div>
 
-        {totalSteps === 0 ? (
+        {displaySteps.length === 0 ? (
           <div className="workflow-empty-state">
-            <p>No steps yet. Click "Add Step" to create your first workflow step.</p>
+            <p>{stepFilter === 'My Steps' ? 'No steps specifically assigned to you in this project.' : 'No steps yet. Click "Add Step" to create your first workflow step.'}</p>
           </div>
         ) : (
           <div className="workflow-list">
-            {steps.map((step, index) => {
+            {displaySteps.map((step, index) => {
               const isExpanded = expandedStepId === step.id;
               
               return (
@@ -141,9 +203,31 @@ export default function ProjectDetails() {
                     <div className="workflow-item-left">
                       <div className="step-number">{index + 1}</div>
                       <div className="step-info">
-                        <div className="step-title-row">
+                        <div className="step-title-row" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
                           <h4>{step.title}</h4>
                           {step.status === 'Completed' && <span className="status-badge completed">Completed</span>}
+                          {step.assignee_name ? (
+                            <span style={{ background: '#e0e7ff', color: '#3730a3', fontSize: '0.75rem', padding: '2px 8px', borderRadius: '12px', fontWeight: '600', display: 'inline-flex', alignItems: 'center', gap: '0.25rem' }}>
+                              👤 Assigned to: {step.assignee_name}
+                            </span>
+                          ) : (
+                            <span style={{ background: '#f1f5f9', color: '#94a3b8', fontSize: '0.75rem', padding: '2px 8px', borderRadius: '12px', fontWeight: '500' }}>
+                              Unassigned
+                            </span>
+                          )}
+
+                          {step.deadline && (
+                            <span style={{ 
+                              fontSize: '0.75rem', 
+                              fontWeight: '700', 
+                              padding: '2px 8px', 
+                              borderRadius: '12px', 
+                              background: step.deadline_status === 'Accepted' ? '#d1fae5' : step.deadline_status === 'Appealed' ? '#e0e7ff' : '#fef3c7', 
+                              color: step.deadline_status === 'Accepted' ? '#047857' : step.deadline_status === 'Appealed' ? '#3730a3' : '#b45309' 
+                            }}>
+                              📅 {step.deadline_status === 'Accepted' ? 'Confirmed' : step.deadline_status === 'Appealed' ? `Appealed (${new Date(step.proposed_deadline).toLocaleDateString()})` : 'Pending Acceptance'}: {new Date(step.deadline).toLocaleDateString()}
+                            </span>
+                          )}
                         </div>
                       </div>
                     </div>
