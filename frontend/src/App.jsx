@@ -102,7 +102,6 @@ function AppContent() {
     if (!user) return '/dashboard';
     if (user.role === 'Production') return '/production';
     if (user.role === 'Product Manager' || user.role === 'PM' || user.role === 'Project Manager') return '/pm-portal';
-    if (user.role === 'Sales' || user.role === 'Sales Rep') return '/sales';
     if (user.role === 'Client') return '/client-portal';
     return '/dashboard';
   };
