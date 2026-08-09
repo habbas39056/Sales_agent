@@ -97,7 +97,7 @@ router.get('/breakdown', async (req, res) => {
       JOIN users u ON c.user_id = u.id
       JOIN projects p ON c.project_id = p.id
       LEFT JOIN project_steps ps ON c.step_id = ps.id
-      WHERE 1=1
+      WHERE u.role NOT IN ('Sales', 'Sales Rep')
     `;
     const releasedParams = [];
 
@@ -120,7 +120,7 @@ router.get('/breakdown', async (req, res) => {
       FROM project_steps ps
       JOIN users u ON ps.assignee_id = u.id
       JOIN projects p ON ps.project_id = p.id
-      WHERE ps.commission_released = FALSE
+      WHERE ps.commission_released = FALSE AND u.role NOT IN ('Sales', 'Sales Rep')
     `;
     const pendingParams = [];
 
@@ -295,7 +295,7 @@ router.get('/', async (req, res) => {
         COALESCE(SUM(c.base_amount), 0) as total_earned_project,
         COALESCE(SUM(c.final_amount), 0) as total_paid_out_project
       FROM users u
-      LEFT JOIN commissions c ON u.id = c.user_id
+      LEFT JOIN commissions c ON u.id = c.user_id AND u.role NOT IN ('Sales', 'Sales Rep')
     `;
     
     const conditions = ["u.role != 'Client'"];
@@ -344,10 +344,12 @@ router.get('/', async (req, res) => {
     // Calculate pending payout for each user and add invoice commissions
     for (const row of rows) {
       let pending_payout = 0;
-      let total_earned = parseFloat(row.total_earned_project);
-      let total_paid_out = parseFloat(row.total_paid_out_project);
+      let total_earned = parseFloat(row.total_earned_project) || 0;
+      let total_paid_out = parseFloat(row.total_paid_out_project) || 0;
+      row.total_invoices = 0; // Will be set by invoice logic for Sales
       
-      const [pendingSteps] = await db.query('SELECT invoice_item_ids FROM project_steps WHERE assignee_id = ? AND commission_released = FALSE', [row.id]);
+      if (row.role !== 'Sales' && row.role !== 'Sales Rep') {
+        const [pendingSteps] = await db.query('SELECT invoice_item_ids FROM project_steps WHERE assignee_id = ? AND commission_released = FALSE', [row.id]);
       
       for (const step of pendingSteps) {
         if (step.invoice_item_ids) {
@@ -362,6 +364,7 @@ router.get('/', async (req, res) => {
             pending_payout += items_total * (comm_pct / 100);
           }
         }
+      }
       }
 
       // Add invoice commissions (Sales)
