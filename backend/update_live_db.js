@@ -257,6 +257,45 @@ async function updateLiveDb() {
 
     await addColumnIfNotExists('expenses', 'category', 'VARCHAR(100) NULL');
 
+    // 12. Notifications Table
+    await connection.query(`
+      CREATE TABLE IF NOT EXISTS notifications (
+          id INT AUTO_INCREMENT PRIMARY KEY,
+          user_id INT NOT NULL,
+          message TEXT NOT NULL,
+          type VARCHAR(50),
+          link VARCHAR(255),
+          is_read BOOLEAN DEFAULT FALSE,
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+    `);
+    console.log('✅ Ensured notifications table exists.');
+
+    // 13. Salary Penalties Table
+    await connection.query(`
+      CREATE TABLE IF NOT EXISTS salary_penalties (
+        id INT(11) NOT NULL AUTO_INCREMENT,
+        user_id INT(11) NOT NULL,
+        step_id INT(11) NOT NULL,
+        month VARCHAR(7) NOT NULL,
+        amount DECIMAL(10,2) NOT NULL DEFAULT '0.00',
+        reason TEXT,
+        created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        PRIMARY KEY (id),
+        KEY user_id (user_id),
+        KEY step_id (step_id),
+        CONSTRAINT salary_penalties_ibfk_1 FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE,
+        CONSTRAINT salary_penalties_ibfk_2 FOREIGN KEY (step_id) REFERENCES project_steps (id) ON DELETE CASCADE
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+    `);
+    console.log('✅ Ensured salary_penalties table exists.');
+
+    // 14. Project Steps New Columns
+    await addColumnIfNotExists('project_steps', 'invoice_item_ids', 'JSON DEFAULT NULL');
+    await addColumnIfNotExists('project_steps', 'completed_at', 'TIMESTAMP NULL');
+    await addColumnIfNotExists('project_steps', 'forgive_late_commission', 'BOOLEAN DEFAULT FALSE');
+
     console.log('\n🎉 Live database update completed successfully!');
   } catch (error) {
     console.error('\n❌ Migration failed:', error);
