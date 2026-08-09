@@ -14,7 +14,8 @@ import {
   Trash2,
   Tag,
   Camera,
-  FileText
+  FileText,
+  LayoutDashboard
 } from 'lucide-react';
 import './Settings.css';
 
@@ -45,6 +46,14 @@ export default function Settings() {
     confirmPassword: ''
   });
 
+  // Dashboard Settings State
+  const [dashboardSettings, setDashboardSettings] = useState({
+    dashboard_default_date: 'This Year',
+    dashboard_default_category: 'All Categories',
+    dashboard_start_date: '',
+    dashboard_end_date: ''
+  });
+
   useEffect(() => {
     loadAllData();
   }, []);
@@ -68,6 +77,17 @@ export default function Settings() {
       // Load project categories
       const categoriesRes = await axios.get('/api/project-categories');
       setCategories(categoriesRes.data || []);
+
+      // Load global settings
+      const settingsRes = await axios.get('/api/settings');
+      if (settingsRes.data) {
+        setDashboardSettings({
+          dashboard_default_date: settingsRes.data.dashboard_default_date || 'This Year',
+          dashboard_default_category: settingsRes.data.dashboard_default_category || 'All Categories',
+          dashboard_start_date: settingsRes.data.dashboard_start_date || '',
+          dashboard_end_date: settingsRes.data.dashboard_end_date || ''
+        });
+      }
     } catch (err) {
       console.error('Error loading settings data:', err);
     } finally {
@@ -183,6 +203,19 @@ export default function Settings() {
     }
   };
 
+  const handleSaveDashboardSettings = async (e) => {
+    e.preventDefault();
+    setSaving(true);
+    try {
+      await axios.post('/api/settings', dashboardSettings);
+      showAlert('success', 'Dashboard settings saved successfully!');
+    } catch (err) {
+      showAlert('error', err.response?.data?.error || 'Failed to save dashboard settings');
+    } finally {
+      setSaving(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="settings-container" style={{ textAlign: 'center', padding: '5rem 0' }}>
@@ -215,6 +248,12 @@ export default function Settings() {
           onClick={() => setActiveTab('profile')}
         >
           <ShieldCheck size={18} /> Account & Security
+        </button>
+        <button 
+          className={`tab-btn ${activeTab === 'dashboard' ? 'active' : ''}`} 
+          onClick={() => setActiveTab('dashboard')}
+        >
+          <LayoutDashboard size={18} /> Dashboard
         </button>
       </div>
 
@@ -439,6 +478,95 @@ export default function Settings() {
             </div>
           </form>
         </div>
+      )}
+
+      {/* SECTION 3: DASHBOARD SETTINGS */}
+      {activeTab === 'dashboard' && (
+        <form onSubmit={handleSaveDashboardSettings}>
+          <div className="settings-card">
+            <div className="card-title-section">
+              <LayoutDashboard size={24} style={{ color: 'var(--primary-color)' }} />
+              <div>
+                <h3 className="card-title">Dashboard Settings</h3>
+                <p className="card-description">Configure the default filters and data views applied to the main Dashboard</p>
+              </div>
+            </div>
+
+            <div className="form-grid">
+              <div className="form-group">
+                <label className="form-label">Default Date Range</label>
+                <select 
+                  className="form-input" 
+                  value={dashboardSettings.dashboard_default_date}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    setDashboardSettings(prev => ({ 
+                      ...prev, 
+                      dashboard_default_date: val,
+                      // clear custom dates if preset selected
+                      ...(val !== 'Custom' ? { dashboard_start_date: '', dashboard_end_date: '' } : {})
+                    }));
+                  }}
+                >
+                  <option value="This Year">This Year</option>
+                  <option value="This Month">This Month</option>
+                  <option value="This Week">This Week</option>
+                  <option value="All Time">All Time</option>
+                  <option value="Custom">Custom Date Range</option>
+                </select>
+                <p style={{ fontSize: '0.8rem', color: '#64748b', marginTop: '0.25rem' }}>
+                  Choose which time period is displayed by default on the dashboard performance charts.
+                </p>
+              </div>
+
+              {dashboardSettings.dashboard_default_date === 'Custom' && (
+                <>
+                  <div className="form-group">
+                    <label className="form-label">Start Date</label>
+                    <input 
+                      type="date"
+                      className="form-input"
+                      value={dashboardSettings.dashboard_start_date}
+                      onChange={(e) => setDashboardSettings(prev => ({ ...prev, dashboard_start_date: e.target.value }))}
+                    />
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label">End Date</label>
+                    <input 
+                      type="date"
+                      className="form-input"
+                      value={dashboardSettings.dashboard_end_date}
+                      onChange={(e) => setDashboardSettings(prev => ({ ...prev, dashboard_end_date: e.target.value }))}
+                    />
+                  </div>
+                </>
+              )}
+
+              <div className="form-group" style={{ gridColumn: '1 / -1' }}>
+                <label className="form-label">Default Project Category</label>
+                <select 
+                  className="form-input" 
+                  value={dashboardSettings.dashboard_default_category}
+                  onChange={(e) => setDashboardSettings(prev => ({ ...prev, dashboard_default_category: e.target.value }))}
+                >
+                  <option value="All Categories">All Categories</option>
+                  {categories.map(cat => (
+                    <option key={cat.id} value={cat.name}>{cat.name}</option>
+                  ))}
+                </select>
+                <p style={{ fontSize: '0.8rem', color: '#64748b', marginTop: '0.25rem' }}>
+                  Filter the dashboard to only show stats, projects, and revenue for a specific category.
+                </p>
+              </div>
+            </div>
+
+            <div className="settings-actions">
+              <button type="submit" className="save-btn" disabled={saving}>
+                <Save size={18} /> {saving ? 'Saving...' : 'Save Dashboard Settings'}
+              </button>
+            </div>
+          </div>
+        </form>
       )}
     </div>
   );

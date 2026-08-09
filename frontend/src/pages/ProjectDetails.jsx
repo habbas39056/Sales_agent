@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import axios from 'axios';
-import { ArrowLeft, FileText, UploadCloud, Download, CheckCircle, Clock, Plus, X, Check, ExternalLink, Image, FileCode, Film, Music, Archive, Upload, Edit, Link2 } from 'lucide-react';
+import { ArrowLeft, FileText, UploadCloud, Download, CheckCircle, Clock, Plus, X, Check, ExternalLink, Image, FileCode, Film, Music, Archive, Upload, Edit, Link2, Trash2 } from 'lucide-react';
 import StepComments from '../components/StepComments';
 import StepActivityLog from '../components/StepActivityLog';
 import './ProjectDetails.css';
@@ -21,8 +21,14 @@ export default function ProjectDetails() {
   const [activeTab, setActiveTab] = useState('Details');
   const [stepFilter, setStepFilter] = useState('All');
 
+  // Reassign Modal State
+  const [isReassignModalOpen, setIsReassignModalOpen] = useState(false);
+  const [stepToReassign, setStepToReassign] = useState(null);
+  const [newDeadline, setNewDeadline] = useState('');
+
   const currentUserStr = localStorage.getItem('user');
   const currentUser = currentUserStr ? JSON.parse(currentUserStr) : null;
+  const canManageSteps = currentUser && ['Admin', 'Project Manager', 'PM', 'Product Manager', 'Production Manager'].includes(currentUser.role);
 
   useEffect(() => {
     fetchProjectDetails();
@@ -30,12 +36,27 @@ export default function ProjectDetails() {
 
   const fetchProjectDetails = async () => {
     try {
-      const res = await axios.get(`/api/projects/${id}`);
+      let url = `/api/projects/${id}`;
+      if (currentUser) {
+        url += `?user_id=${currentUser.id}&role=${encodeURIComponent(currentUser.role)}`;
+      }
+      const res = await axios.get(url);
       setProject(res.data);
       setLoading(false);
     } catch (error) {
       console.error('Failed to fetch project details', error);
       setLoading(false);
+    }
+  };
+
+  const handleDeleteStep = async (stepId) => {
+    if (!window.confirm("Are you sure you want to delete this step? This action cannot be undone.")) return;
+    try {
+      await axios.delete(`/api/projects/${id}/steps/${stepId}`);
+      fetchProjectDetails();
+    } catch (err) {
+      console.error('Failed to delete step', err);
+      alert(err.response?.data?.error || 'Failed to delete step');
     }
   };
 
@@ -65,16 +86,72 @@ export default function ProjectDetails() {
     }
   };
 
-  const handleToggleRevisionOption = async (stepId, currentOption) => {
+  const handleToggleRevisionOption = async (stepId, currentVal) => {
     try {
-      await axios.put(`/api/projects/${id}/steps/${stepId}`, { allow_revision: !currentOption });
+      await axios.put(`/api/projects/${id}/steps/${stepId}`, { allow_revision: !currentVal });
       fetchProjectDetails();
-    } catch (error) {
-      console.error('Failed to update revision option', error);
+    } catch(err) {
+      console.error('Failed to toggle revision option', err);
+      alert('Failed to update step');
     }
   };
 
-  if (loading) return <div style={{ padding: '2rem' }}>Loading Project...</div>;
+  const handleForgiveLate = async (stepId, currentVal) => {
+    try {
+      await axios.post(`/api/projects/${id}/steps/${stepId}/forgive-late`, { forgive: !currentVal });
+      fetchProjectDetails();
+    } catch(err) {
+      console.error('Failed to toggle forgive late', err);
+      alert('Failed to update step');
+    }
+  };
+
+  const handleApproveProject = async () => {
+    if (!window.confirm("Are you sure you want to mark this project as completed?")) return;
+    try {
+      await axios.post(`/api/projects/${id}/approve`);
+      alert("Project marked as completed!");
+      fetchProjectDetails();
+    } catch(err) {
+      console.error('Failed to approve project', err);
+      alert(err.response?.data?.error || 'Failed to approve project');
+    }
+  };
+
+  const handleReassignSubmit = async (e) => {
+    e.preventDefault();
+    if (!newDeadline) {
+      alert('Please select a new deadline.');
+      return;
+    }
+    try {
+      await axios.post(`/api/projects/${id}/steps/${stepToReassign.id}/reassign`, {
+        new_deadline: newDeadline
+      });
+      setIsReassignModalOpen(false);
+      setStepToReassign(null);
+      setNewDeadline('');
+      alert('Step successfully reassigned!');
+      fetchProjectDetails();
+    } catch (err) {
+      console.error('Failed to reassign step', err);
+      alert(err.response?.data?.error || 'Failed to reassign step');
+    }
+  };
+
+  const handleApproveStepCommission = async (stepId) => {
+    if (!window.confirm("Are you sure you want to release the commission for this step?")) return;
+    try {
+      await axios.post(`/api/projects/${id}/steps/${stepId}/approve-commission`);
+      alert("Step commission released successfully!");
+      fetchProjectDetails();
+    } catch(err) {
+      console.error('Failed to release step commission', err);
+      alert(err.response?.data?.error || 'Failed to release step commission');
+    }
+  };
+
+  if (loading) return <div className="project-details-loading">Loading project...</div>;
   if (!project) return <div style={{ padding: '2rem' }}>Project Not Found</div>;
 
   const allSteps = project.steps || [];
@@ -125,6 +202,38 @@ export default function ProjectDetails() {
             <div className="progress-bar-bg-clean">
               <div className="progress-bar-fill-clean" style={{ width: `${percent}%` }}></div>
             </div>
+            
+            {project.status !== 'Completed' && project.status !== 'Commission Released' && currentUser && (currentUser.role === 'Admin' || currentUser.role === 'Project Manager' || currentUser.role === 'PM' || currentUser.role === 'Product Manager') && (
+              <button 
+                onClick={handleApproveProject}
+                disabled={percent !== 100}
+                title={percent !== 100 ? "All steps must be completed before marking project complete." : "Mark Project Complete"}
+                style={{
+                  marginTop: '1rem',
+                  width: '100%',
+                  padding: '0.6rem 1rem',
+                  backgroundColor: percent === 100 ? '#10b981' : '#94a3b8',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '8px',
+                  fontWeight: '700',
+                  cursor: percent === 100 ? 'pointer' : 'not-allowed',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '0.5rem',
+                  boxShadow: percent === 100 ? '0 4px 6px -1px rgba(16, 185, 129, 0.2)' : 'none',
+                  opacity: percent === 100 ? 1 : 0.7
+                }}
+              >
+                <CheckCircle size={16} /> Mark Project Complete
+              </button>
+            )}
+            {(project.status === 'Completed' || project.status === 'Commission Released') && (
+              <div style={{ marginTop: '1rem', textAlign: 'center', color: '#10b981', fontWeight: '700', fontSize: '0.85rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.35rem' }}>
+                <CheckCircle size={15} /> Project Completed
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -134,7 +243,7 @@ export default function ProjectDetails() {
         <div className="workflow-header" style={{ flexWrap: 'wrap', gap: '1rem' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', flexWrap: 'wrap' }}>
             <h2 style={{ margin: 0 }}>Workflow Steps ({totalSteps})</h2>
-            {currentUser && myAssignedSteps.length > 0 && (
+            {currentUser && myAssignedSteps.length > 0 && (currentUser.role === 'Admin' || project.pm_id == currentUser.id) && (
               <div style={{ display: 'flex', gap: '0.5rem', background: '#f1f5f9', padding: '4px', borderRadius: '8px' }}>
                 <button 
                   type="button"
@@ -173,9 +282,11 @@ export default function ProjectDetails() {
               </div>
             )}
           </div>
-          <button className="btn-create" onClick={() => navigate(`/projects/${id}/steps/new`)}>
-            <Plus size={16} /> Add Step
-          </button>
+          {canManageSteps && (
+            <button className="btn-create" onClick={() => navigate(`/projects/${id}/steps/new`)}>
+              <Plus size={16} /> Add Step
+            </button>
+          )}
         </div>
 
         {displaySteps.length === 0 ? (
@@ -206,6 +317,21 @@ export default function ProjectDetails() {
                         <div className="step-title-row" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
                           <h4>{step.title}</h4>
                           {step.status === 'Completed' && <span className="status-badge completed">Completed</span>}
+                          {step.status === 'Completed' && step.completed_at && step.deadline && (
+                            (() => {
+                              const d_deadline = new Date(step.deadline);
+                              d_deadline.setHours(23, 59, 59, 999);
+                              const d_completed = new Date(step.completed_at);
+                              if (d_completed > d_deadline) {
+                                return (
+                                  <span style={{ background: '#fef2f2', color: '#ef4444', fontSize: '0.75rem', padding: '2px 8px', borderRadius: '12px', fontWeight: '600', display: 'inline-flex', alignItems: 'center', gap: '0.25rem' }}>
+                                    ⚠️ Delivered Late {step.forgive_late_commission ? '(Forgiven)' : ''}
+                                  </span>
+                                );
+                              }
+                              return null;
+                            })()
+                          )}
                           {step.assignee_name ? (
                             <span style={{ background: '#e0e7ff', color: '#3730a3', fontSize: '0.75rem', padding: '2px 8px', borderRadius: '12px', fontWeight: '600', display: 'inline-flex', alignItems: 'center', gap: '0.25rem' }}>
                               👤 Assigned to: {step.assignee_name}
@@ -228,6 +354,22 @@ export default function ProjectDetails() {
                               📅 {step.deadline_status === 'Accepted' ? 'Confirmed' : step.deadline_status === 'Appealed' ? `Appealed (${new Date(step.proposed_deadline).toLocaleDateString()})` : 'Pending Acceptance'}: {new Date(step.deadline).toLocaleDateString()}
                             </span>
                           )}
+
+                          {(() => {
+                            let itemIds = [];
+                            try { itemIds = typeof step.invoice_item_ids === 'string' ? JSON.parse(step.invoice_item_ids) : step.invoice_item_ids; } catch(e){}
+                            if (Array.isArray(itemIds) && itemIds.length > 0 && project.invoice && project.invoice.items) {
+                              const stepItems = project.invoice.items.filter(item => itemIds.includes(item.id));
+                              if (stepItems.length > 0) {
+                                return (
+                                  <span style={{ background: '#fdf4ff', color: '#c026d3', fontSize: '0.75rem', padding: '2px 8px', borderRadius: '12px', fontWeight: '600', display: 'inline-flex', alignItems: 'center', gap: '0.25rem' }}>
+                                    🧾 Items: {stepItems.map(i => i.description).join(', ')} (Rs. {stepItems.reduce((acc, i) => acc + Number(i.total), 0).toLocaleString()})
+                                  </span>
+                                );
+                              }
+                            }
+                            return null;
+                          })()}
                         </div>
                       </div>
                     </div>
@@ -243,25 +385,145 @@ export default function ProjectDetails() {
                           <span className="slider round blue-slider"></span>
                         </label>
                       </div>
-                      <select 
-                        value={step.status || 'Pending'} 
-                        onChange={(e) => handleStatusChange(step.id, e.target.value)}
-                        className={`status-dropdown ${step.status === 'Completed' ? 'completed' : step.status === 'In Progress' ? 'in-progress' : 'pending'}`}
-                        style={{ 
+
+                      {canManageSteps && (
+                        <>
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              navigate(`/projects/${id}/steps/${step.id}/edit`);
+                            }}
+                            style={{
+                              padding: '0.4rem',
+                              borderRadius: '6px',
+                              border: '1px solid #e2e8f0',
+                              backgroundColor: '#f8fafc',
+                              color: '#64748b',
+                              cursor: 'pointer',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center'
+                            }}
+                            title="Edit Step"
+                          >
+                            <Edit size={16} />
+                          </button>
+                          
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleDeleteStep(step.id);
+                            }}
+                            style={{
+                              padding: '0.4rem',
+                              borderRadius: '6px',
+                              border: '1px solid #fee2e2',
+                              backgroundColor: '#fef2f2',
+                              color: '#ef4444',
+                              cursor: 'pointer',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center'
+                            }}
+                            title="Delete Step"
+                          >
+                            <Trash2 size={16} />
+                          </button>
+                        </>
+                      )}
+
+                      {step.status !== 'Completed' ? (
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            if (window.confirm('Are you sure you want to mark this step as completed?')) {
+                              handleStatusChange(step.id, 'Completed');
+                            }
+                          }}
+                          style={{
+                            padding: '0.4rem 0.75rem',
+                            borderRadius: '6px',
+                            border: 'none',
+                            backgroundColor: 'var(--success)',
+                            color: 'white',
+                            fontWeight: '600',
+                            cursor: 'pointer'
+                          }}
+                        >
+                          Complete Step
+                        </button>
+                      ) : (
+                        <span style={{ 
                           padding: '0.4rem 0.75rem', 
                           borderRadius: '6px', 
-                          border: '1px solid var(--border-color)', 
-                          outline: 'none',
-                          backgroundColor: step.status === 'Completed' ? 'var(--success)' : step.status === 'In Progress' ? 'var(--warning)' : '#f1f5f9',
-                          color: step.status === 'Pending' ? 'var(--text-primary)' : 'white',
-                          fontWeight: '600',
-                          cursor: 'pointer'
-                        }}
-                      >
-                        <option value="Pending">Pending</option>
-                        <option value="In Progress">In Progress</option>
-                        <option value="Completed">Completed</option>
-                      </select>
+                          border: '1px solid var(--success)',
+                          backgroundColor: '#dcfce7',
+                          color: 'var(--success)',
+                          fontWeight: '600'
+                        }}>
+                          Completed
+                        </span>
+                      )}
+                      
+                      {/* Commission and Reassign Buttons for Step */}
+                      {step.status === 'Completed' && currentUser && (currentUser.role === 'Admin' || currentUser.role === 'Project Manager' || currentUser.role === 'PM' || currentUser.role === 'Product Manager') && (
+                        step.commission_released ? (
+                          <span style={{ background: '#dcfce7', color: '#166534', padding: '0.4rem 0.75rem', borderRadius: '6px', fontSize: '0.75rem', fontWeight: '700', border: '1px solid #bbf7d0', display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
+                            <CheckCircle size={14} /> Paid
+                          </span>
+                        ) : (
+                          <div style={{ display: 'flex', gap: '0.5rem' }}>
+                            <button 
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleApproveStepCommission(step.id);
+                              }}
+                              style={{
+                                padding: '0.4rem 0.75rem',
+                                backgroundColor: '#10b981',
+                                color: 'white',
+                                border: 'none',
+                                borderRadius: '6px',
+                                fontSize: '0.75rem',
+                                fontWeight: '700',
+                                cursor: 'pointer',
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '0.35rem',
+                                boxShadow: '0 2px 4px rgba(16, 185, 129, 0.2)'
+                              }}
+                            >
+                              <CheckCircle size={14} /> Pay Comm.
+                            </button>
+                            <button 
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setStepToReassign(step);
+                                setIsReassignModalOpen(true);
+                              }}
+                              style={{
+                                padding: '0.4rem 0.75rem',
+                                backgroundColor: '#f59e0b',
+                                color: 'white',
+                                border: 'none',
+                                borderRadius: '6px',
+                                fontSize: '0.75rem',
+                                fontWeight: '700',
+                                cursor: 'pointer',
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '0.35rem',
+                                boxShadow: '0 2px 4px rgba(245, 158, 11, 0.2)'
+                              }}
+                            >
+                              <Clock size={14} /> Reassign
+                            </button>
+                          </div>
+                        )
+                      )}
                     </div>
                   </div>
 
@@ -299,6 +561,29 @@ export default function ProjectDetails() {
                                 <label>Created:</label>
                                 <p>{new Date(step.created_at).toLocaleDateString()}</p>
                               </div>
+                              {step.completed_at && (
+                                <div className="tp-col">
+                                  <label>Completed On:</label>
+                                  <p>{new Date(step.completed_at).toLocaleString()}</p>
+                                </div>
+                              )}
+                              {step.status === 'Completed' && step.completed_at && step.deadline && new Date(step.completed_at) > new Date(new Date(step.deadline).setHours(23, 59, 59, 999)) && currentUser?.role === 'Admin' && (
+                                <div className="tp-col" style={{ gridColumn: '1 / -1', marginTop: '1rem', padding: '1rem', backgroundColor: '#fef2f2', borderRadius: '8px', border: '1px solid #fecaca' }}>
+                                  <label style={{ color: '#b91c1c' }}>Admin Override: Late Delivery Penalty</label>
+                                  <p style={{ fontSize: '0.85rem', color: '#7f1d1d', margin: '0.25rem 0 0.75rem 0' }}>This step was delivered after its deadline. By default, the assigned member will receive 0 commission for this step.</p>
+                                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                    <span style={{ fontSize: '0.85rem', fontWeight: '600', color: '#991b1b' }}>Forgive late delivery and pay commission?</span>
+                                    <label className="toggle-switch" style={{ transform: 'scale(0.8)' }}>
+                                      <input 
+                                        type="checkbox" 
+                                        checked={!!step.forgive_late_commission} 
+                                        onChange={() => handleForgiveLate(step.id, step.forgive_late_commission)} 
+                                      />
+                                      <span className="slider round blue-slider"></span>
+                                    </label>
+                                  </div>
+                                </div>
+                              )}
                             </div>
                           </div>
                         )}
@@ -625,6 +910,52 @@ export default function ProjectDetails() {
           </div>
         )}
       </div>
+      {/* Reassign Step Modal */}
+      {isReassignModalOpen && stepToReassign && (
+        <div className="modal-overlay">
+          <div className="modal-content" style={{ maxWidth: '400px' }}>
+            <div className="modal-header">
+              <h2>Reassign Step</h2>
+              <button className="modal-close" onClick={() => setIsReassignModalOpen(false)}>
+                <X size={20} />
+              </button>
+            </div>
+            <form onSubmit={handleReassignSubmit}>
+              <div className="form-group" style={{ marginBottom: '1rem' }}>
+                <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: '600' }}>
+                  Select New Deadline for "{stepToReassign.title}"
+                </label>
+                <input 
+                  type="date" 
+                  required
+                  value={newDeadline}
+                  onChange={(e) => setNewDeadline(e.target.value)}
+                  style={{ width: '100%', padding: '0.6rem', borderRadius: '6px', border: '1px solid #cbd5e1' }}
+                />
+                <small style={{ display: 'block', marginTop: '0.5rem', color: '#64748b' }}>
+                  This will reset the step status back to 'Pending' and send it back to the assigned team member.
+                </small>
+              </div>
+              <div className="modal-actions" style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.5rem' }}>
+                <button 
+                  type="button" 
+                  onClick={() => setIsReassignModalOpen(false)}
+                  style={{ padding: '0.5rem 1rem', background: '#e2e8f0', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: '600' }}
+                >
+                  Cancel
+                </button>
+                <button 
+                  type="submit"
+                  style={{ padding: '0.5rem 1rem', background: '#f59e0b', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: '600' }}
+                >
+                  Confirm Reassignment
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 }

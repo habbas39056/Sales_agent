@@ -229,6 +229,34 @@ async function updateLiveDb() {
     await addColumnIfNotExists('project_steps', 'appealed_at', 'TIMESTAMP NULL');
     console.log('✅ Ensured project_steps deadline workflow columns exist.');
 
+    // 9. Expense Categories Table
+    await connection.query(`
+      CREATE TABLE IF NOT EXISTS expense_categories (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        name VARCHAR(255) NOT NULL UNIQUE,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+    `);
+    console.log('✅ Ensured expense_categories table exists.');
+
+    const [existingExpCategories] = await connection.query('SELECT COUNT(*) as count FROM expense_categories');
+    if (existingExpCategories[0].count === 0) {
+      const defaultExpCategories = [
+        'Software Subscriptions',
+        'Office Supplies',
+        'Marketing',
+        'Utilities',
+        'Payroll',
+        'Rent'
+      ];
+      for (const catName of defaultExpCategories) {
+        await connection.query('INSERT IGNORE INTO expense_categories (name) VALUES (?)', [catName]);
+      }
+      console.log('✅ Seeded default expense categories.');
+    }
+
+    await addColumnIfNotExists('expenses', 'category', 'VARCHAR(100) NULL');
+
     console.log('\n🎉 Live database update completed successfully!');
   } catch (error) {
     console.error('\n❌ Migration failed:', error);

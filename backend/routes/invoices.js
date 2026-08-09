@@ -297,8 +297,13 @@ router.put('/:id', async (req, res) => {
     if (!invoice) throw new Error('Invoice not found');
 
     const targetClientId = client_id || invoice.client_id;
-    const targetIssueDate = issue_date || (invoice.issue_date ? new Date(invoice.issue_date).toISOString().split('T')[0] : new Date().toISOString().split('T')[0]);
-    const targetDueDate = due_date || (invoice.due_date ? new Date(invoice.due_date).toISOString().split('T')[0] : new Date().toISOString().split('T')[0]);
+    const parseDate = (d) => {
+      if (!d) return new Date().toISOString().split('T')[0];
+      try { return new Date(d).toISOString().split('T')[0]; }
+      catch(e) { return new Date().toISOString().split('T')[0]; }
+    };
+    const targetIssueDate = parseDate(issue_date || invoice.issue_date);
+    const targetDueDate = parseDate(due_date || invoice.due_date);
     let targetProjectId = project_id !== undefined ? project_id : invoice.project_id;
     if (targetProjectId === '') targetProjectId = null;
 

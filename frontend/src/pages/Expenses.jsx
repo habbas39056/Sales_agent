@@ -15,6 +15,7 @@ export default function Expenses() {
   const [summary, setSummary] = useState({ cashInHand: 0, otherExpenses: 0, totalNetBalance: 0, bankTotals: {} });
   const [invoices, setInvoices] = useState([]);
   const [searchTerm, setSearchTerm] = useState('');
+  const [categories, setCategories] = useState([]);
   
   // Filters
   const [typeFilter, setTypeFilter] = useState('All Types');
@@ -30,10 +31,14 @@ export default function Expenses() {
   const [editingId, setEditingId] = useState(null);
   const [isManageBanksModalOpen, setIsManageBanksModalOpen] = useState(false);
   const [newBankName, setNewBankName] = useState('');
+  const [isManageCategoriesModalOpen, setIsManageCategoriesModalOpen] = useState(false);
+  const [newCategoryName, setNewCategoryName] = useState('');
+
   const [formData, setFormData] = useState({
     date: new Date().toISOString().split('T')[0],
     client: '',
     description: '',
+    category: '',
     mode: 'Cash',
     bank: '',
     reference: '',
@@ -46,7 +51,17 @@ export default function Expenses() {
     fetchClients();
     fetchBanks();
     fetchInvoices();
+    fetchCategories();
   }, []);
+
+  const fetchCategories = async () => {
+    try {
+      const res = await axios.get('/api/expense-categories');
+      setCategories(res.data);
+    } catch (err) {
+      console.error('Failed to fetch categories', err);
+    }
+  };
 
   const fetchInvoices = async () => {
     try {
@@ -114,6 +129,7 @@ export default function Expenses() {
         date: new Date().toISOString().split('T')[0],
         client: '',
         description: '',
+        category: '',
         mode: 'Cash',
         bank: '',
         reference: '',
@@ -133,6 +149,7 @@ export default function Expenses() {
       date: new Date(exp.date).toISOString().split('T')[0],
       client: exp.client || '',
       description: exp.description || '',
+      category: exp.category || '',
       mode: exp.mode || 'Cash',
       bank: exp.bank || '',
       reference: exp.reference || '',
@@ -176,6 +193,28 @@ export default function Expenses() {
     }
   };
 
+  const handleCreateCategory = async (e) => {
+    e.preventDefault();
+    try {
+      await axios.post('/api/expense-categories', { name: newCategoryName });
+      setNewCategoryName('');
+      fetchCategories();
+    } catch (err) {
+      alert(err.response?.data?.error || 'Error creating category');
+    }
+  };
+
+  const handleDeleteCategory = async (id) => {
+    if (window.confirm("Delete this category?")) {
+      try {
+        await axios.delete(`/api/expense-categories/${id}`);
+        fetchCategories();
+      } catch (err) {
+        alert(err.response?.data?.error || 'Error deleting category');
+      }
+    }
+  };
+
   const generatePDF = () => {
     const doc = new jsPDF();
     doc.setFontSize(20);
@@ -187,10 +226,11 @@ export default function Expenses() {
     doc.text(`Total Expenses: PKR ${dynamicOtherExpenses.toFixed(2)}`, 14, 46);
     doc.text(`Total Net Balance: PKR ${dynamicNetBalance.toFixed(2)}`, 14, 52);
 
-    const tableColumn = ["Date", "Client/Party", "Description", "Mode", "Bank", "Ref", "Receipt", "Payment", "Balance"];
+    const tableColumn = ["Date", "Client/Party", "Category", "Description", "Mode", "Bank", "Ref", "Receipt", "Payment", "Balance"];
     const tableRows = filteredExpenses.map(exp => [
       new Date(exp.date).toLocaleDateString(),
       exp.client,
+      exp.category || '-',
       exp.description,
       exp.mode,
       exp.bank,
@@ -214,10 +254,10 @@ export default function Expenses() {
   const filteredExpenses = expenses.filter(exp => {
     const term = searchTerm.trim().toLowerCase();
 
-    // Multi-field search across Client, Description, Mode, Bank, Reference, Amount, and ID
     const matchesSearch = !term || 
       (exp.client && exp.client.toLowerCase().includes(term)) || 
       (exp.description && exp.description.toLowerCase().includes(term)) || 
+      (exp.category && exp.category.toLowerCase().includes(term)) || 
       (exp.mode && exp.mode.toLowerCase().includes(term)) || 
       (exp.bank && exp.bank.toLowerCase().includes(term)) || 
       (exp.reference && exp.reference.toLowerCase().includes(term)) || 
@@ -266,11 +306,16 @@ export default function Expenses() {
     : Number(summary.totalInvoiceBalance || 0);
 
   const dynamicBankTotals = {};
+  const dynamicCategoryTotals = {};
   if (isFiltered) {
     filteredExpenses.forEach(exp => {
       if (exp.bank && exp.bank.trim() !== '') {
         if (!dynamicBankTotals[exp.bank]) dynamicBankTotals[exp.bank] = 0;
         dynamicBankTotals[exp.bank] += Number(exp.receipt_amount || 0) - Number(exp.payment_amount || 0);
+      }
+      if (exp.category && exp.category.trim() !== '') {
+        if (!dynamicCategoryTotals[exp.category]) dynamicCategoryTotals[exp.category] = 0;
+        dynamicCategoryTotals[exp.category] += Number(exp.payment_amount || 0) - Number(exp.receipt_amount || 0);
       }
     });
   }
@@ -314,6 +359,9 @@ export default function Expenses() {
     <div className="expenses-container modern-ui">
       <div className="expenses-controls" style={{ justifyContent: 'flex-end', marginBottom: '1.5rem' }}>
         <div className="controls-right">
+          <button className="btn-outline" onClick={() => setIsManageCategoriesModalOpen(true)}>
+            <Briefcase size={16} /> Manage Expense
+          </button>
           <button className="btn-outline" onClick={() => setIsManageBanksModalOpen(true)}>
             <Building2 size={16} /> Manage Banks
           </button>
@@ -326,6 +374,7 @@ export default function Expenses() {
               date: new Date().toISOString().split('T')[0],
               client: '',
               description: '',
+              category: '',
               mode: 'Cash',
               bank: '',
               reference: '',
@@ -394,6 +443,25 @@ export default function Expenses() {
               <div className="expense-card-info">
                 <p>{bank.name.toUpperCase()} {isFiltered ? '(FILTERED)' : ''}</p>
                 <h3 style={{ color: bankBalance < 0 ? 'var(--danger)' : 'var(--text-primary)' }}>PKR {bankBalance.toFixed(2)}
+                </h3>
+              </div>
+            </div>
+          );
+        })}
+
+        {/* Dynamic Category Cards */}
+        {categories.map(category => {
+          const categoryBalance = isFiltered 
+            ? (dynamicCategoryTotals[category.name] || 0) 
+            : (summary.categoryTotals?.[category.name] || 0);
+          return (
+            <div className="expense-card" key={category.id} style={{ flex: '1 1 300px' }}>
+              <div className="expense-card-icon" style={{ backgroundColor: '#fef3c7', color: '#d97706' }}>
+                <Briefcase size={24} />
+              </div>
+              <div className="expense-card-info">
+                <p>{category.name.toUpperCase()} {isFiltered ? '(FILTERED)' : ''}</p>
+                <h3 style={{ color: categoryBalance > 0 ? 'var(--danger)' : 'var(--text-primary)' }}>PKR {categoryBalance.toFixed(2)}
                 </h3>
               </div>
             </div>
@@ -524,6 +592,7 @@ export default function Expenses() {
               <tr>
                 <th>DATE</th>
                 <th>PARTY/CLIENT</th>
+                <th>EXPENSE</th>
                 <th>DESCRIPTION</th>
                 <th>MODE</th>
                 <th>BANK</th>
@@ -539,6 +608,7 @@ export default function Expenses() {
                 <tr key={exp.id}>
                   <td>{new Date(exp.date).toLocaleDateString()}</td>
                   <td style={{fontWeight: '600'}}>{exp.client}</td>
+                  <td>{exp.category || '-'}</td>
                   <td>{exp.description}</td>
                   <td>{exp.mode}</td>
                   <td>{exp.bank || '-'}</td>
@@ -597,6 +667,16 @@ export default function Expenses() {
                 <select name="type" value={formData.type} onChange={handleInputChange} required>
                   <option value="receipt">Receipt (Cash In)</option>
                   <option value="payment">Payment (Expense / Cash Out)</option>
+                </select>
+              </div>
+
+              <div className="form-group">
+                <label>Expense</label>
+                <select name="category" value={formData.category} onChange={handleInputChange}>
+                  <option value="">- Select Expense (Optional) -</option>
+                  {categories.map(c => (
+                    <option key={c.id} value={c.name}>{c.name}</option>
+                  ))}
                 </select>
               </div>
 
@@ -750,6 +830,42 @@ export default function Expenses() {
                 value={newBankName} 
                 onChange={(e) => setNewBankName(e.target.value)} 
                 placeholder="New Bank Name" 
+                required 
+                style={{ flex: 1, padding: '0.5rem', borderRadius: '6px', border: '1px solid #cbd5e1' }}
+              />
+              <button type="submit" className="btn-primary" style={{ padding: '0.5rem 1rem', borderRadius: '6px' }}>Add</button>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Manage Categories Modal */}
+      {isManageCategoriesModalOpen && (
+        <div className="modal-overlay">
+          <div className="modal-content" style={{ maxWidth: '400px' }}>
+            <div className="modal-header">
+              <h2>Manage Categories</h2>
+              <button className="btn-close" onClick={() => setIsManageCategoriesModalOpen(false)}><X size={24} /></button>
+            </div>
+            <div className="banks-list" style={{ marginBottom: '1.5rem', maxHeight: '200px', overflowY: 'auto' }}>
+              {categories.length === 0 && <p style={{ color: '#64748b', fontSize: '0.9rem' }}>No categories added yet.</p>}
+              <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
+                {categories.map(category => (
+                  <li key={category.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0.75rem', borderBottom: '1px solid #e2e8f0' }}>
+                    <span style={{ fontWeight: '500' }}>{category.name}</span>
+                    <button className="btn-icon delete-btn" onClick={() => handleDeleteCategory(category.id)} title="Delete Category">
+                      <X size={16} />
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </div>
+            <form onSubmit={handleCreateCategory} style={{ display: 'flex', gap: '0.5rem' }}>
+              <input 
+                type="text" 
+                value={newCategoryName} 
+                onChange={(e) => setNewCategoryName(e.target.value)} 
+                placeholder="New Category Name" 
                 required 
                 style={{ flex: 1, padding: '0.5rem', borderRadius: '6px', border: '1px solid #cbd5e1' }}
               />

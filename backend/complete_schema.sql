@@ -133,6 +133,7 @@ CREATE TABLE `project_steps` (
   `client_form_answers` json DEFAULT NULL,
   `allow_revision` tinyint(1) DEFAULT '0',
   `attachments` mediumtext,
+  `invoice_item_ids` json DEFAULT NULL,
   PRIMARY KEY (`id`),
   KEY `project_id` (`project_id`),
   KEY `assignee_id` (`assignee_id`),

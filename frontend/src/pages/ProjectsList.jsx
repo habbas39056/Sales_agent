@@ -33,7 +33,7 @@ export default function ProjectsList() {
     invoice_id: '',
     pm_id: '',
     team_member_ids: [],
-    service_type: '',
+    service_type: [],
     revision_cycles_included: 0,
     terms_and_conditions: ''
   });
@@ -192,7 +192,7 @@ export default function ProjectsList() {
         invoice_id: '',
         pm_id: '',
         team_member_ids: [],
-        service_type: categories.length > 0 ? categories[0].name : '',
+        service_type: [],
         revision_cycles_included: 0,
         terms_and_conditions: ''
       });
@@ -208,6 +208,9 @@ export default function ProjectsList() {
     const existingMemberIds = project.assigned_members && project.assigned_members.length > 0
       ? project.assigned_members.map(m => m.id)
       : (project.pm_id ? [project.pm_id] : []);
+    
+    let st = project.service_type;
+    try { if (typeof st === 'string' && st.startsWith('[')) st = JSON.parse(st); } catch(e){}
 
     setEditFormData({
       title: project.title || '',
@@ -215,7 +218,7 @@ export default function ProjectsList() {
       client_id: project.client_id || '',
       pm_id: project.pm_id || '',
       team_member_ids: existingMemberIds,
-      service_type: project.service_type || '',
+      service_type: Array.isArray(st) ? st : (st ? [st] : []),
       revision_cycles_included: project.revision_cycles_included || 0,
       terms_and_conditions: project.terms_and_conditions || ''
     });
@@ -252,13 +255,23 @@ export default function ProjectsList() {
     const matchesSearch = project.title.toLowerCase().includes(searchTerm.toLowerCase()) || 
                           (project.client_name && project.client_name.toLowerCase().includes(searchTerm.toLowerCase()));
     
-    // Simplistic mapping for Active/Pending/etc for display purposes based on DB ENUM
-    const isCompleted = project.status === 'Completed' || project.status === 'Commission Released';
-    const displayStatus = isCompleted ? 'Completed' : 'Active';
-
-    const matchesStatus = statusFilter === 'All Statuses' || displayStatus === statusFilter;
-    const matchesService = serviceFilter === 'All Services' || project.service_type === serviceFilter;
-    
+    const matchesStatus = statusFilter === 'All Statuses' || project.status === statusFilter;
+    let matchesService = false;
+    if (serviceFilter === 'All Services') {
+      matchesService = true;
+    } else {
+      let st = project.service_type;
+      try {
+        if (typeof st === 'string' && st.startsWith('[')) {
+          st = JSON.parse(st);
+        }
+      } catch(e){}
+      if (Array.isArray(st)) {
+        matchesService = st.includes(serviceFilter);
+      } else {
+        matchesService = st === serviceFilter;
+      }
+    }
     return matchesSearch && matchesStatus && matchesService;
   });
 
@@ -364,7 +377,18 @@ export default function ProjectsList() {
                       )}
                     </td>
                     <td>
-                      <span className="service-tag">{project.service_type || 'Unspecified'}</span>
+                      {(() => {
+                        let st = project.service_type;
+                        try {
+                          if (typeof st === 'string' && st.startsWith('[')) {
+                            st = JSON.parse(st);
+                          }
+                        } catch(e){}
+                        if (Array.isArray(st) && st.length > 0) {
+                          return <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap' }}>{st.map((s, i) => <span key={i} className="service-tag">{s}</span>)}</div>;
+                        }
+                        return <span className="service-tag">{st || 'Unspecified'}</span>;
+                      })()}
                     </td>
                     <td>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', minWidth: '160px' }}>
@@ -376,7 +400,7 @@ export default function ProjectsList() {
                     </td>
                     <td>
                       <span className={`status-pill ${isCompleted ? 'completed' : 'active'}`}>
-                        {isCompleted ? 'Completed' : 'Active'}
+                        {project.status || 'Active'}
                       </span>
                     </td>
                     <td style={{ textAlign: 'right', paddingRight: '1.25rem' }}>
@@ -455,7 +479,6 @@ export default function ProjectsList() {
                     ))}
                   </select>
                 </div>
-
               </div>
 
               <div className="form-group">
@@ -514,14 +537,40 @@ export default function ProjectsList() {
               </div>
 
               <div className="form-row">
-                <div className="form-group">
-                  <label>Service Type *</label>
-                  <select name="service_type" value={formData.service_type} onChange={handleInputChange} required>
-                    {availableServices.map(s => <option key={s} value={s}>{s}</option>)}
+                <div className="form-group" style={{ flex: 2 }}>
+                  <label>Service Type(s) *</label>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem', marginBottom: '0.5rem' }}>
+                    {(formData.service_type || []).map(st => (
+                      <span key={st} style={{ background: '#e0e7ff', color: '#4338ca', padding: '4px 10px', borderRadius: '12px', fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                        {st}
+                        <X 
+                          size={14} 
+                          style={{ cursor: 'pointer' }} 
+                          onClick={() => setFormData(prev => ({...prev, service_type: prev.service_type.filter(s => s !== st)}))} 
+                        />
+                      </span>
+                    ))}
+                  </div>
+                  <select 
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      if (val && !(formData.service_type || []).includes(val)) {
+                        setFormData(prev => ({
+                          ...prev,
+                          service_type: [...(prev.service_type || []), val]
+                        }));
+                      }
+                      e.target.value = "";
+                    }}
+                  >
+                    <option value="">+ Select Service Type...</option>
+                    {availableServices.filter(s => !(formData.service_type || []).includes(s)).map(s => (
+                      <option key={s} value={s}>{s}</option>
+                    ))}
                   </select>
                 </div>
                 
-                <div className="form-group">
+                <div className="form-group" style={{ flex: 1 }}>
                   <label>Revision Cycles Included</label>
                   <input type="number" name="revision_cycles_included" value={formData.revision_cycles_included} onChange={handleInputChange} min="0" />
                 </div>
@@ -578,7 +627,6 @@ export default function ProjectsList() {
                     {clients.map(c => <option key={c.id} value={c.id}>{c.full_name} ({c.business_name || 'Individual'})</option>)}
                   </select>
                 </div>
-
               </div>
 
               <div className="form-group">
@@ -638,14 +686,35 @@ export default function ProjectsList() {
 
               <div className="form-row">
                 <div className="form-group">
-                  <label>Service Type *</label>
+                  <label>Service Type(s) *</label>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem', marginBottom: '0.5rem' }}>
+                    {(editFormData.service_type || []).map(st => (
+                      <span key={st} style={{ background: '#e0e7ff', color: '#4338ca', padding: '4px 10px', borderRadius: '12px', fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                        {st}
+                        <X 
+                          size={14} 
+                          style={{ cursor: 'pointer' }} 
+                          onClick={() => setEditFormData(prev => ({...prev, service_type: prev.service_type.filter(s => s !== st)}))} 
+                        />
+                      </span>
+                    ))}
+                  </div>
                   <select 
-                    name="service_type" 
-                    value={editFormData.service_type} 
-                    onChange={(e) => setEditFormData({ ...editFormData, service_type: e.target.value })} 
-                    required
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      if (val && !(editFormData.service_type || []).includes(val)) {
+                        setEditFormData(prev => ({
+                          ...prev,
+                          service_type: [...(prev.service_type || []), val]
+                        }));
+                      }
+                      e.target.value = "";
+                    }}
                   >
-                    {availableServices.map(s => <option key={s} value={s}>{s}</option>)}
+                    <option value="">+ Select Service Type...</option>
+                    {availableServices.filter(s => !(editFormData.service_type || []).includes(s)).map(s => (
+                      <option key={s} value={s}>{s}</option>
+                    ))}
                   </select>
                 </div>
                 

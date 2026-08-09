@@ -15,6 +15,9 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [performanceFilter, setPerformanceFilter] = useState('This Year');
+  const [dashboardCategory, setDashboardCategory] = useState('All Categories');
+  const [dashboardStartDate, setDashboardStartDate] = useState('');
+  const [dashboardEndDate, setDashboardEndDate] = useState('');
   const navigate = useNavigate();
 
   const currentUserStr = localStorage.getItem('user');
@@ -49,7 +52,8 @@ export default function Dashboard() {
         const requests = [
           axios.get(`/api/clients${queryParams}`),
           axios.get(`/api/projects${queryParams}`),
-          axios.get(`/api/invoices${queryParams}`)
+          axios.get(`/api/invoices${queryParams}`),
+          axios.get('/api/settings')
         ];
         if (user?.role === 'Admin') {
           requests.push(axios.get('/api/users'));
@@ -59,8 +63,25 @@ export default function Dashboard() {
         setClients(results[0].data);
         setProjects(results[1].data);
         setInvoices(results[2].data);
-        if (results[3]) {
-          setTeamMembers(results[3].data || []);
+        
+        const settingsRes = results[3];
+        if (settingsRes && settingsRes.data) {
+          if (settingsRes.data.dashboard_default_date) {
+            setPerformanceFilter(settingsRes.data.dashboard_default_date);
+          }
+          if (settingsRes.data.dashboard_default_category) {
+            setDashboardCategory(settingsRes.data.dashboard_default_category);
+          }
+          if (settingsRes.data.dashboard_start_date) {
+            setDashboardStartDate(settingsRes.data.dashboard_start_date);
+          }
+          if (settingsRes.data.dashboard_end_date) {
+            setDashboardEndDate(settingsRes.data.dashboard_end_date);
+          }
+        }
+
+        if (results[4]) {
+          setTeamMembers(results[4].data || []);
         }
       } catch (error) {
         console.error('Failed to fetch dashboard data:', error);
@@ -72,13 +93,41 @@ export default function Dashboard() {
     fetchData();
   }, []);
 
-  const totalRevenue = invoices.reduce((sum, inv) => {
+  // Apply Dashboard Category & Date Filters
+  let filteredProjects = dashboardCategory === 'All Categories'
+    ? projects
+    : projects.filter(p => p.category === dashboardCategory);
+
+  let filteredInvoices = dashboardCategory === 'All Categories'
+    ? invoices
+    : invoices.filter(inv => {
+        const proj = projects.find(p => p.id === inv.project_id);
+        return proj && proj.category === dashboardCategory;
+      });
+
+  if (performanceFilter === 'Custom' && (dashboardStartDate || dashboardEndDate)) {
+    filteredProjects = filteredProjects.filter(p => {
+      const pDateStr = new Date(p.start_date || p.created_at).toISOString().slice(0, 10);
+      if (dashboardStartDate && pDateStr < dashboardStartDate) return false;
+      if (dashboardEndDate && pDateStr > dashboardEndDate) return false;
+      return true;
+    });
+
+    filteredInvoices = filteredInvoices.filter(inv => {
+      const invDateStr = new Date(inv.issue_date || inv.created_at).toISOString().slice(0, 10);
+      if (dashboardStartDate && invDateStr < dashboardStartDate) return false;
+      if (dashboardEndDate && invDateStr > dashboardEndDate) return false;
+      return true;
+    });
+  }
+
+  const totalRevenue = filteredInvoices.reduce((sum, inv) => {
     const amount = parseFloat(inv.amount || 0);
     const balance = parseFloat(inv.balance || 0);
     return sum + (amount - balance);
   }, 0);
 
-  const overdueInvoicesCount = invoices.filter(inv => inv.status === 'Overdue').length;
+  const overdueInvoicesCount = filteredInvoices.filter(inv => inv.status === 'Overdue').length;
 
   // Aggregate Data for Performance Overview (Bar Chart)
   let performanceData = [];
@@ -97,7 +146,7 @@ export default function Dashboard() {
       });
     }
 
-    invoices.forEach(inv => {
+    filteredInvoices.forEach(inv => {
       if (!inv.issue_date) return;
       const d = new Date(inv.issue_date);
       const entry = performanceData.find(p => p.monthInt === d.getMonth() && p.yearInt === d.getFullYear());
@@ -113,7 +162,7 @@ export default function Dashboard() {
     for (let i = 1; i <= 4; i++) {
       performanceData.push({ name: `Week ${i}`, Sales: 0, Revenue: 0, weekInt: i });
     }
-    invoices.forEach(inv => {
+    filteredInvoices.forEach(inv => {
       if (!inv.issue_date) return;
       const d = new Date(inv.issue_date);
       if (d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear()) {
@@ -139,7 +188,7 @@ export default function Dashboard() {
         dateString: d.toDateString()
       });
     }
-    invoices.forEach(inv => {
+    filteredInvoices.forEach(inv => {
       if (!inv.issue_date) return;
       const d = new Date(inv.issue_date);
       const entry = performanceData.find(p => p.dateString === d.toDateString());
@@ -150,17 +199,37 @@ export default function Dashboard() {
         entry.Revenue += (amount - balance);
       }
     });
+  } else if (performanceFilter === 'Custom' && (dashboardStartDate || dashboardEndDate)) {
+    // Basic day-by-day aggregate for custom range
+    const start = dashboardStartDate ? new Date(dashboardStartDate) : new Date(now.getFullYear(), 0, 1);
+    const end = dashboardEndDate ? new Date(dashboardEndDate) : now;
+    
+    // Create an entry for each date with data
+    const tempMap = {};
+    filteredInvoices.forEach(inv => {
+      if (!inv.issue_date && !inv.created_at) return;
+      const d = new Date(inv.issue_date || inv.created_at);
+      const dateString = d.toISOString().slice(0, 10);
+      if (!tempMap[dateString]) {
+        tempMap[dateString] = { name: dateString, Sales: 0, Revenue: 0, ms: d.getTime() };
+      }
+      const amount = parseFloat(inv.amount || 0);
+      const balance = parseFloat(inv.balance || 0);
+      tempMap[dateString].Sales += amount;
+      tempMap[dateString].Revenue += (amount - balance);
+    });
+    performanceData = Object.values(tempMap).sort((a,b) => a.ms - b.ms);
   }
 
   // Sales Overview Radial Gauge
-  const totalInvoiced = invoices.reduce((sum, inv) => sum + parseFloat(inv.amount || 0), 0);
+  const totalInvoiced = filteredInvoices.reduce((sum, inv) => sum + parseFloat(inv.amount || 0), 0);
   const paidPercentage = totalInvoiced > 0 ? Math.round((totalRevenue / totalInvoiced) * 100) : 0;
   const gaugeData = [
     { name: 'Paid', value: paidPercentage },
     { name: 'Unpaid', value: 100 - paidPercentage }
   ];
 
-  const recentInvoices = [...invoices]
+  const recentInvoices = [...filteredInvoices]
     .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
     .filter(inv => inv.invoice_number.toLowerCase().includes(searchTerm.toLowerCase()) || 
                    (inv.client_name && inv.client_name.toLowerCase().includes(searchTerm.toLowerCase())))
@@ -189,7 +258,7 @@ export default function Dashboard() {
   const currentYear = targetDateObj.getFullYear();
   const monthGoalTitle = `Monthly Goal — ${currentMonthName} ${currentYear}`;
 
-  const currentMonthInvoices = invoices.filter(inv => {
+  const currentMonthInvoices = filteredInvoices.filter(inv => {
     if (!inv.issue_date && !inv.created_at) return false;
     const d = new Date(inv.issue_date || inv.created_at);
     return d.getMonth() === targetMonth && d.getFullYear() === targetYear;
@@ -252,6 +321,27 @@ export default function Dashboard() {
   return (
     <div className="dashboard-container modern-ui">
       
+      {(dashboardCategory !== 'All Categories' || performanceFilter === 'Custom') && (
+        <div style={{
+          backgroundColor: '#e0f2fe',
+          color: '#0284c7',
+          padding: '0.5rem 1rem',
+          borderRadius: '6px',
+          marginBottom: '1rem',
+          fontWeight: '500',
+          display: 'inline-flex',
+          alignItems: 'center',
+          gap: '0.5rem'
+        }}>
+          <span>
+            Showing Data For: 
+            {dashboardCategory !== 'All Categories' && <strong> {dashboardCategory}</strong>}
+            {performanceFilter === 'Custom' && <strong> [Custom Dates Active]</strong>}
+          </span>
+          <span style={{fontSize: '0.8rem', opacity: 0.8}}>(Configure in Settings)</span>
+        </div>
+      )}
+
       {/* Top Stat Cards Grid */}
       <div className="stats-grid-4">
         <div className="stat-card-ref primary-card">
@@ -286,10 +376,9 @@ export default function Dashboard() {
           <div className="stat-content-ref">
             <span className="stat-title-ref">Total Projects</span>
             <div className="stat-val-row">
-              <span className="stat-number-ref">{projects.length}</span>
-              <span className="stat-badge-ref negative">↓ 6.0%</span>
+              <span className="stat-number-ref">{filteredProjects.length}</span>
+              <span className="stat-badge-ref positive">On Track</span>
             </div>
-            <span className="stat-subtitle-ref">Last month: 60</span>
           </div>
           <div className="stat-icon-ref icon-blue">
             <Package size={20} />

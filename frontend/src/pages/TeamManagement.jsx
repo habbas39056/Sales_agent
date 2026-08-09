@@ -37,19 +37,22 @@ export default function TeamManagement() {
   ];
 
   const availableModules = [
-    'DASHBOARD', 'CLIENTS', 'PROJECTS', 'INVOICES', 'CASHBOOK',
-    'COMMISSIONS', 'REPORTS', 'STAFF MANAGEMENT'
+    'DASHBOARD', 'CLIENTS', 'PROJECTS', 'DEADLINES', 'INVOICES', 'CASHBOOK',
+    'COMMISSIONS', 'PAYROLL', 'REPORTS', 'STAFF MANAGEMENT', 'SETTINGS'
   ];
 
   const moduleDisplayNames = {
     'DASHBOARD': 'Dashboard',
     'CLIENTS': 'Client Management',
     'PROJECTS': 'Project Creation',
+    'DEADLINES': 'Deadline Workflow',
     'INVOICES': 'Invoice Management',
     'CASHBOOK': 'Expenses',
     'COMMISSIONS': 'Commissions',
+    'PAYROLL': 'Payroll',
     'REPORTS': 'System Reports',
-    'STAFF MANAGEMENT': 'Team Management'
+    'STAFF MANAGEMENT': 'Team Management',
+    'SETTINGS': 'Settings'
   };
 
   useEffect(() => {
@@ -385,22 +388,18 @@ export default function TeamManagement() {
                     placeholder="e.g. 1000000"
                   />
                 </div>
-
-                {(formData.role === 'Sales' || formData.role === 'Sales Rep') && (
-                  <div className="form-group" style={{ flex: '1 1 200px' }}>
-                    <label>COMMISSION PERCENTAGE (%) *</label>
-                    <input 
-                      type="number" 
-                      name="commission_percentage" 
-                      value={formData.commission_percentage} 
-                      onChange={handleInputChange} 
-                      min="0" 
-                      max="100" 
-                      step="0.01"
-                      required 
-                    />
-                  </div>
-                )}
+                <div className="form-group" style={{ flex: '1 1 200px' }}>
+                  <label>COMMISSION PERCENTAGE (%)</label>
+                  <input 
+                    type="number" 
+                    name="commission_percentage" 
+                    value={formData.commission_percentage} 
+                    onChange={handleInputChange} 
+                    min="0" 
+                    max="100" 
+                    step="0.01"
+                  />
+                </div>
               </div>
 
               <div className="form-group" style={{ marginTop: '1.5rem' }}>

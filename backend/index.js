@@ -29,11 +29,13 @@ app.use('/api/commissions', authMiddleware, require('./routes/commissions'));
 app.use('/api/reports', authMiddleware, require('./routes/reports'));
 app.use('/api/expenses', authMiddleware, require('./routes/expenses'));
 app.use('/api/banks', authMiddleware, require('./routes/banks'));
+app.use('/api/expense-categories', authMiddleware, require('./routes/expense_categories'));
 app.use('/api/search', authMiddleware, require('./routes/search'));
 app.use('/api/settings', authMiddleware, require('./routes/settings'));
 app.use('/api/payroll', authMiddleware, require('./routes/payroll'));
 app.use('/api/project-categories', authMiddleware, require('./routes/project_categories'));
 app.use('/api/deadlines', authMiddleware, require('./routes/deadlines'));
+app.use('/api/notifications', authMiddleware, require('./routes/notifications'));
 
 // Serve static frontend files
 app.use(express.static(path.join(__dirname, '../frontend/dist')));
@@ -45,7 +47,32 @@ app.use((req, res) => {
 
 const updateLiveDb = require('./update_live_db');
 
+const startDeadlineAutoAccepter = () => {
+  setInterval(async () => {
+    try {
+      const [steps] = await db.query(`
+        SELECT id FROM project_steps 
+        WHERE assignee_id IS NOT NULL 
+          AND deadline IS NOT NULL 
+          AND deadline_status = 'Pending Acceptance' 
+          AND created_at < NOW() - INTERVAL 12 HOUR
+      `);
+
+      for (const step of steps) {
+        await db.query(`UPDATE project_steps SET deadline_status = 'Accepted' WHERE id = ?`, [step.id]);
+        await db.query(`INSERT INTO step_activity (step_id, user_id, action_text) VALUES (?, NULL, 'System Auto-Accepted the deadline after 12 hours of inactivity.')`, [step.id]);
+      }
+      if (steps.length > 0) {
+        console.log(`Auto-accepted ${steps.length} pending deadlines.`);
+      }
+    } catch (error) {
+      console.error('Error in deadline auto-accepter:', error);
+    }
+  }, 60 * 60 * 1000); // Check every 1 hour
+};
+
 app.listen(PORT, '0.0.0.0', async () => {
   console.log(`Server running on port ${PORT}`);
   await updateLiveDb();
+  startDeadlineAutoAccepter();
 });

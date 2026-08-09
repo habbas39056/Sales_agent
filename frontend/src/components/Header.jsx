@@ -12,14 +12,52 @@ export default function Header() {
   const [showDropdown, setShowDropdown] = useState(false);
   const searchRef = useRef(null);
 
+  const [notifications, setNotifications] = useState([]);
+  const [showNotifDropdown, setShowNotifDropdown] = useState(false);
+  const notifRef = useRef(null);
+  const audioRef = useRef(null);
+
   useEffect(() => {
     const handleClickOutside = (event) => {
       if (searchRef.current && !searchRef.current.contains(event.target)) {
         setShowDropdown(false);
       }
+      if (notifRef.current && !notifRef.current.contains(event.target)) {
+        setShowNotifDropdown(false);
+      }
     };
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  useEffect(() => {
+    // Create audio element for buzzer
+    audioRef.current = new Audio('https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3'); // A simple clean ding sound
+  }, []);
+
+  const fetchNotifications = async () => {
+    const userStr = localStorage.getItem('user');
+    const u = userStr ? JSON.parse(userStr) : null;
+    if (!u) return;
+    try {
+      const res = await axios.get(`/api/notifications?user_id=${u.id}`);
+      setNotifications(prev => {
+        const prevUnread = prev.filter(n => !n.is_read).length;
+        const newUnread = res.data.filter(n => !n.is_read).length;
+        if (newUnread > prevUnread && audioRef.current) {
+          audioRef.current.play().catch(e => console.log('Audio play failed:', e));
+        }
+        return res.data;
+      });
+    } catch (e) {
+      console.error('Failed to fetch notifications:', e);
+    }
+  };
+
+  useEffect(() => {
+    fetchNotifications();
+    const interval = setInterval(fetchNotifications, 30000); // 30 sec polling
+    return () => clearInterval(interval);
   }, []);
 
   useEffect(() => {
@@ -195,10 +233,72 @@ export default function Header() {
             }}>Wipe Data</button>
           )}
 
-          <button className="header-icon-btn">
-            <Bell size={20} />
-            <span className="notification-dot"></span>
-          </button>
+          <div className="header-notifications" ref={notifRef} style={{ position: 'relative' }}>
+            <button 
+              className="header-icon-btn" 
+              onClick={() => setShowNotifDropdown(!showNotifDropdown)}
+            >
+              <Bell size={20} />
+              {notifications.filter(n => !n.is_read).length > 0 && (
+                <span className="notification-dot" style={{ position: 'absolute', top: 5, right: 6, background: '#ef4444', width: 10, height: 10, borderRadius: '50%', border: '2px solid white' }}></span>
+              )}
+            </button>
+            
+            {showNotifDropdown && (
+              <div className="notif-dropdown" style={{
+                position: 'absolute', top: '100%', right: 0, marginTop: '0.5rem', width: '320px',
+                backgroundColor: 'white', borderRadius: '12px', boxShadow: '0 8px 30px rgba(0,0,0,0.12)',
+                border: '1px solid var(--border-color)', zIndex: 1000, overflow: 'hidden'
+              }}>
+                <div style={{ padding: '1rem', borderBottom: '1px solid #f1f5f9', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <h3 style={{ margin: 0, fontSize: '1rem', fontWeight: '700', color: '#0f172a' }}>Notifications</h3>
+                  {notifications.filter(n => !n.is_read).length > 0 && (
+                    <button onClick={async () => {
+                      if(!user) return;
+                      await axios.put('/api/notifications/mark-all-read', { user_id: user.id });
+                      fetchNotifications();
+                    }} style={{ fontSize: '0.75rem', color: '#4338ca', background: 'none', border: 'none', cursor: 'pointer', fontWeight: '600' }}>Mark all read</button>
+                  )}
+                </div>
+                <div style={{ maxHeight: '350px', overflowY: 'auto' }}>
+                  {notifications.length === 0 ? (
+                    <div style={{ padding: '2rem 1rem', textAlign: 'center', color: '#64748b', fontSize: '0.85rem' }}>
+                      No recent notifications.
+                    </div>
+                  ) : (
+                    notifications.map(n => (
+                      <div 
+                        key={n.id} 
+                        onClick={async () => {
+                          if (!n.is_read) {
+                            await axios.put(`/api/notifications/${n.id}/read`);
+                            fetchNotifications();
+                          }
+                          setShowNotifDropdown(false);
+                          if (n.link) navigate(n.link);
+                        }}
+                        style={{ 
+                          padding: '0.85rem 1rem', borderBottom: '1px solid #f1f5f9', cursor: 'pointer',
+                          background: n.is_read ? '#ffffff' : '#f8fafc', transition: 'background 0.2s',
+                          display: 'flex', gap: '0.75rem'
+                        }}
+                        onMouseOver={(e) => e.currentTarget.style.backgroundColor = '#f1f5f9'}
+                        onMouseOut={(e) => e.currentTarget.style.backgroundColor = n.is_read ? '#ffffff' : '#f8fafc'}
+                      >
+                        <div style={{ flex: 1 }}>
+                          <p style={{ margin: '0 0 0.25rem 0', fontSize: '0.85rem', color: '#0f172a', fontWeight: n.is_read ? '500' : '700' }}>
+                            {n.message}
+                          </p>
+                          <span style={{ fontSize: '0.7rem', color: '#94a3b8' }}>{new Date(n.created_at).toLocaleString()}</span>
+                        </div>
+                        {!n.is_read && <div style={{ width: 8, height: 8, borderRadius: '50%', background: '#3b82f6', alignSelf: 'center' }}></div>}
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
           
           <div className="user-profile" style={{ cursor: 'pointer' }} onClick={() => navigate('/settings')}>
             {user?.profile_image_url ? (

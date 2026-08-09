@@ -81,6 +81,7 @@ function AppContent() {
   const isLoginPage = location.pathname === '/';
   const isClientPortal = location.pathname.startsWith('/client-portal');
   const showSidebar = isAuthenticated && !isLoginPage && !isClientPortal;
+  const showHeader = isAuthenticated && !isLoginPage;
 
   const handleLogout = () => {
     localStorage.removeItem('user');
@@ -143,7 +144,7 @@ function AppContent() {
               <li><Link to="/projects" className={`sidebar-link ${location.pathname === '/projects' ? 'active' : ''}`}><PlusCircle size={20} /> Project Creation</Link></li>
             )}
 
-            {(!user || user.role === 'Admin' || (user.modules_access && user.modules_access.includes('PROJECTS'))) && (
+            {(!user || user.role === 'Admin' || (user.modules_access && user.modules_access.includes('DEADLINES'))) && (
               <li><Link to="/deadlines" className={location.pathname.startsWith('/deadlines') ? 'active' : ''}><Clock size={20} /> Deadline Workflow</Link></li>
             )}
             
@@ -163,7 +164,9 @@ function AppContent() {
               <li><Link to="/reports" className={location.pathname.startsWith('/reports') ? 'active' : ''}><FileText size={20} /> System Reports</Link></li>
             )}
 
-            <li><Link to="/settings" className={`sidebar-link ${location.pathname.startsWith('/settings') ? 'active' : ''}`}><SettingsIcon size={20} /> Settings</Link></li>
+            {(!user || user.role === 'Admin' || (user.modules_access && user.modules_access.includes('SETTINGS'))) && (
+              <li><Link to="/settings" className={`sidebar-link ${location.pathname.startsWith('/settings') ? 'active' : ''}`}><SettingsIcon size={20} /> Settings</Link></li>
+            )}
           </ul>
 
           <div className="sidebar-footer" style={{ marginTop: 'auto', padding: '1.5rem', borderTop: '1px solid var(--border-color)' }}>
@@ -186,8 +189,8 @@ function AppContent() {
       )}
       
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', height: '100vh', overflow: 'hidden' }}>
-        {showSidebar && <Header />}
-        <main className="main-content" style={!showSidebar ? { padding: 0, maxWidth: '100%', height: '100vh' } : { height: 'calc(100vh - 70px)' }}>
+        {showHeader && <Header />}
+        <main className="main-content" style={(!showSidebar && !isClientPortal) ? { padding: 0, maxWidth: '100%', height: '100vh' } : { height: 'calc(100vh - 70px)' }}>
           <Routes>
             <Route path="/" element={<Login />} />
             <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
@@ -200,6 +203,7 @@ function AppContent() {
             <Route path="/projects" element={<ProtectedRoute><ProjectsList /></ProtectedRoute>} />
             <Route path="/projects/:id" element={<ProtectedRoute><ProjectDetails /></ProtectedRoute>} />
             <Route path="/projects/:id/steps/new" element={<ProtectedRoute><AddStep /></ProtectedRoute>} />
+            <Route path="/projects/:id/steps/:step_id/edit" element={<ProtectedRoute><AddStep /></ProtectedRoute>} />
             <Route path="/deadlines" element={<ProtectedRoute><DeadlineWorkflow /></ProtectedRoute>} />
             <Route path="/client-portal" element={<ProtectedRoute><ClientPortal /></ProtectedRoute>} />
             <Route path="/client-portal/revision/:projectId/:stepId" element={<ProtectedRoute><RequestRevision /></ProtectedRoute>} />

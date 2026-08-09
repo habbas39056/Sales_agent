@@ -141,6 +141,17 @@ CREATE TABLE IF NOT EXISTS subscriptions (
     FOREIGN KEY (client_id) REFERENCES clients(id) ON DELETE CASCADE
 );
 
+CREATE TABLE IF NOT EXISTS notifications (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    user_id INT NOT NULL,
+    message TEXT NOT NULL,
+    type VARCHAR(50),
+    link VARCHAR(255),
+    is_read BOOLEAN DEFAULT FALSE,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+);
+
 CREATE TABLE IF NOT EXISTS settings (
     setting_key VARCHAR(50) PRIMARY KEY,
     setting_value VARCHAR(255) NOT NULL
@@ -162,11 +173,22 @@ CREATE TABLE IF NOT EXISTS project_steps (
     status ENUM('Pending', 'In Progress', 'Completed') DEFAULT 'Pending',
     assignee_id INT,
     deadline DATE,
+    completed_at TIMESTAMP NULL,
+    forgive_late_commission BOOLEAN DEFAULT FALSE,
     requires_client_form BOOLEAN DEFAULT FALSE,
     client_form_schema JSON,
     client_form_answers JSON,
     requires_payment BOOLEAN DEFAULT FALSE,
+    allow_revision BOOLEAN DEFAULT FALSE,
+    attachments JSON,
+    invoice_item_ids JSON,
+    deadline_status ENUM('Pending Acceptance', 'Accepted', 'Appealed', 'Rejected') DEFAULT 'Pending Acceptance',
+    proposed_deadline DATE,
+    deadline_appeal_reason TEXT,
+    appealed_by INT,
+    appealed_at TIMESTAMP NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE,
-    FOREIGN KEY (assignee_id) REFERENCES users(id) ON DELETE SET NULL
+    FOREIGN KEY (assignee_id) REFERENCES users(id) ON DELETE SET NULL,
+    FOREIGN KEY (appealed_by) REFERENCES users(id) ON DELETE SET NULL
 );

@@ -305,6 +305,11 @@ export default function DeadlineWorkflow() {
                         ✅ Confirmed
                       </span>
                     )}
+                    {item.invoice_items && item.invoice_items.length > 0 && (
+                      <span style={{ background: '#fdf4ff', color: '#c026d3', fontSize: '0.7rem', padding: '2px 6px', borderRadius: '8px', fontWeight: '700', display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
+                        🧾 Items: {item.invoice_items.map(i => i.description).join(', ')}
+                      </span>
+                    )}
                   </div>
 
                   <div style={{ fontSize: '0.85rem', color: '#64748b' }}>
@@ -369,7 +374,7 @@ export default function DeadlineWorkflow() {
 
                 {/* Actions Footer */}
                 <div className="appeal-actions" style={{ flexWrap: 'wrap', gap: '0.4rem' }}>
-                  {isAppealed && (
+                  {isAppealed && (currentUser.role === 'Admin' || currentUser.role === 'Product Manager' || currentUser.role === 'PM' || currentUser.role === 'Project Manager') && (
                     <>
                       <button 
                         className="btn-approve-appeal"

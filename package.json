@@ -7,6 +7,7 @@
     "start:backend": "cd backend && npx nodemon index.js",
     "start:frontend": "cd frontend && npm run dev",
     "fullstack": "concurrently \"npm run start:backend\" \"npm run start:frontend\"",
+    "dev": "npm run fullstack",
     "build": "cd frontend && npm run build"
   },
   "keywords": [],

@@ -445,6 +445,28 @@ export default function ProductionPortal() {
                                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
                                   <span className="prod-step-title">{step.title}</span>
                                   
+                                  {/* Step Deadline Urgency Indicator */}
+                                  {step.deadline && step.status !== 'Completed' && (
+                                    (() => {
+                                      const sdl = getDeadlineInfo(step.deadline);
+                                      if (sdl.isOverdue || sdl.isSoon) {
+                                        return (
+                                          <span style={{ 
+                                            background: sdl.isOverdue ? '#fee2e2' : '#fef3c7', 
+                                            color: sdl.isOverdue ? '#b91c1c' : '#b45309', 
+                                            fontSize: '0.72rem', 
+                                            padding: '2px 8px', 
+                                            borderRadius: '10px', 
+                                            fontWeight: '800' 
+                                          }}>
+                                            {sdl.label}
+                                          </span>
+                                        );
+                                      }
+                                      return null;
+                                    })()
+                                  )}
+                                  
                                   {/* Deadline Status Badges */}
                                   {step.deadline_status === 'Accepted' && (
                                     <span style={{ background: '#d1fae5', color: '#047857', fontSize: '0.72rem', padding: '2px 8px', borderRadius: '10px', fontWeight: '700' }}>
@@ -510,25 +532,42 @@ export default function ProductionPortal() {
                                   </button>
                                 )}
 
-                                {/* Status Dropdown */}
-                                <select 
-                                  value={step.status || 'Pending'}
-                                  onChange={(e) => handleStepStatusChange(p.id, step.id, e.target.value)}
-                                  style={{ 
+                                {/* Status Button */}
+                                {step.status !== 'Completed' ? (
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      if (window.confirm('Are you sure you want to mark this step as completed?')) {
+                                        handleStepStatusChange(p.id, step.id, 'Completed');
+                                      }
+                                    }}
+                                    style={{
+                                      padding: '0.35rem 0.75rem',
+                                      borderRadius: '6px',
+                                      fontSize: '0.75rem',
+                                      fontWeight: '700',
+                                      border: 'none',
+                                      backgroundColor: '#10b981',
+                                      color: '#ffffff',
+                                      cursor: 'pointer',
+                                      boxShadow: '0 1px 2px rgba(0,0,0,0.05)'
+                                    }}
+                                  >
+                                    Complete Step
+                                  </button>
+                                ) : (
+                                  <span style={{ 
                                     padding: '0.3rem 0.6rem', 
                                     borderRadius: '6px', 
                                     fontSize: '0.78rem', 
                                     fontWeight: '700', 
-                                    border: '1px solid #cbd5e1',
-                                    backgroundColor: step.status === 'Completed' ? '#d1fae5' : step.status === 'In Progress' ? '#fef3c7' : '#f1f5f9',
-                                    color: step.status === 'Completed' ? '#047857' : step.status === 'In Progress' ? '#b45309' : '#475569',
-                                    cursor: 'pointer'
-                                  }}
-                                >
-                                  <option value="Pending">Pending</option>
-                                  <option value="In Progress">In Progress</option>
-                                  <option value="Completed">Completed</option>
-                                </select>
+                                    border: '1px solid #10b981',
+                                    backgroundColor: '#d1fae5',
+                                    color: '#047857'
+                                  }}>
+                                    Completed
+                                  </span>
+                                )}
                               </div>
                             </div>
                           );

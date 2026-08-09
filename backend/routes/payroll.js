@@ -83,6 +83,16 @@ router.get('/', async (req, res) => {
 
     const [rows] = await db.query(query, params);
 
+    // Fetch penalties for this month
+    const [penalties] = await db.query(
+      `SELECT sp.*, ps.title as step_title, p.title as project_title 
+       FROM salary_penalties sp
+       LEFT JOIN project_steps ps ON sp.step_id = ps.id
+       LEFT JOIN projects p ON ps.project_id = p.id
+       WHERE sp.month = ?`,
+      [targetMonth]
+    );
+
     // Account Balances Calculation from Cashbook/Expenses
     const [allExpenses] = await db.query('SELECT mode, bank, receipt_amount, payment_amount FROM expenses');
     let cashInHand = 0;
@@ -108,6 +118,7 @@ router.get('/', async (req, res) => {
     res.json({ 
       month: targetMonth, 
       payrolls: rows,
+      penalties: penalties,
       accounts: {
         cashInHand,
         totalNetBalance,
@@ -146,15 +157,22 @@ router.post('/generate', async (req, res) => {
       );
       const advSalary = parseFloat(advRow.total_adv || 0);
 
+      // Check total late penalties for this user in targetMonth
+      const [[penRow]] = await connection.query(
+        `SELECT COALESCE(SUM(amount), 0.00) as total_pen FROM salary_penalties WHERE user_id = ? AND month = ?`,
+        [emp.id, targetMonth]
+      );
+      const otherDeductions = parseFloat(penRow.total_pen || 0);
+
       const grossSalary = baseSalary;
-      const totalDeductions = advSalary;
+      const totalDeductions = advSalary + otherDeductions;
       const netSalary = Math.max(0, grossSalary - totalDeductions);
 
       // INSERT IGNORE so existing customized payroll records for this month are preserved
       const [result] = await connection.query(
         `INSERT IGNORE INTO payrolls (user_id, month, base_salary, overtime_allowance, bonus, gross_salary, advance_salary, tax_deduction, other_deductions, deductions, net_salary, status)
-         VALUES (?, ?, ?, 0.00, 0.00, ?, ?, 0.00, 0.00, ?, ?, 'Pending')`,
-        [emp.id, targetMonth, baseSalary, grossSalary, advSalary, totalDeductions, netSalary]
+         VALUES (?, ?, ?, 0.00, 0.00, ?, ?, 0.00, ?, ?, ?, 'Pending')`,
+        [emp.id, targetMonth, baseSalary, grossSalary, advSalary, otherDeductions, totalDeductions, netSalary]
       );
 
       if (result.affectedRows > 0) {

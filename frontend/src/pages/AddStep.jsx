@@ -5,7 +5,7 @@ import { FileText, Plus, ExternalLink, Calendar, Trash2, Edit, CreditCard } from
 import './AddStep.css';
 
 export default function AddStep() {
-  const { id } = useParams();
+  const { id, step_id } = useParams();
   const navigate = useNavigate();
 
   const [project, setProject] = useState(null);
@@ -21,7 +21,8 @@ export default function AddStep() {
     requires_client_form: false,
     client_form_schema: [],
     requires_payment: false,
-    allow_revision: false
+    allow_revision: false,
+    invoice_item_ids: []
   });
 
   const [isEditingInvoice, setIsEditingInvoice] = useState(false);
@@ -30,7 +31,7 @@ export default function AddStep() {
 
   useEffect(() => {
     fetchData();
-  }, [id]);
+  }, [id, step_id]);
 
   const fetchData = async () => {
     try {
@@ -43,6 +44,40 @@ export default function AddStep() {
       
       const sRes = await axios.get('/api/users/specialists');
       setSpecialists(sRes.data);
+
+      if (step_id && pRes.data.steps) {
+        const step = pRes.data.steps.find(s => String(s.id) === String(step_id));
+        if (step) {
+          let parsedSchema = [];
+          try {
+            if (step.client_form_schema) {
+              parsedSchema = typeof step.client_form_schema === 'string' ? JSON.parse(step.client_form_schema) : step.client_form_schema;
+            }
+          } catch(e) { console.error('Error parsing schema', e); }
+          if (!Array.isArray(parsedSchema)) parsedSchema = [];
+
+          let parsedInvoiceItemIds = [];
+          try {
+            if (step.invoice_item_ids) {
+              parsedInvoiceItemIds = typeof step.invoice_item_ids === 'string' ? JSON.parse(step.invoice_item_ids) : step.invoice_item_ids;
+            }
+          } catch(e) { console.error('Error parsing invoice items', e); }
+          if (!Array.isArray(parsedInvoiceItemIds)) parsedInvoiceItemIds = [];
+
+          setFormData({
+            title: step.title || '',
+            description: step.description || '',
+            status: step.status || 'Pending',
+            assignee_id: step.assignee_id || '',
+            deadline: step.deadline ? String(step.deadline).split('T')[0] : '',
+            requires_client_form: !!step.requires_client_form,
+            client_form_schema: parsedSchema,
+            requires_payment: !!step.requires_payment,
+            allow_revision: !!step.allow_revision,
+            invoice_item_ids: parsedInvoiceItemIds
+          });
+        }
+      }
     } catch (error) {
       console.error('Failed to fetch data', error);
     }
@@ -124,7 +159,7 @@ export default function AddStep() {
     try {
       const fd = new FormData();
       Object.keys(formData).forEach(key => {
-        if (key === 'client_form_schema') {
+        if (key === 'client_form_schema' || key === 'invoice_item_ids') {
           fd.append(key, JSON.stringify(formData[key]));
         } else {
           fd.append(key, formData[key]);
@@ -134,11 +169,15 @@ export default function AddStep() {
         fd.append('attachments', file);
       });
 
-      await axios.post(`/api/projects/${id}/steps`, fd, {
-        headers: {
-          'Content-Type': 'multipart/form-data'
-        }
-      });
+      if (step_id) {
+        await axios.put(`/api/projects/${id}/steps/${step_id}/full`, fd, {
+          headers: { 'Content-Type': 'multipart/form-data' }
+        });
+      } else {
+        await axios.post(`/api/projects/${id}/steps`, fd, {
+          headers: { 'Content-Type': 'multipart/form-data' }
+        });
+      }
       navigate(`/projects/${id}`);
     } catch (error) {
       console.error('Save failed', error);
@@ -152,7 +191,7 @@ export default function AddStep() {
     <div className="add-step-container">
       <div className="add-step-header">
         <button className="btn-cancel" onClick={() => navigate(`/projects/${id}`)}>Cancel</button>
-        <h2>Create Milestone</h2>
+        <h2>{step_id ? 'Edit Milestone' : 'Create Milestone'}</h2>
         <button className="btn-save-step" onClick={handleSave}>Save Milestone</button>
       </div>
 
@@ -478,8 +517,101 @@ export default function AddStep() {
                 </optgroup>
               </select>
             </div>
+
+            <div className="form-group" style={{ marginTop: '1rem' }}>
+              <label className="as-label">ASSOCIATED INVOICE ITEMS (For Commission)</label>
+              <p style={{ fontSize: '0.8rem', color: '#64748b', marginBottom: '0.5rem' }}>Select which items this step is responsible for. Commission is calculated based on the selected items' total price.</p>
+              {invoiceItems.length > 0 ? (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', marginTop: '0.5rem' }}>
+                  {invoiceItems.map(item => {
+                    const isSelected = formData.invoice_item_ids.includes(item.id);
+                    return (
+                      <label 
+                        key={item.id} 
+                        style={{ 
+                          display: 'flex', 
+                          alignItems: 'center', 
+                          gap: '1rem', 
+                          padding: '0.75rem 1rem',
+                          background: isSelected ? '#eff6ff' : '#ffffff',
+                          border: `1px solid ${isSelected ? '#3b82f6' : '#e2e8f0'}`,
+                          borderRadius: '8px',
+                          cursor: 'pointer',
+                          transition: 'all 0.2s ease',
+                          margin: 0,
+                          textTransform: 'none',
+                          letterSpacing: 'normal',
+                          color: '#0f172a',
+                          fontWeight: 'normal'
+                        }}
+                      >
+                        <input 
+                          type="checkbox"
+                          checked={isSelected}
+                          onChange={(e) => {
+                            const id = item.id;
+                            if (e.target.checked) {
+                              setFormData(prev => ({ ...prev, invoice_item_ids: [...prev.invoice_item_ids, id] }));
+                            } else {
+                              setFormData(prev => ({ ...prev, invoice_item_ids: prev.invoice_item_ids.filter(i => i !== id) }));
+                            }
+                          }}
+                          style={{ width: '1.2rem', height: '1.2rem', cursor: 'pointer', margin: 0, accentColor: '#3b82f6' }}
+                        />
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.15rem' }}>
+                          <span style={{ fontSize: '0.95rem', fontWeight: '700', color: isSelected ? '#1e40af' : '#1e293b' }}>
+                            {item.description || 'Unnamed Item'}
+                          </span>
+                          <span style={{ fontSize: '0.8rem', color: '#64748b', fontWeight: '500' }}>
+                            Qty: {item.quantity} × Rs. {Number(item.unit_price).toLocaleString()} 
+                            <span style={{ margin: '0 6px', color: '#cbd5e1' }}>|</span> 
+                            <span style={{ color: isSelected ? '#2563eb' : '#475569', fontWeight: '600' }}>Total: Rs. {Number(item.total).toLocaleString()}</span>
+                          </span>
+                        </div>
+                      </label>
+                    );
+                  })}
+                </div>
+              ) : (
+                <p style={{ fontSize: '0.85rem', color: '#f59e0b', margin: 0 }}>No invoice items available. Create/link an invoice first.</p>
+              )}
+
+              {/* Commission Preview Box */}
+              {formData.assignee_id && formData.invoice_item_ids.length > 0 && (
+                (() => {
+                  let assignee = (project?.assigned_members || []).find(m => String(m.id) === String(formData.assignee_id));
+                  if (!assignee || typeof assignee.commission_percentage === 'undefined') {
+                    const specialist = specialists.find(s => String(s.id) === String(formData.assignee_id));
+                    if (specialist) assignee = { ...assignee, ...specialist };
+                  }
+                  
+                  const commPct = Number(assignee?.commission_percentage) || 0;
+                  
+                  const selectedTotal = invoiceItems
+                    .filter(item => formData.invoice_item_ids.includes(item.id))
+                    .reduce((sum, item) => sum + Number(item.total), 0);
+                  
+                  const commAmount = selectedTotal * (commPct / 100);
+
+                  return (
+                    <div style={{ marginTop: '0.75rem', padding: '1rem', background: '#f0fdf4', border: '1px solid #86efac', borderRadius: '8px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <div>
+                        <div style={{ fontSize: '0.8rem', color: '#166534', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Estimated Commission</div>
+                        <div style={{ fontSize: '0.85rem', color: '#15803d', marginTop: '0.2rem' }}>
+                          Based on {commPct}% rate for {assignee?.name || assignee?.full_name || 'Selected Member'}
+                        </div>
+                      </div>
+                      <div style={{ fontSize: '1.25rem', fontWeight: '800', color: '#166534' }}>
+                        Rs. {commAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      </div>
+                    </div>
+                  );
+                })()
+              )}
+            </div>
+
             <div className="form-group">
-              <label className="as-label">DEADLINE</label>
+              <label className="as-label">SET DEADLINE</label>
               <div className="date-input-wrapper">
                 <input 
                   type="date" 
