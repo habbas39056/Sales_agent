@@ -35,10 +35,6 @@ export default function Dashboard() {
             navigate('/production');
             return;
           }
-          if (user.role === 'Sales' || user.role === 'Sales Rep') {
-            navigate('/sales');
-            return;
-          }
           if (user.role === 'Client') {
             navigate('/client-portal');
             return;
