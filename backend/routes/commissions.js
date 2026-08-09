@@ -168,7 +168,7 @@ router.get('/breakdown', async (req, res) => {
         'Invoice Commission' as step_title,
         i.commission_amount as amount,
         i.created_at as date,
-        IF(i.status = 'Paid', 'Paid', 'Pending') as status,
+        IF(i.balance <= 0, 'Paid', 'Pending') as status,
         NULL as invoice_item_ids,
         i.invoice_number
       FROM invoices i
@@ -199,8 +199,8 @@ router.get('/breakdown', async (req, res) => {
       invoiceParams.push(end_date);
     }
     if (status && status !== 'all') {
-      if (status === 'Paid') invoiceQuery += ` AND i.status = 'Paid'`;
-      if (status === 'Pending') invoiceQuery += ` AND i.status != 'Paid'`;
+      if (status === 'Paid') invoiceQuery += ` AND i.balance <= 0`;
+      if (status === 'Pending') invoiceQuery += ` AND i.balance > 0`;
     }
 
     const [invoiceRows] = await db.query(invoiceQuery, invoiceParams);
@@ -368,14 +368,22 @@ router.get('/', async (req, res) => {
       }
 
       // Add invoice commissions (Sales)
-      const [invoiceCommissions] = await db.query('SELECT commission_amount, status FROM invoices WHERE agent_id = ? AND commission_amount > 0', [row.id]);
+      const [invoiceCommissions] = await db.query('SELECT amount, balance, commission_amount, status FROM invoices WHERE agent_id = ? AND commission_amount > 0', [row.id]);
       for (const inv of invoiceCommissions) {
-        total_earned += parseFloat(inv.commission_amount);
-        if (inv.status === 'Paid') {
-          total_paid_out += parseFloat(inv.commission_amount);
-        } else {
-          pending_payout += parseFloat(inv.commission_amount);
+        let earned = parseFloat(inv.commission_amount) || 0;
+        total_earned += earned;
+        
+        let fraction = 0;
+        let inv_amount = parseFloat(inv.amount) || 0;
+        let inv_balance = parseFloat(inv.balance) || 0;
+        if (inv_amount > 0) {
+            fraction = (inv_amount - inv_balance) / inv_amount;
         }
+        
+        let paidOutForInvoice = earned * fraction;
+        total_paid_out += paidOutForInvoice;
+        pending_payout += (earned - paidOutForInvoice);
+
         row.total_invoices += 1;
       }
       
