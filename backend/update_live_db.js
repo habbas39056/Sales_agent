@@ -295,6 +295,10 @@ async function updateLiveDb() {
     await addColumnIfNotExists('project_steps', 'invoice_item_ids', 'JSON DEFAULT NULL');
     await addColumnIfNotExists('project_steps', 'completed_at', 'TIMESTAMP NULL');
     await addColumnIfNotExists('project_steps', 'forgive_late_commission', 'BOOLEAN DEFAULT FALSE');
+    await addColumnIfNotExists('project_steps', 'commission_released', 'BOOLEAN DEFAULT FALSE');
+
+    // 15. Projects Missing Columns
+    await addColumnIfNotExists('projects', 'locked_deadline', 'DATE NULL');
 
     console.log('\n🎉 Live database update completed successfully!');
   } catch (error) {
