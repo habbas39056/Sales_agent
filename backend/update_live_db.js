@@ -300,6 +300,9 @@ async function updateLiveDb() {
     // 15. Projects Missing Columns
     await addColumnIfNotExists('projects', 'locked_deadline', 'DATE NULL');
 
+    // 16. Commissions Missing Columns
+    await addColumnIfNotExists('commissions', 'step_id', 'INT NULL');
+
     console.log('\n🎉 Live database update completed successfully!');
   } catch (error) {
     console.error('\n❌ Migration failed:', error);
