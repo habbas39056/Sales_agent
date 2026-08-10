@@ -240,6 +240,11 @@ router.get('/breakdown', async (req, res) => {
       }
     }
 
+    // Append invoiceRows which are pre-processed
+    for (const row of invoiceRows) {
+      allCommissions.push(row);
+    }
+
     // Now enrich with invoice numbers and partial amounts
     for (const row of allCommissions) {
       row.invoice_numbers = row.invoice_numbers || [];
@@ -297,11 +302,7 @@ router.get('/breakdown', async (req, res) => {
       }
     }
 
-    // Append invoiceRows which are pre-processed
-    for (const row of invoiceRows) {
-      row.invoice_numbers = [row.invoice_number];
-      allCommissions.push(row);
-    }
+
 
     // Sort by date DESC, then earned_commission DESC
     allCommissions.sort((a, b) => {
