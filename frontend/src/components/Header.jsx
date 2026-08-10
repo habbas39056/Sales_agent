@@ -129,6 +129,9 @@ export default function Header() {
   } else if (location.pathname === '/projects') {
     title = 'Project Management';
     subtitle = 'Track all active projects';
+  } else if (location.pathname === '/tasks') {
+    title = 'My Tasks 📝';
+    subtitle = 'Manage your assigned project tasks, track deadlines, and update progress.';
   } else if (location.pathname === '/settings') {
     title = 'Settings & Configuration';
     subtitle = 'Manage company details, billing options, bank accounts, and security';

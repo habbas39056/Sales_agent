@@ -251,6 +251,21 @@ export default function ProjectsList() {
     }
   };
 
+  const [deadlineFilter, setDeadlineFilter] = useState('All Dates');
+  const [actionFilter, setActionFilter] = useState('All Actions');
+
+  const getDeadlineInfo = (deadlineStr) => {
+    if (!deadlineStr) return { isOverdue: false, isSoon: false, label: 'No Deadline' };
+    const due = new Date(deadlineStr);
+    const now = new Date();
+    const diffTime = due - now;
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+    if (diffDays < 0) return { isOverdue: true, isSoon: false, label: 'Due Today' }; // Treat overdue as due today for filtering purposes
+    if (diffDays === 0) return { isOverdue: false, isSoon: true, label: 'Due Today' };
+    if (diffDays <= 3) return { isOverdue: false, isSoon: true, label: 'Due Soon' };
+    return { isOverdue: false, isSoon: false, label: 'Future' };
+  };
+
   const filteredProjects = projects.filter(project => {
     const matchesSearch = project.title.toLowerCase().includes(searchTerm.toLowerCase()) || 
                           (project.client_name && project.client_name.toLowerCase().includes(searchTerm.toLowerCase()));
@@ -272,7 +287,22 @@ export default function ProjectsList() {
         matchesService = st === serviceFilter;
       }
     }
-    return matchesSearch && matchesStatus && matchesService;
+
+    let matchesDeadline = true;
+    if (deadlineFilter !== 'All Dates') {
+      const dl = getDeadlineInfo(project.locked_deadline);
+      if (deadlineFilter === 'Due Soon / Overdue') matchesDeadline = dl.isOverdue || dl.isSoon;
+      if (deadlineFilter === 'Due Today') matchesDeadline = dl.label === 'Due Today';
+    }
+
+    let matchesAction = true;
+    if (actionFilter === 'Pending Approval') {
+      matchesAction = project.steps && project.steps.some(s => s.status === 'Pending Approval');
+    } else if (actionFilter === 'Appealed') {
+      matchesAction = project.steps && project.steps.some(s => s.deadline_status === 'Appealed');
+    }
+
+    return matchesSearch && matchesStatus && matchesService && matchesDeadline && matchesAction;
   });
 
   const currentProjects = filteredProjects.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
@@ -324,6 +354,30 @@ export default function ProjectsList() {
         >
           <option value="All Services">All Services</option>
           {availableServices.map(s => <option key={s} value={s}>{s}</option>)}
+        </select>
+        <select 
+          className="filter-select"
+          value={deadlineFilter}
+          onChange={(e) => {
+            setDeadlineFilter(e.target.value);
+            setCurrentPage(1);
+          }}
+        >
+          <option value="All Dates">All Dates</option>
+          <option value="Due Today">Due Today</option>
+          <option value="Due Soon / Overdue">Due Soon / Overdue</option>
+        </select>
+        <select 
+          className="filter-select"
+          value={actionFilter}
+          onChange={(e) => {
+            setActionFilter(e.target.value);
+            setCurrentPage(1);
+          }}
+        >
+          <option value="All Actions">All Actions</option>
+          <option value="Pending Approval">⏳ Pending Approval</option>
+          <option value="Appealed">🚨 Appealed</option>
         </select>
       </div>
 

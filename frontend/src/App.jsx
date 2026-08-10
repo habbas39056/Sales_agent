@@ -23,6 +23,7 @@ import Payroll from './pages/Payroll';
 import Expenses from './pages/Expenses';
 import Settings from './pages/Settings';
 import DeadlineWorkflow from './pages/DeadlineWorkflow';
+import Tasks from './pages/Tasks';
 import Header from './components/Header';
 import './App.css';
 import './App.css';
@@ -140,7 +141,16 @@ function AppContent() {
             )}
             
             {(!user || user.role === 'Admin' || (user.modules_access && user.modules_access.includes('PROJECTS'))) && (
-              <li><Link to="/projects" className={`sidebar-link ${location.pathname === '/projects' ? 'active' : ''}`}><PlusCircle size={20} /> Project Creation</Link></li>
+              <>
+                <li><Link to="/projects" className={`sidebar-link ${location.pathname === '/projects' ? 'active' : ''}`}><PlusCircle size={20} /> Project Creation</Link></li>
+                {user && user.role !== 'Client' && (location.pathname.startsWith('/projects') || location.pathname.startsWith('/tasks')) && (
+                  <li className="submenu-item">
+                    <Link to="/tasks" className={`sidebar-link ${location.pathname === '/tasks' ? 'active' : ''}`} style={{ paddingLeft: '3.2rem', fontSize: '0.9rem', opacity: 0.9 }}>
+                      <CheckSquare size={16} /> My Tasks
+                    </Link>
+                  </li>
+                )}
+              </>
             )}
 
             {(!user || user.role === 'Admin' || (user.modules_access && user.modules_access.includes('DEADLINES'))) && (
@@ -203,6 +213,7 @@ function AppContent() {
             <Route path="/projects/:id" element={<ProtectedRoute><ProjectDetails /></ProtectedRoute>} />
             <Route path="/projects/:id/steps/new" element={<ProtectedRoute><AddStep /></ProtectedRoute>} />
             <Route path="/projects/:id/steps/:step_id/edit" element={<ProtectedRoute><AddStep /></ProtectedRoute>} />
+            <Route path="/tasks" element={<ProtectedRoute><Tasks /></ProtectedRoute>} />
             <Route path="/deadlines" element={<ProtectedRoute><DeadlineWorkflow /></ProtectedRoute>} />
             <Route path="/client-portal" element={<ProtectedRoute><ClientPortal /></ProtectedRoute>} />
             <Route path="/client-portal/revision/:projectId/:stepId" element={<ProtectedRoute><RequestRevision /></ProtectedRoute>} />

@@ -154,6 +154,31 @@ export default function PmPortal() {
     return true;
   });
 
+  // Extract Critical Alerts for PM
+  const criticalAlerts = [];
+  projects.forEach(p => {
+    if (Array.isArray(p.steps)) {
+      p.steps.forEach(step => {
+        if (step.deadline_status === 'Appealed') {
+          criticalAlerts.push({
+            id: `appeal-${step.id}`,
+            type: 'Appeal',
+            message: `Deadline appeal arrived for project "${p.title}" (Step: ${step.title}). Production Member: ${step.assignee_name || 'Unassigned'}.`,
+            projectId: p.id
+          });
+        }
+        if (step.status === 'Pending Approval') {
+          criticalAlerts.push({
+            id: `approval-${step.id}`,
+            type: 'Approval',
+            message: `Project approval arrived! Deliverable submitted for project "${p.title}" (Step: ${step.title}). Production Member: ${step.assignee_name || 'Unassigned'}.`,
+            projectId: p.id
+          });
+        }
+      });
+    }
+  });
+
   return (
     <div className="pm-dashboard-container">
       
@@ -187,6 +212,33 @@ export default function PmPortal() {
           </button>
         </div>
       </div>
+
+      {/* Critical Alerts Section */}
+      {criticalAlerts.length > 0 && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', marginBottom: '1.5rem' }}>
+          {criticalAlerts.map(alert => (
+            <div key={alert.id} style={{
+              background: '#fef2f2', border: '1px solid #fecaca', borderLeft: '5px solid #ef4444', 
+              padding: '1rem 1.5rem', borderRadius: '8px', display: 'flex', alignItems: 'center', gap: '1rem',
+              boxShadow: '0 2px 5px rgba(239, 68, 68, 0.1)', cursor: 'pointer'
+            }} onClick={() => navigate(`/projects/${alert.projectId}`)}>
+              <AlertCircle size={24} color="#ef4444" />
+              <div style={{ flex: 1 }}>
+                <strong style={{ display: 'block', color: '#991b1b', fontSize: '1rem', marginBottom: '0.2rem' }}>
+                  {alert.type === 'Approval' ? 'Deliverable Pending Approval!' : 'Deadline Appeal Requires Review!'}
+                </strong>
+                <span style={{ color: '#b91c1c', fontSize: '0.9rem' }}>{alert.message}</span>
+              </div>
+              <button style={{
+                background: '#ef4444', color: '#fff', border: 'none', padding: '0.5rem 1rem', 
+                borderRadius: '6px', fontWeight: 'bold', cursor: 'pointer', fontSize: '0.85rem'
+              }}>
+                Review Now
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
 
       {/* KPI Stat Cards */}
       <div className="pm-metrics-grid">

@@ -23,6 +23,7 @@ const authMiddleware = require('./middleware/auth');
 app.use('/api/users', require('./routes/users')); // Users handles its own auth for /login
 app.use('/api/clients', authMiddleware, require('./routes/clients'));
 app.use('/api/projects', authMiddleware, require('./routes/projects'));
+app.use('/api/tasks', authMiddleware, require('./routes/tasks'));
 app.use('/api/invoices', authMiddleware, require('./routes/invoices'));
 app.use('/api/products', authMiddleware, require('./routes/products'));
 app.use('/api/commissions', authMiddleware, require('./routes/commissions'));

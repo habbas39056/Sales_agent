@@ -26,6 +26,11 @@ export default function ProjectDetails() {
   const [stepToReassign, setStepToReassign] = useState(null);
   const [newDeadline, setNewDeadline] = useState('');
 
+  // Submit Deliverable Modal State
+  const [submitModal, setSubmitModal] = useState({ isOpen: false, stepId: null });
+  const [deliverableName, setDeliverableName] = useState('');
+  const [deliverableUrl, setDeliverableUrl] = useState('');
+
   const currentUserStr = localStorage.getItem('user');
   const currentUser = currentUserStr ? JSON.parse(currentUserStr) : null;
   const canManageSteps = currentUser && ['Admin', 'Project Manager', 'PM', 'Product Manager', 'Production Manager'].includes(currentUser.role);
@@ -83,6 +88,25 @@ export default function ProjectDetails() {
       fetchProjectDetails();
     } catch (error) {
       console.error('Failed to update step status', error);
+    }
+  };
+
+  const submitDeliverable = async () => {
+    if (!deliverableName || !deliverableUrl) {
+      alert("Please fill in all required fields.");
+      return;
+    }
+    try {
+      await axios.put(`/api/projects/${id}/steps/${submitModal.stepId}`, {
+        status: 'Pending Approval',
+        deliverable_name: deliverableName,
+        deliverable_url: deliverableUrl
+      });
+      setSubmitModal({ isOpen: false, stepId: null });
+      fetchProjectDetails();
+    } catch (error) {
+      console.error('Failed to submit step for approval', error);
+      alert('Failed to update step status: ' + (error.response?.data?.error || error.message));
     }
   };
 
@@ -371,6 +395,33 @@ export default function ProjectDetails() {
                             return null;
                           })()}
                         </div>
+
+                        {(step.deliverable_name || step.deliverable_url) && (
+                          <div style={{ marginTop: '0.8rem', padding: '0.75rem 1rem', background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '8px', display: 'flex', flexDirection: 'column', gap: '0.4rem', width: '100%', boxShadow: '0 1px 3px rgba(0,0,0,0.02)' }}>
+                            <strong style={{ fontSize: '0.85rem', color: '#1e293b', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                              📦 Submitted Deliverable
+                            </strong>
+                            {step.deliverable_name && (
+                              <span style={{ fontSize: '0.85rem', color: '#475569' }}>
+                                <strong style={{ color: '#334155' }}>Name:</strong> {step.deliverable_name}
+                              </span>
+                            )}
+                            {step.deliverable_url && (
+                              <span style={{ fontSize: '0.85rem', color: '#475569', display: 'flex', alignItems: 'center', gap: '0.3rem', flexWrap: 'wrap' }}>
+                                <strong style={{ color: '#334155' }}>Link:</strong> 
+                                <a 
+                                  href={step.deliverable_url.startsWith('http') ? step.deliverable_url : `https://${step.deliverable_url}`} 
+                                  target="_blank" 
+                                  rel="noopener noreferrer" 
+                                  style={{ color: '#2563eb', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '0.2rem', fontWeight: '500' }}
+                                >
+                                  {step.deliverable_url} <ExternalLink size={14} />
+                                </a>
+                              </span>
+                            )}
+                          </div>
+                        )}
+
                       </div>
                     </div>
                     <div className="workflow-item-right" onClick={(e) => e.stopPropagation()} style={{display: 'flex', gap: '1rem', alignItems: 'center'}}>
@@ -434,27 +485,74 @@ export default function ProjectDetails() {
                         </>
                       )}
 
-                      {step.status !== 'Completed' ? (
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            if (window.confirm('Are you sure you want to mark this step as completed?')) {
-                              handleStatusChange(step.id, 'Completed');
-                            }
-                          }}
-                          style={{
-                            padding: '0.4rem 0.75rem',
-                            borderRadius: '6px',
-                            border: 'none',
-                            backgroundColor: 'var(--success)',
-                            color: 'white',
-                            fontWeight: '600',
-                            cursor: 'pointer'
-                          }}
-                        >
-                          Complete Step
-                        </button>
+                      {step.status === 'Pending Approval' ? (
+                        <div style={{ display: 'flex', gap: '0.5rem' }}>
+                          {canManageSteps ? (
+                            <>
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  if (window.confirm('Are you sure you want to approve this step and mark it as completed?')) {
+                                    handleStatusChange(step.id, 'Completed');
+                                  }
+                                }}
+                                style={{ padding: '0.4rem 0.75rem', borderRadius: '6px', border: 'none', backgroundColor: 'var(--success)', color: 'white', fontWeight: '600', cursor: 'pointer' }}
+                              >
+                                Approve
+                              </button>
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  if (window.confirm('Are you sure you want to reject this step and send it back to production?')) {
+                                    handleStatusChange(step.id, 'Active');
+                                  }
+                                }}
+                                style={{ padding: '0.4rem 0.75rem', borderRadius: '6px', border: '1px solid #ef4444', backgroundColor: '#fef2f2', color: '#ef4444', fontWeight: '600', cursor: 'pointer' }}
+                              >
+                                Reject
+                              </button>
+                            </>
+                          ) : (
+                            <span style={{ padding: '0.4rem 0.75rem', borderRadius: '6px', border: '1px solid #f59e0b', backgroundColor: '#fffbeb', color: '#b45309', fontWeight: '600' }}>
+                              Pending Approval
+                            </span>
+                          )}
+                        </div>
+                      ) : step.status !== 'Completed' ? (
+                        canManageSteps || step.deadline_status === 'Accepted' ? (
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              if (canManageSteps) {
+                                if (window.confirm('Are you sure you want to mark this step as completed?')) {
+                                  handleStatusChange(step.id, 'Completed');
+                                }
+                              } else {
+                                setSubmitModal({ isOpen: true, stepId: step.id });
+                                setDeliverableName('');
+                                setDeliverableUrl('');
+                              }
+                            }}
+                            style={{
+                              padding: '0.4rem 0.75rem',
+                              borderRadius: '6px',
+                              border: 'none',
+                              backgroundColor: '#4f46e5',
+                              color: 'white',
+                              fontWeight: '600',
+                              cursor: 'pointer'
+                            }}
+                          >
+                            {canManageSteps ? 'Complete Step' : 'Submit for Approval'}
+                          </button>
+                        ) : (
+                          <span style={{ fontSize: '0.75rem', color: '#b45309', background: '#fffbeb', padding: '0.4rem 0.75rem', borderRadius: '6px', border: '1px solid #fde68a', fontWeight: '600' }}>
+                            ⚠️ Accept deadline to submit
+                          </span>
+                        )
                       ) : (
                         <span style={{ 
                           padding: '0.4rem 0.75rem', 
@@ -956,6 +1054,62 @@ export default function ProjectDetails() {
         </div>
       )}
 
+      {/* Submit Deliverable Modal (for step level) */}
+      {submitModal.isOpen && (
+        <div className="modal-overlay">
+          <div className="modal-content" style={{ maxWidth: '500px' }}>
+            <div className="modal-header">
+              <h2>Submit Project Deliverable</h2>
+              <button className="close-btn" onClick={() => setSubmitModal({ isOpen: false, stepId: null })}>
+                &times;
+              </button>
+            </div>
+            
+            <div style={{ padding: '0 1.5rem', marginBottom: '1.5rem' }}>
+              <p style={{ margin: '0 0 1.5rem 0', color: '#334155', fontWeight: '600', fontSize: '0.9rem' }}>Project: {project.title}</p>
+              
+              <div className="form-group" style={{ marginBottom: '1.25rem' }}>
+                <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: '800', color: '#475569', marginBottom: '0.5rem', textTransform: 'uppercase' }}>FILE / PACKAGE NAME *</label>
+                <input 
+                  type="text" 
+                  value={deliverableName}
+                  onChange={(e) => setDeliverableName(e.target.value)}
+                  placeholder="e.g. MARKETING - Final Deliverable"
+                  style={{ width: '100%', padding: '0.65rem 1rem', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '0.9rem', color: '#0f172a' }}
+                />
+              </div>
+
+              <div className="form-group">
+                <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: '800', color: '#475569', marginBottom: '0.5rem', textTransform: 'uppercase' }}>DOWNLOAD LINK / FILE URL *</label>
+                <input 
+                  type="text" 
+                  value={deliverableUrl}
+                  onChange={(e) => setDeliverableUrl(e.target.value)}
+                  placeholder="https://drive.google.com/..."
+                  style={{ width: '100%', padding: '0.65rem 1rem', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '0.9rem', color: '#0f172a' }}
+                />
+              </div>
+            </div>
+
+            <div className="modal-actions" style={{ display: 'flex', justifyContent: 'flex-end', gap: '1rem', padding: '1.5rem', borderTop: '1px solid #e2e8f0' }}>
+              <button 
+                type="button" 
+                onClick={() => setSubmitModal({ isOpen: false, stepId: null })}
+                style={{ background: 'none', border: 'none', color: '#64748b', fontWeight: '600', cursor: 'pointer' }}
+              >
+                Cancel
+              </button>
+              <button 
+                type="button" 
+                onClick={submitDeliverable}
+                style={{ padding: '0.6rem 1.25rem', backgroundColor: '#4f46e5', color: '#fff', border: 'none', borderRadius: '8px', fontWeight: '700', cursor: 'pointer' }}
+              >
+                Submit Deliverable
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

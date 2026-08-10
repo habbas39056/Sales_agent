@@ -26,6 +26,14 @@ export default function ProductionPortal() {
   });
   const [submittingDeliverable, setSubmittingDeliverable] = useState(false);
 
+  // Deadline extension state
+  const [appealModal, setAppealModal] = useState({ isOpen: false, projectId: null, stepId: null, proposedDate: '', reason: '' });
+  
+  // Submit Deliverable state
+  const [submitModal, setSubmitModal] = useState({ isOpen: false, projectId: null, stepId: null, projectName: '' });
+  const [deliverableName, setDeliverableName] = useState('');
+  const [deliverableUrl, setDeliverableUrl] = useState('');
+
   // Deadline Appeal Modal State
   const [appealModalStep, setAppealModalStep] = useState(null);
   const [appealForm, setAppealForm] = useState({
@@ -162,6 +170,25 @@ export default function ProductionPortal() {
     }
   };
 
+  const submitDeliverable = async () => {
+    if (!deliverableName || !deliverableUrl) {
+      alert("Please fill in all required fields.");
+      return;
+    }
+    try {
+      await axios.put(`/api/projects/${submitModal.projectId}/steps/${submitModal.stepId}`, {
+        status: 'Pending Approval',
+        deliverable_name: deliverableName,
+        deliverable_url: deliverableUrl
+      });
+      setSubmitModal({ isOpen: false, projectId: null, stepId: null, projectName: '' });
+      fetchProjects();
+    } catch (error) {
+      console.error('Failed to submit step for approval', error);
+      alert('Failed to update step status: ' + (error.response?.data?.error || error.message));
+    }
+  };
+
   const openDeliverableModal = (project) => {
     setActiveModalProject(project);
     setDeliverableForm({
@@ -239,10 +266,22 @@ export default function ProductionPortal() {
     const isComp = p.status === 'Completed' || p.status === 'Commission Released';
     if (filterTab === 'Active') return !isComp;
     if (filterTab === 'Completed') return isComp;
+    
+    const dl = getDeadlineInfo(p.locked_deadline);
     if (filterTab === 'Due Soon') {
-      const dl = getDeadlineInfo(p.locked_deadline);
       return !isComp && (dl.isOverdue || dl.isSoon);
     }
+    if (filterTab === 'Due Today') {
+      return !isComp && (dl.label === '⏰ Due Today!' || dl.isOverdue);
+    }
+    
+    if (filterTab === 'Pending Approval') {
+      return !isComp && p.steps && p.steps.some(s => s.status === 'Pending Approval');
+    }
+    if (filterTab === 'Appealed') {
+      return !isComp && p.steps && p.steps.some(s => s.deadline_status === 'Appealed');
+    }
+    
     return true; // All
   });
 
@@ -329,18 +368,18 @@ export default function ProductionPortal() {
               return (
                 <div key={p.id} className="prod-alert-item">
                   <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                    <strong style={{ color: '#1e293b' }}>{p.title}</strong>
-                    <span style={{ fontSize: '0.8rem', color: '#64748b' }}>Client: {p.client_name || 'Unassigned'}</span>
+                    <strong>{p.title}</strong>
+                    <span className="alert-client-name">Client: {p.client_name || 'Unassigned'}</span>
                   </div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                    <span className={dl.isOverdue ? 'badge-deadline-overdue' : 'badge-deadline-soon'}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+                    <span className={dl.isOverdue ? 'badge-deadline-overdue-alert' : 'badge-deadline-soon-alert'}>
                       {dl.label}
                     </span>
                     <button 
                       onClick={() => navigate(`/projects/${p.id}`)}
-                      style={{ background: 'none', border: 'none', color: '#4338ca', fontWeight: '700', fontSize: '0.82rem', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.25rem' }}
+                      style={{ background: '#ffffff', border: 'none', color: '#b91c1c', fontWeight: '800', fontSize: '0.85rem', padding: '0.5rem 1rem', borderRadius: '8px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.35rem', boxShadow: '0 2px 4px rgba(0,0,0,0.1)' }}
                     >
-                      Open Project <ArrowRight size={14} />
+                      Open Project <ArrowRight size={15} />
                     </button>
                   </div>
                 </div>
@@ -368,7 +407,25 @@ export default function ProductionPortal() {
               className={`prod-filter-btn ${filterTab === 'Due Soon' ? 'active' : ''}`}
               onClick={() => setFilterTab('Due Soon')}
             >
-              🔥 Due Soon / Overdue ({urgentProjects.length})
+              🔥 Due Soon / Overdue
+            </button>
+            <button 
+              className={`prod-filter-btn ${filterTab === 'Due Today' ? 'active' : ''}`}
+              onClick={() => setFilterTab('Due Today')}
+            >
+              ⏰ Due Today
+            </button>
+            <button 
+              className={`prod-filter-btn ${filterTab === 'Pending Approval' ? 'active' : ''}`}
+              onClick={() => setFilterTab('Pending Approval')}
+            >
+              ⏳ Pending Approval
+            </button>
+            <button 
+              className={`prod-filter-btn ${filterTab === 'Appealed' ? 'active' : ''}`}
+              onClick={() => setFilterTab('Appealed')}
+            >
+              🚨 Appealed
             </button>
             <button 
               className={`prod-filter-btn ${filterTab === 'Active' ? 'active' : ''}`}
@@ -533,28 +590,47 @@ export default function ProductionPortal() {
                                 )}
 
                                 {/* Status Button */}
-                                {step.status !== 'Completed' ? (
-                                  <button
-                                    type="button"
-                                    onClick={() => {
-                                      if (window.confirm('Are you sure you want to mark this step as completed?')) {
-                                        handleStepStatusChange(p.id, step.id, 'Completed');
-                                      }
-                                    }}
-                                    style={{
-                                      padding: '0.35rem 0.75rem',
-                                      borderRadius: '6px',
-                                      fontSize: '0.75rem',
-                                      fontWeight: '700',
-                                      border: 'none',
-                                      backgroundColor: '#10b981',
-                                      color: '#ffffff',
-                                      cursor: 'pointer',
-                                      boxShadow: '0 1px 2px rgba(0,0,0,0.05)'
-                                    }}
-                                  >
-                                    Complete Step
-                                  </button>
+                                {step.status === 'Pending Approval' ? (
+                                  <span style={{ 
+                                    padding: '0.35rem 0.75rem', 
+                                    borderRadius: '6px', 
+                                    fontSize: '0.78rem', 
+                                    fontWeight: '700', 
+                                    border: '1px solid #f59e0b',
+                                    backgroundColor: '#fffbeb',
+                                    color: '#b45309'
+                                  }}>
+                                    ⏳ Pending Approval
+                                  </span>
+                                ) : step.status !== 'Completed' ? (
+                                  step.deadline_status === 'Accepted' ? (
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        setSubmitModal({
+                                          isOpen: true,
+                                          projectId: p.id,
+                                          stepId: step.id,
+                                          projectName: p.title
+                                        });
+                                        setDeliverableName('');
+                                        setDeliverableUrl('');
+                                      }}
+                                      style={{
+                                        padding: '0.35rem 0.75rem',
+                                        borderRadius: '6px',
+                                        fontSize: '0.75rem',
+                                        fontWeight: '700',
+                                        border: 'none',
+                                        backgroundColor: '#4f46e5',
+                                        color: '#ffffff',
+                                        cursor: 'pointer',
+                                        boxShadow: '0 1px 2px rgba(0,0,0,0.05)'
+                                      }}
+                                    >
+                                      Submit for Approval
+                                    </button>
+                                  ) : null
                                 ) : (
                                   <span style={{ 
                                     padding: '0.3rem 0.6rem', 
@@ -565,7 +641,7 @@ export default function ProductionPortal() {
                                     backgroundColor: '#d1fae5',
                                     color: '#047857'
                                   }}>
-                                    Completed
+                                    ✅ Approved & Completed
                                   </span>
                                 )}
                               </div>
@@ -863,6 +939,62 @@ export default function ProductionPortal() {
         </div>
       )}
 
+      {/* Submit Deliverable Modal (for step level) */}
+      {submitModal.isOpen && (
+        <div className="modal-overlay">
+          <div className="modal-content" style={{ maxWidth: '500px' }}>
+            <div className="modal-header">
+              <h2>Submit Project Deliverable</h2>
+              <button className="close-btn" onClick={() => setSubmitModal({ isOpen: false, projectId: null, stepId: null, projectName: '' })}>
+                &times;
+              </button>
+            </div>
+            
+            <div style={{ padding: '0 1.5rem', marginBottom: '1.5rem' }}>
+              <p style={{ margin: '0 0 1.5rem 0', color: '#334155', fontWeight: '600', fontSize: '0.9rem' }}>Project: {submitModal.projectName}</p>
+              
+              <div className="form-group" style={{ marginBottom: '1.25rem' }}>
+                <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: '800', color: '#475569', marginBottom: '0.5rem', textTransform: 'uppercase' }}>FILE / PACKAGE NAME *</label>
+                <input 
+                  type="text" 
+                  value={deliverableName}
+                  onChange={(e) => setDeliverableName(e.target.value)}
+                  placeholder="e.g. MARKETING - Final Deliverable"
+                  style={{ width: '100%', padding: '0.65rem 1rem', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '0.9rem', color: '#0f172a' }}
+                />
+              </div>
+
+              <div className="form-group">
+                <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: '800', color: '#475569', marginBottom: '0.5rem', textTransform: 'uppercase' }}>DOWNLOAD LINK / FILE URL *</label>
+                <input 
+                  type="text" 
+                  value={deliverableUrl}
+                  onChange={(e) => setDeliverableUrl(e.target.value)}
+                  placeholder="https://drive.google.com/..."
+                  style={{ width: '100%', padding: '0.65rem 1rem', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '0.9rem', color: '#0f172a' }}
+                />
+              </div>
+            </div>
+
+            <div className="modal-actions" style={{ display: 'flex', justifyContent: 'flex-end', gap: '1rem', padding: '1.5rem', borderTop: '1px solid #e2e8f0' }}>
+              <button 
+                type="button" 
+                onClick={() => setSubmitModal({ isOpen: false, projectId: null, stepId: null, projectName: '' })}
+                style={{ background: 'none', border: 'none', color: '#64748b', fontWeight: '600', cursor: 'pointer' }}
+              >
+                Cancel
+              </button>
+              <button 
+                type="button" 
+                onClick={submitDeliverable}
+                style={{ padding: '0.6rem 1.25rem', backgroundColor: '#4f46e5', color: '#fff', border: 'none', borderRadius: '8px', fontWeight: '700', cursor: 'pointer' }}
+              >
+                Submit Deliverable
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

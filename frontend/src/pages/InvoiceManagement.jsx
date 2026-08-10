@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { useNavigate } from 'react-router-dom';
-import { Search, Plus, FileText, Eye, X, Check, Trash2, Printer, Banknote, Edit } from 'lucide-react';
+import { Search, Plus, FileText, Eye, X, Check, Trash2, Printer, Banknote, Edit, FileSpreadsheet } from 'lucide-react';
+import * as XLSX from 'xlsx';
 import Pagination from '../components/Pagination';
 import './InvoiceManagement.css';
 
@@ -116,6 +117,33 @@ export default function InvoiceManagement() {
     }
   };
 
+  const handleExportExcel = () => {
+    if (!filteredInvoices || filteredInvoices.length === 0) {
+      alert('No invoices to export!');
+      return;
+    }
+
+    const wb = XLSX.utils.book_new();
+
+    const invoiceData = filteredInvoices.map(inv => ({
+      'Invoice #': inv.invoice_number,
+      'Amount': inv.amount,
+      'Date': inv.issue_date ? new Date(inv.issue_date).toLocaleDateString() : '',
+      'Customer': inv.client_name || 'N/A',
+      'Sales Person': inv.agent_name || 'N/A',
+      'Project': inv.project_title || 'N/A',
+      'Due Date': inv.due_date ? new Date(inv.due_date).toLocaleDateString() : '',
+      'Balance': inv.balance !== undefined && inv.balance !== null ? inv.balance : 0,
+      'Status': inv.status
+    }));
+
+    const ws = XLSX.utils.json_to_sheet(invoiceData);
+    XLSX.utils.book_append_sheet(wb, ws, 'Invoices');
+
+    const dateStr = new Date().toISOString().slice(0, 10);
+    XLSX.writeFile(wb, `Invoices_Export_${dateStr}.xlsx`);
+  };
+
   const filteredInvoices = invoices.filter(inv => {
     const term = searchTerm.trim().toLowerCase();
 
@@ -224,9 +252,19 @@ export default function InvoiceManagement() {
             </div>
           </div>
 
-          <button className="btn-primary" onClick={() => navigate('/invoices/new')} style={{ borderRadius: '20px', fontSize: '0.85rem', whiteSpace: 'nowrap' }}>
-            <Plus size={16} /> Create Invoice
-          </button>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+            <button 
+              className="btn-excel" 
+              onClick={handleExportExcel} 
+              title="Download Excel Listing"
+              style={{ borderRadius: '20px', fontSize: '0.85rem', whiteSpace: 'nowrap', display: 'flex', alignItems: 'center', gap: '0.4rem', background: '#ffffff', border: '1px solid #10b981', color: '#10b981', padding: '0.5rem 1rem', cursor: 'pointer', fontWeight: '600' }}
+            >
+              <FileSpreadsheet size={16} /> Export Excel
+            </button>
+            <button className="btn-primary" onClick={() => navigate('/invoices/new')} style={{ borderRadius: '20px', fontSize: '0.85rem', whiteSpace: 'nowrap' }}>
+              <Plus size={16} /> Create Invoice
+            </button>
+          </div>
         </div>
 
         <div className="table-responsive-ref">

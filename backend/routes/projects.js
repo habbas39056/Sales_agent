@@ -404,47 +404,74 @@ router.post('/:id/steps/:step_id/documents', upload.array('documents', 10), asyn
 
 // Update workflow step status or allow_revision
 router.put('/:id/steps/:step_id', async (req, res) => {
-  const { status, allow_revision } = req.body;
+  const { status, allow_revision, deliverable_name, deliverable_url } = req.body;
   try {
-    if (status !== undefined && allow_revision !== undefined) {
+    let updateFields = [];
+    let updateValues = [];
+    let actions = [];
+    
+    if (status !== undefined) {
+      updateFields.push('status = ?');
+      updateValues.push(status);
+      actions.push(`Changed status to "${status}"`);
       if (status === 'Completed') {
-        await db.query('UPDATE project_steps SET status = ?, allow_revision = ?, completed_at = NOW() WHERE id = ? AND project_id = ?', [status, allow_revision, req.params.step_id, req.params.id]);
-        
-        // Notify managers that step is completed
-        const [[step]] = await db.query('SELECT title FROM project_steps WHERE id = ?', [req.params.step_id]);
-        if (step) {
-          await notifyManagers(req.params.id, `Project step "${step.title}" has been completed.`, 'step_completed', `/projects/${req.params.id}`);
-        }
-      } else {
-        await db.query('UPDATE project_steps SET status = ?, allow_revision = ? WHERE id = ? AND project_id = ?', [status, allow_revision, req.params.step_id, req.params.id]);
+        updateFields.push('completed_at = NOW()');
       }
-      await db.query('INSERT INTO step_activity (step_id, user_id, action_text) VALUES (?, ?, ?)',
-        [req.params.step_id, null, `Updated status to "${status}" and revision option to ${allow_revision ? 'Enabled' : 'Disabled'}`]
-      );
-    } else if (status !== undefined) {
-      if (status === 'Completed') {
-        await db.query('UPDATE project_steps SET status = ?, completed_at = NOW() WHERE id = ? AND project_id = ?', [status, req.params.step_id, req.params.id]);
-        
-        // Notify managers that step is completed
-        const [[step]] = await db.query('SELECT title FROM project_steps WHERE id = ?', [req.params.step_id]);
-        if (step) {
-          await notifyManagers(req.params.id, `Project step "${step.title}" has been completed.`, 'step_completed', `/projects/${req.params.id}`);
-        }
-      } else {
-        await db.query('UPDATE project_steps SET status = ? WHERE id = ? AND project_id = ?', [status, req.params.step_id, req.params.id]);
-      }
-      await db.query('INSERT INTO step_activity (step_id, user_id, action_text) VALUES (?, ?, ?)',
-        [req.params.step_id, null, `Changed status to "${status}"`]
-      );
-    } else if (allow_revision !== undefined) {
-      await db.query('UPDATE project_steps SET allow_revision = ? WHERE id = ? AND project_id = ?', [allow_revision, req.params.step_id, req.params.id]);
-      await db.query('INSERT INTO step_activity (step_id, user_id, action_text) VALUES (?, ?, ?)',
-        [req.params.step_id, null, `${allow_revision ? 'Enabled' : 'Disabled'} revision requests`]
-      );
     }
+    if (allow_revision !== undefined) {
+      updateFields.push('allow_revision = ?');
+      updateValues.push(allow_revision);
+      actions.push(`${allow_revision ? 'Enabled' : 'Disabled'} revision requests`);
+    }
+    if (deliverable_name !== undefined) {
+      updateFields.push('deliverable_name = ?');
+      updateValues.push(deliverable_name);
+    }
+    if (deliverable_url !== undefined) {
+      updateFields.push('deliverable_url = ?');
+      updateValues.push(deliverable_url);
+    }
+    
+    if (updateFields.length > 0) {
+      const query = `UPDATE project_steps SET ${updateFields.join(', ')} WHERE id = ? AND project_id = ?`;
+      updateValues.push(req.params.step_id, req.params.id);
+      await db.query(query, updateValues);
+      
+      if (actions.length > 0) {
+        await db.query('INSERT INTO step_activity (step_id, user_id, action_text) VALUES (?, ?, ?)',
+          [req.params.step_id, null, actions.join(', ')]
+        );
+      }
+
+      if (status) {
+        const [[step]] = await db.query('SELECT title, assignee_id FROM project_steps WHERE id = ?', [req.params.step_id]);
+        if (step) {
+          if (status === 'Completed') {
+            await notifyManagers(req.params.id, `Project step "${step.title}" has been completed.`, 'step_completed', `/projects/${req.params.id}`);
+            if (step.assignee_id) {
+              await db.query(
+                'INSERT INTO notifications (user_id, message, type, link) VALUES (?, ?, ?, ?)',
+                [step.assignee_id, `Congratulations! Your deliverable for step "${step.title}" has been approved.`, 'step_approved', `/production`]
+              );
+            }
+          } else if (status === 'Active') {
+            if (step.assignee_id) {
+              await db.query(
+                'INSERT INTO notifications (user_id, message, type, link) VALUES (?, ?, ?, ?)',
+                [step.assignee_id, `Revisions requested: Your deliverable for step "${step.title}" was rejected and needs revision.`, 'step_rejected', `/production`]
+              );
+            }
+          } else if (status === 'Pending Approval') {
+            await notifyManagers(req.params.id, `Deliverable submitted for step "${step.title}" and is pending your approval.`, 'step_pending', `/projects/${req.params.id}`);
+          }
+        }
+      }
+    }
+    
     res.json({ message: 'Step updated' });
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    console.error('Error in step update:', error);
+    res.status(500).json({ error: error.message, stack: error.stack });
   }
 });
 

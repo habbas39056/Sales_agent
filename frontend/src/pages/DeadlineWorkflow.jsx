@@ -8,7 +8,7 @@ export default function DeadlineWorkflow() {
   const [appeals, setAppeals] = useState([]);
   const [loading, setLoading] = useState(true);
   const [processingId, setProcessingId] = useState(null);
-  const [filterTab, setFilterTab] = useState('All');
+  const [filterTab, setFilterTab] = useState('Pending Acceptance');
 
   const navigate = useNavigate();
 
@@ -129,6 +129,29 @@ export default function DeadlineWorkflow() {
     }
   };
 
+  const [startDate, setStartDate] = useState('');
+  const [endDate, setEndDate] = useState('');
+
+  const setQuickDateFilter = (type) => {
+    const today = new Date();
+    if (type === 'today') {
+      const dateStr = today.toISOString().split('T')[0];
+      setStartDate(dateStr);
+      setEndDate(dateStr);
+    } else if (type === 'tomorrow') {
+      const tmrw = new Date(today);
+      tmrw.setDate(tmrw.getDate() + 1);
+      const dateStr = tmrw.toISOString().split('T')[0];
+      setStartDate(dateStr);
+      setEndDate(dateStr);
+    } else if (type === 'this_week') {
+      const endOfWeek = new Date(today);
+      endOfWeek.setDate(endOfWeek.getDate() + (7 - endOfWeek.getDay())); // Sunday
+      setStartDate(today.toISOString().split('T')[0]);
+      setEndDate(endOfWeek.toISOString().split('T')[0]);
+    }
+  };
+
   // Metrics
   const totalCount = appeals.length;
   const pendingAcceptanceCount = appeals.filter(a => a.deadline_status === 'Pending Acceptance' || !a.deadline_status).length;
@@ -137,9 +160,25 @@ export default function DeadlineWorkflow() {
 
   // Filter items
   const filteredItems = appeals.filter(item => {
-    if (filterTab === 'Appealed') return item.deadline_status === 'Appealed';
-    if (filterTab === 'Pending Acceptance') return item.deadline_status === 'Pending Acceptance' || !item.deadline_status;
-    if (filterTab === 'Accepted') return item.deadline_status === 'Accepted';
+    if (filterTab === 'Appealed' && item.deadline_status !== 'Appealed') return false;
+    if (filterTab === 'Pending Acceptance' && item.deadline_status !== 'Pending Acceptance' && item.deadline_status) return false;
+    if (filterTab === 'Accepted' && item.deadline_status !== 'Accepted') return false;
+
+    if (startDate || endDate) {
+      if (!item.original_deadline) return false;
+      const itemDate = new Date(item.original_deadline);
+      if (startDate) {
+        const s = new Date(startDate);
+        s.setHours(0, 0, 0, 0);
+        if (itemDate < s) return false;
+      }
+      if (endDate) {
+        const e = new Date(endDate);
+        e.setHours(23, 59, 59, 999);
+        if (itemDate > e) return false;
+      }
+    }
+
     return true;
   });
 
@@ -248,6 +287,65 @@ export default function DeadlineWorkflow() {
         >
           ✅ Confirmed ({confirmedCount})
         </button>
+      </div>
+
+      {/* Date Filters */}
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '1rem', background: '#ffffff', padding: '1rem', borderRadius: '12px', border: '1px solid #e2e8f0', marginTop: '1rem', alignItems: 'center' }}>
+        <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+          <span style={{ fontSize: '0.8rem', color: '#64748b', fontWeight: '600', marginRight: '0.25rem' }}>Quick Find:</span>
+          <button 
+            type="button"
+            onClick={() => setQuickDateFilter('today')} 
+            style={{ background: '#f8fafc', border: '1px solid #cbd5e1', color: '#334155', padding: '0.35rem 0.75rem', borderRadius: '8px', fontSize: '0.78rem', cursor: 'pointer', fontWeight: '600' }}
+          >
+            Today
+          </button>
+          <button 
+            type="button"
+            onClick={() => setQuickDateFilter('tomorrow')} 
+            style={{ background: '#f8fafc', border: '1px solid #cbd5e1', color: '#334155', padding: '0.35rem 0.75rem', borderRadius: '8px', fontSize: '0.78rem', cursor: 'pointer', fontWeight: '600' }}
+          >
+            Tomorrow
+          </button>
+          <button 
+            type="button"
+            onClick={() => setQuickDateFilter('this_week')} 
+            style={{ background: '#f8fafc', border: '1px solid #cbd5e1', color: '#334155', padding: '0.35rem 0.75rem', borderRadius: '8px', fontSize: '0.78rem', cursor: 'pointer', fontWeight: '600' }}
+          >
+            This Week
+          </button>
+        </div>
+
+        <div style={{ width: '1px', height: '24px', background: '#e2e8f0', margin: '0 0.5rem' }}></div>
+
+        <div style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+            <label style={{ fontSize: '0.8rem', color: '#64748b', fontWeight: '600' }}>Start Deadline</label>
+            <input 
+              type="date" 
+              value={startDate} 
+              onChange={(e) => setStartDate(e.target.value)} 
+              style={{ padding: '0.35rem 0.5rem', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '0.8rem' }}
+            />
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+            <label style={{ fontSize: '0.8rem', color: '#64748b', fontWeight: '600' }}>End Deadline</label>
+            <input 
+              type="date" 
+              value={endDate} 
+              onChange={(e) => setEndDate(e.target.value)} 
+              style={{ padding: '0.35rem 0.5rem', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '0.8rem' }}
+            />
+          </div>
+          {(startDate || endDate) && (
+            <button 
+              onClick={() => { setStartDate(''); setEndDate(''); }}
+              style={{ background: 'none', border: 'none', color: '#ef4444', fontSize: '0.8rem', fontWeight: '600', cursor: 'pointer', textDecoration: 'underline' }}
+            >
+              Clear Filter
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Appeals & Deadlines List Grid */}
