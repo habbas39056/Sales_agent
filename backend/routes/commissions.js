@@ -290,10 +290,9 @@ router.get('/breakdown', async (req, res) => {
           row.invoice_paid_amount = totalInvPaid;
 
           if (row.status === 'Pending') {
-            let fraction = 0;
-            if (totalInvAmount > 0) fraction = totalInvPaid / totalInvAmount;
-            row.earned_commission = (parseFloat(row.potential_commission) || 0) * fraction;
-            row.pending_commission = (parseFloat(row.potential_commission) || 0) - row.earned_commission;
+            // Production commission is earned upon task completion/approval, not invoice payment
+            row.earned_commission = 0; 
+            row.pending_commission = parseFloat(row.potential_commission) || 0;
           } else {
             // For Paid status, earned_commission is already set from c.final_amount
             row.pending_commission = 0;
