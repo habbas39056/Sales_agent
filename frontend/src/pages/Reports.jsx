@@ -4,7 +4,8 @@ import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { useNavigate } from 'react-router-dom';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
-import { Download, Users, Shield, Loader, FileText, CheckCircle, Clock, X, Filter, Banknote, TrendingUp, CreditCard, Search } from 'lucide-react';
+import { Download, Users, Shield, Loader, FileText, CheckCircle, Clock, X, Filter, Banknote, TrendingUp, CreditCard, Search, FileSpreadsheet } from 'lucide-react';
+import * as XLSX from 'xlsx';
 import Pagination from '../components/Pagination';
 import './Reports.css';
 
@@ -346,6 +347,69 @@ export default function Reports() {
     doc.save('Profit_Loss_Analytics_Report.pdf');
   };
 
+  const downloadSalesExcel = () => {
+    const wb = XLSX.utils.book_new();
+    const data = salesReports.map(inv => ({
+      'Invoice #': inv.invoice_number,
+      'Client': inv.client_name || 'N/A',
+      'Issue Date': inv.issue_date ? new Date(inv.issue_date).toLocaleDateString() : '',
+      'Amount': inv.amount,
+      'Paid': parseFloat(inv.amount || 0) - parseFloat(inv.balance || 0),
+      'Balance': inv.balance || 0,
+      'Status': inv.status
+    }));
+    const ws = XLSX.utils.json_to_sheet(data);
+    XLSX.utils.book_append_sheet(wb, ws, 'Sales Data');
+    XLSX.writeFile(wb, `Sales_Report_${new Date().toISOString().slice(0, 10)}.xlsx`);
+  };
+
+  const downloadClientExcel = () => {
+    const wb = XLSX.utils.book_new();
+    const data = clientReports.map(client => ({
+      'Client': client.full_name || client.business_name || 'N/A',
+      'Total Invoices': client.total_invoices,
+      'Invoiced (PKR)': client.total_invoiced_amount,
+      'Paid (PKR)': client.total_paid,
+      'Balance (PKR)': client.total_balance,
+      'Next Due Date': client.next_due_date ? new Date(client.next_due_date).toLocaleDateString() : 'N/A'
+    }));
+    const ws = XLSX.utils.json_to_sheet(data);
+    XLSX.utils.book_append_sheet(wb, ws, 'Clients Data');
+    XLSX.writeFile(wb, `Clients_Report_${new Date().toISOString().slice(0, 10)}.xlsx`);
+  };
+
+  const downloadTeamExcel = () => {
+    const wb = XLSX.utils.book_new();
+    const data = teamReports.map(member => ({
+      'Name': member.name,
+      'Role': member.role,
+      'Assigned Projects': member.total_projects,
+      'Completed Projects': member.completed_projects,
+      'Active Projects': member.active_projects,
+      'Total Comm (PKR)': member.total_commissions,
+      'Pending Comm (PKR)': member.pending_commissions
+    }));
+    const ws = XLSX.utils.json_to_sheet(data);
+    XLSX.utils.book_append_sheet(wb, ws, 'Team Data');
+    XLSX.writeFile(wb, `Team_Report_${new Date().toISOString().slice(0, 10)}.xlsx`);
+  };
+
+  const downloadProfitExcel = () => {
+    const wb = XLSX.utils.book_new();
+    const data = (profitReport.monthlyTrend || []).map(row => ({
+      'Month': row.month,
+      'Revenue (PKR)': row.revenue,
+      'Expenses (PKR)': row.expenses,
+      'Net Profit (PKR)': row.profit,
+      'Margin (%)': row.margin,
+      'Status': row.profit >= 0 ? 'Profitable' : 'Loss'
+    }));
+    const ws = XLSX.utils.json_to_sheet(data);
+    XLSX.utils.book_append_sheet(wb, ws, 'Profit Analysis');
+    XLSX.writeFile(wb, `Profit_Analysis_${new Date().toISOString().slice(0, 10)}.xlsx`);
+  };
+
+
   return (
     <div className="reports-container">
       <div className="reports-dashboard-cards">
@@ -434,6 +498,9 @@ export default function Reports() {
                   <button className="btn-secondary" onClick={() => setQuickFilter(30)}>Last 30 Days</button>
                   <button className="btn-secondary" onClick={() => setQuickFilter(365)}>This Year</button>
                   <button className="btn-secondary" onClick={() => setQuickFilter('all')}>All Time</button>
+                  <button className="download-btn btn-excel" onClick={downloadSalesExcel} style={{ background: '#10b981', color: '#fff', border: 'none', padding: '0.45rem 1rem', borderRadius: '8px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.4rem', fontWeight: 600 }}>
+                    <FileSpreadsheet size={16} /> Export Excel
+                  </button>
                 </div>
               </div>
             </div>
@@ -516,6 +583,9 @@ export default function Reports() {
                       }}
                     />
                   </div>
+                  <button className="download-btn btn-excel" onClick={downloadClientExcel} style={{ background: '#10b981', color: '#fff', border: 'none', padding: '0.55rem 1.1rem', borderRadius: '8px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.5rem', fontWeight: 600 }}>
+                    <FileSpreadsheet size={18} /> Export Excel
+                  </button>
                   <button className="download-btn btn-blue" onClick={downloadClientPDF}>
                     <Download size={18} /> Export PDF
                   </button>
@@ -568,11 +638,16 @@ export default function Reports() {
           );
         })() : activeTab === 'team' ? (
           <div className="report-panel fade-in">
-            <div className="panel-header">
+            <div className="panel-header" style={{ flexWrap: 'wrap', gap: '1rem', alignItems: 'center', justifyContent: 'space-between' }}>
               <h2>Team Performance & Commissions</h2>
-              <button className="download-btn btn-emerald" onClick={downloadTeamPDF}>
-                <Download size={18} /> Export PDF
-              </button>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+                <button className="download-btn btn-excel" onClick={downloadTeamExcel} style={{ background: '#10b981', color: '#fff', border: 'none', padding: '0.55rem 1.1rem', borderRadius: '8px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.5rem', fontWeight: 600 }}>
+                  <FileSpreadsheet size={18} /> Export Excel
+                </button>
+                <button className="download-btn btn-emerald" onClick={downloadTeamPDF}>
+                  <Download size={18} /> Export PDF
+                </button>
+              </div>
             </div>
             
             <div className="table-responsive">
@@ -621,9 +696,14 @@ export default function Reports() {
             <div className="panel-header" style={{ flexDirection: 'column', alignItems: 'flex-start', gap: '1rem' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%', flexWrap: 'wrap', gap: '1rem' }}>
                 <h2>Profit & Financial Loss Analysis</h2>
-                <button className="download-btn btn-blue" onClick={downloadProfitPDF} style={{ background: '#4f46e5', color: '#ffffff', border: 'none', padding: '0.55rem 1.1rem', borderRadius: '8px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.5rem', fontWeight: 600 }}>
-                  <Download size={18} /> Export Profit PDF
-                </button>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+                  <button className="download-btn btn-excel" onClick={downloadProfitExcel} style={{ background: '#10b981', color: '#fff', border: 'none', padding: '0.55rem 1.1rem', borderRadius: '8px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.5rem', fontWeight: 600 }}>
+                    <FileSpreadsheet size={18} /> Export Excel
+                  </button>
+                  <button className="download-btn btn-blue" onClick={downloadProfitPDF} style={{ background: '#4f46e5', color: '#ffffff', border: 'none', padding: '0.55rem 1.1rem', borderRadius: '8px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.5rem', fontWeight: 600 }}>
+                    <Download size={18} /> Export PDF
+                  </button>
+                </div>
               </div>
 
               {/* Profit Date Filters */}
