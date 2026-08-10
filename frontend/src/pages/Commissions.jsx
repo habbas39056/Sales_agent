@@ -370,52 +370,79 @@ export default function Commissions() {
               <thead>
                 <tr>
                   <th>AGENT</th>
-                  <th>PROJECT & TASK</th>
-                  <th>INVOICE(S)</th>
-                  <th>AMOUNT</th>
-                  <th>STATUS</th>
+                  <th>PROJECT / STEP</th>
+                  <th>INVOICE & PAID %</th>
+                  <th>COMM. %</th>
+                  <th>POTENTIAL</th>
+                  <th>EARNED</th>
+                  <th>PENDING</th>
                   <th>DATE</th>
                 </tr>
               </thead>
               <tbody>
                 {loading ? (
-                  <tr><td colSpan="6" className="empty-state">Loading breakdown...</td></tr>
+                  <tr><td colSpan="8" className="empty-state">Loading breakdown...</td></tr>
                 ) : (
-                  currentBreakdown.map((item, idx) => (
-                    <tr key={idx}>
-                      <td>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                          <User size={16} style={{ color: '#64748b' }} />
-                          <div>
-                            <strong>{item.agent_name}</strong>
-                            <div style={{ fontSize: '0.75rem', color: '#64748b' }}>{item.agent_role}</div>
+                  currentBreakdown.map((item, idx) => {
+                    const totalInv = parseFloat(item.invoice_total_amount || 0);
+                    const paidInv = parseFloat(item.invoice_paid_amount || 0);
+                    const paidFraction = totalInv > 0 ? (paidInv / totalInv) * 100 : 0;
+                    
+                    return (
+                      <tr key={idx}>
+                        <td>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                            <User size={16} style={{ color: '#64748b' }} />
+                            <div>
+                              <strong>{item.agent_name}</strong>
+                              <div style={{ fontSize: '0.75rem', color: '#64748b' }}>{item.agent_role}</div>
+                            </div>
                           </div>
-                        </div>
-                      </td>
-                      <td>
-                        <div><strong>{item.project_title}</strong></div>
-                        <div style={{ fontSize: '0.8rem', color: '#64748b' }}>{item.step_title}</div>
-                      </td>
-                      <td>
-                        {item.invoice_numbers && item.invoice_numbers.length > 0 
-                          ? item.invoice_numbers.map(inv => <span key={inv} style={{ display: 'inline-block', background: '#f1f5f9', padding: '0.2rem 0.5rem', borderRadius: '4px', fontSize: '0.8rem', marginRight: '0.25rem', border: '1px solid #e2e8f0' }}>{inv}</span>)
-                          : <span style={{ color: '#94a3b8', fontSize: '0.8rem' }}>N/A</span>}
-                      </td>
-                      <td style={{ fontWeight: 'bold', color: item.status === 'Paid' ? '#16a34a' : '#dc2626' }}>
-                        PKR {Number(item.amount || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                      </td>
-                      <td>
-                        <span className={`status-badge ${item.status === 'Paid' ? 'paid' : 'unpaid'}`}>
-                          {item.status}
-                        </span>
-                      </td>
-                      <td>{item.date ? new Date(item.date).toLocaleDateString() : '-'}</td>
-                    </tr>
-                  ))
+                        </td>
+                        <td>
+                          <div><strong>{item.project_title}</strong></div>
+                          <div style={{ fontSize: '0.8rem', color: '#64748b' }}>{item.step_title}</div>
+                        </td>
+                        <td style={{ width: '220px' }}>
+                          <div style={{ marginBottom: '0.3rem' }}>
+                            {item.invoice_numbers && item.invoice_numbers.length > 0 
+                              ? item.invoice_numbers.map(inv => <span key={inv} style={{ display: 'inline-block', background: '#f8fafc', padding: '0.1rem 0.4rem', borderRadius: '4px', fontSize: '0.75rem', marginRight: '0.2rem', border: '1px solid #e2e8f0', color: '#475569' }}>{inv}</span>)
+                              : <span style={{ color: '#94a3b8', fontSize: '0.75rem' }}>N/A</span>}
+                          </div>
+                          {totalInv > 0 ? (
+                            <div>
+                              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.75rem', marginBottom: '0.2rem', color: '#64748b' }}>
+                                <span>Paid: {paidFraction.toFixed(1)}%</span>
+                                <span>Total: {totalInv.toLocaleString(undefined, {minimumFractionDigits:0})}</span>
+                              </div>
+                              <div style={{ width: '100%', height: '6px', background: '#e2e8f0', borderRadius: '3px', overflow: 'hidden' }}>
+                                <div style={{ width: `${paidFraction}%`, height: '100%', background: paidFraction >= 100 ? '#10b981' : '#3b82f6' }}></div>
+                              </div>
+                            </div>
+                          ) : (
+                            <span style={{ fontSize: '0.75rem', color: '#94a3b8' }}>No amounts</span>
+                          )}
+                        </td>
+                        <td style={{ fontWeight: '600', color: '#475569' }}>
+                          {item.commission_percentage || 0}%
+                        </td>
+                        <td style={{ color: '#64748b' }}>
+                          PKR {Number(item.potential_commission || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        </td>
+                        <td style={{ fontWeight: 'bold', color: '#16a34a' }}>
+                          PKR {Number(item.earned_commission || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        </td>
+                        <td style={{ fontWeight: 'bold', color: '#dc2626' }}>
+                          PKR {Number(item.pending_commission || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        </td>
+                        <td style={{ fontSize: '0.85rem' }}>{item.date ? new Date(item.date).toLocaleDateString() : '-'}</td>
+                      </tr>
+                    );
+                  })
                 )}
                 {!loading && currentBreakdown.length === 0 && (
                   <tr>
-                    <td colSpan="6" className="empty-state">No breakdown records match the selected filters.</td>
+                    <td colSpan="8" className="empty-state">No breakdown records match the selected filters.</td>
                   </tr>
                 )}
               </tbody>

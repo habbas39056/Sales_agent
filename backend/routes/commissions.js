@@ -85,11 +85,13 @@ router.get('/breakdown', async (req, res) => {
         u.id as agent_id,
         u.name as agent_name,
         u.role as agent_role,
+        u.commission_percentage,
         p.id as project_id,
         p.title as project_title,
         ps.id as step_id,
         ps.title as step_title,
-        c.final_amount as amount,
+        c.base_amount as potential_commission,
+        c.final_amount as earned_commission,
         c.released_at as date,
         'Paid' as status,
         ps.invoice_item_ids
@@ -108,15 +110,16 @@ router.get('/breakdown', async (req, res) => {
         u.id as agent_id,
         u.name as agent_name,
         u.role as agent_role,
+        u.commission_percentage,
         p.id as project_id,
         p.title as project_title,
         ps.id as step_id,
         ps.title as step_title,
-        0 as amount, -- We will calculate this below
+        0 as potential_commission, -- Calculated below
+        0 as earned_commission, -- Calculated below
         NULL as date,
         'Pending' as status,
-        ps.invoice_item_ids,
-        u.commission_percentage
+        ps.invoice_item_ids
       FROM project_steps ps
       JOIN users u ON ps.assignee_id = u.id
       JOIN projects p ON ps.project_id = p.id
@@ -162,11 +165,14 @@ router.get('/breakdown', async (req, res) => {
         u.id as agent_id,
         u.name as agent_name,
         u.role as agent_role,
+        u.commission_percentage,
         p.id as project_id,
         p.title as project_title,
         NULL as step_id,
         'Invoice Commission' as step_title,
-        i.commission_amount as amount,
+        i.commission_amount as potential_commission,
+        i.amount as invoice_total_amount,
+        (i.amount - i.balance) as invoice_paid_amount,
         i.created_at as date,
         IF(i.balance <= 0, 'Paid', 'Pending') as status,
         NULL as invoice_item_ids,
@@ -223,10 +229,10 @@ router.get('/breakdown', async (req, res) => {
             const [items] = await db.query('SELECT SUM(total) as t FROM invoice_items WHERE id IN (?)', [itemIds]);
             const items_total = items[0].t || 0;
             const comm_pct = parseFloat(row.commission_percentage) || 0;
-            row.amount = items_total * (comm_pct / 100);
+            row.potential_commission = items_total * (comm_pct / 100);
             
-            // Only include if amount > 0
-            if (row.amount > 0) {
+            // Only include if potential_commission > 0
+            if (row.potential_commission > 0) {
               allCommissions.push(row);
             }
           }
@@ -234,13 +240,23 @@ router.get('/breakdown', async (req, res) => {
       }
     }
 
-    // Now enrich with invoice numbers
+    // Now enrich with invoice numbers and partial amounts
     for (const row of allCommissions) {
       row.invoice_numbers = row.invoice_numbers || [];
+      if (!row.invoice_total_amount) row.invoice_total_amount = 0;
+      if (!row.invoice_paid_amount) row.invoice_paid_amount = 0;
+
       // If it came from the invoices query, it already has invoice_number
       if (row.invoice_number) {
         row.invoice_numbers.push(row.invoice_number);
+        let fraction = 0;
+        let inv_amount = parseFloat(row.invoice_total_amount) || 0;
+        let inv_paid = parseFloat(row.invoice_paid_amount) || 0;
+        if (inv_amount > 0) fraction = inv_paid / inv_amount;
+        row.earned_commission = (parseFloat(row.potential_commission) || 0) * fraction;
+        row.pending_commission = (parseFloat(row.potential_commission) || 0) - row.earned_commission;
       }
+
       if (row.invoice_item_ids) {
         let itemIds = [];
         try { itemIds = typeof row.invoice_item_ids === 'string' ? JSON.parse(row.invoice_item_ids) : row.invoice_item_ids; } catch(e){}
@@ -248,13 +264,35 @@ router.get('/breakdown', async (req, res) => {
         
         if (Array.isArray(itemIds) && itemIds.length > 0) {
           const [invoices] = await db.query(`
-            SELECT DISTINCT i.invoice_number 
+            SELECT DISTINCT i.invoice_number, i.amount, i.balance 
             FROM invoice_items it
             JOIN invoices i ON it.invoice_id = i.id
             WHERE it.id IN (?)
           `, [itemIds]);
+          
           const newInvs = invoices.map(inv => inv.invoice_number);
           row.invoice_numbers = [...row.invoice_numbers, ...newInvs];
+
+          // Calculate fraction based on aggregated invoices for this step
+          let totalInvAmount = 0;
+          let totalInvPaid = 0;
+          invoices.forEach(inv => {
+            totalInvAmount += parseFloat(inv.amount || 0);
+            totalInvPaid += (parseFloat(inv.amount || 0) - parseFloat(inv.balance || 0));
+          });
+
+          row.invoice_total_amount = totalInvAmount;
+          row.invoice_paid_amount = totalInvPaid;
+
+          if (row.status === 'Pending') {
+            let fraction = 0;
+            if (totalInvAmount > 0) fraction = totalInvPaid / totalInvAmount;
+            row.earned_commission = (parseFloat(row.potential_commission) || 0) * fraction;
+            row.pending_commission = (parseFloat(row.potential_commission) || 0) - row.earned_commission;
+          } else {
+            // For Paid status, earned_commission is already set from c.final_amount
+            row.pending_commission = 0;
+          }
         }
       }
     }
@@ -265,12 +303,12 @@ router.get('/breakdown', async (req, res) => {
       allCommissions.push(row);
     }
 
-    // Sort by date DESC, then amount DESC
+    // Sort by date DESC, then earned_commission DESC
     allCommissions.sort((a, b) => {
       if (a.date && b.date) return new Date(b.date) - new Date(a.date);
       if (a.date) return -1;
       if (b.date) return 1;
-      return b.amount - a.amount;
+      return (b.earned_commission || 0) - (a.earned_commission || 0);
     });
 
     res.json(allCommissions);
