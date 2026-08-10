@@ -399,9 +399,22 @@ export default function Commissions() {
                             </div>
                           </div>
                         </td>
-                        <td>
-                          <div><strong>{item.project_title}</strong></div>
-                          <div style={{ fontSize: '0.8rem', color: '#64748b' }}>{item.step_title}</div>
+                        <td style={{ minWidth: '180px' }}>
+                          <div style={{ marginBottom: '0.4rem' }}>
+                            <strong>{item.project_title}</strong>
+                            <div style={{ fontSize: '0.8rem', color: '#64748b' }}>{item.step_title}</div>
+                          </div>
+                          {item.products && item.products.length > 0 && (
+                            <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '6px', padding: '0.5rem', marginTop: '0.5rem' }}>
+                              <div style={{ fontSize: '0.7rem', fontWeight: 'bold', color: '#94a3b8', textTransform: 'uppercase', marginBottom: '0.3rem' }}>Products</div>
+                              {item.products.map((prod, i) => (
+                                <div key={i} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.75rem', color: '#334155', marginBottom: '0.2rem' }}>
+                                  <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '120px' }} title={prod.description}>• {prod.description}</span>
+                                  <span style={{ fontWeight: '600' }}>PKR {Number(prod.total).toLocaleString()}</span>
+                                </div>
+                              ))}
+                            </div>
+                          )}
                         </td>
                         <td style={{ width: '220px' }}>
                           <div style={{ marginBottom: '0.3rem' }}>
@@ -409,7 +422,7 @@ export default function Commissions() {
                               ? item.invoice_numbers.map(inv => <span key={inv} style={{ display: 'inline-block', background: '#f8fafc', padding: '0.1rem 0.4rem', borderRadius: '4px', fontSize: '0.75rem', marginRight: '0.2rem', border: '1px solid #e2e8f0', color: '#475569' }}>{inv}</span>)
                               : <span style={{ color: '#94a3b8', fontSize: '0.75rem' }}>N/A</span>}
                           </div>
-                          {totalInv > 0 ? (
+                          {(item.agent_role === 'Sales' || item.agent_role === 'Sales Rep') && totalInv > 0 ? (
                             <div>
                               <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.75rem', marginBottom: '0.2rem', color: '#64748b' }}>
                                 <span>Paid: {paidFraction.toFixed(1)}%</span>
@@ -419,9 +432,9 @@ export default function Commissions() {
                                 <div style={{ width: `${paidFraction}%`, height: '100%', background: paidFraction >= 100 ? '#10b981' : '#3b82f6' }}></div>
                               </div>
                             </div>
-                          ) : (
+                          ) : (item.agent_role === 'Sales' || item.agent_role === 'Sales Rep') && totalInv <= 0 ? (
                             <span style={{ fontSize: '0.75rem', color: '#94a3b8' }}>No amounts</span>
-                          )}
+                          ) : null}
                         </td>
                         <td style={{ fontWeight: '600', color: '#475569' }}>
                           {item.commission_percentage || 0}%

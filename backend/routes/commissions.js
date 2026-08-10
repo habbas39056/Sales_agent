@@ -278,6 +278,14 @@ router.get('/breakdown', async (req, res) => {
           const newInvs = invoices.map(inv => inv.invoice_number);
           row.invoice_numbers = [...row.invoice_numbers, ...newInvs];
 
+          // Fetch exact products for this step
+          const [invoiceItems] = await db.query(`
+            SELECT description, total 
+            FROM invoice_items 
+            WHERE id IN (?)
+          `, [itemIds]);
+          row.products = invoiceItems;
+
           // Calculate fraction based on aggregated invoices for this step
           let totalInvAmount = 0;
           let totalInvPaid = 0;
