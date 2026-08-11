@@ -82,7 +82,7 @@ function AppContent() {
   const isLoginPage = location.pathname === '/';
   const isClientPortal = location.pathname.startsWith('/client-portal');
   const showSidebar = isAuthenticated && !isLoginPage && !isClientPortal;
-  const showHeader = isAuthenticated && !isLoginPage;
+  const showHeader = isAuthenticated && !isLoginPage && !isClientPortal;
 
   const handleLogout = () => {
     localStorage.removeItem('user');
@@ -199,7 +199,7 @@ function AppContent() {
       
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', height: '100vh', overflow: 'hidden' }}>
         {showHeader && <Header />}
-        <main className="main-content" style={(!showSidebar && !isClientPortal) ? { padding: 0, maxWidth: '100%', height: '100vh' } : { height: 'calc(100vh - 70px)' }}>
+        <main className="main-content" style={!showSidebar ? { padding: 0, maxWidth: '100%', height: '100vh', display: 'flex', flexDirection: 'column' } : { height: 'calc(100vh - 70px)' }}>
           <Routes>
             <Route path="/" element={<Login />} />
             <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />

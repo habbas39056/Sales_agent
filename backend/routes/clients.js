@@ -2,6 +2,19 @@ const express = require('express');
 const router = express.Router();
 const db = require('../db');
 const bcrypt = require('bcrypt');
+const multer = require('multer');
+const path = require('path');
+
+// Configure multer for file uploads
+const storage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    cb(null, 'uploads/');
+  },
+  filename: (req, file, cb) => {
+    cb(null, Date.now() + path.extname(file.originalname));
+  }
+});
+const upload = multer({ storage: storage });
 
 // Get all clients (or filtered by creator for non-admins)
 router.get('/', async (req, res) => {
@@ -227,13 +240,15 @@ router.get('/user/:userId/portal-data', async (req, res) => {
       ORDER BY p.payment_date DESC
     `, [clientId]);
 
-    // 4. Projects & Steps & Revisions
+    // 4. Projects & Steps & Revisions & Client Reviews
     const [projects] = await db.query('SELECT * FROM projects WHERE client_id = ? ORDER BY created_at DESC', [clientId]);
     for (let p of projects) {
       const [steps] = await db.query('SELECT * FROM project_steps WHERE project_id = ? ORDER BY id ASC', [p.id]);
       p.steps = steps;
       const [revisions] = await db.query('SELECT * FROM revisions WHERE project_id = ? ORDER BY requested_at DESC', [p.id]);
       p.revisions = revisions;
+      const [clientReviews] = await db.query('SELECT * FROM client_reviews WHERE project_id = ? ORDER BY created_at DESC', [p.id]);
+      p.clientReviews = clientReviews;
     }
 
     // 5. Files (Deliverables)
@@ -333,6 +348,44 @@ router.delete('/notes/:id', async (req, res) => {
   try {
     await db.query('DELETE FROM notes WHERE id = ?', [req.params.id]);
     res.json({ message: 'Note deleted successfully' });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Upload files from client portal
+router.post('/files', upload.array('files'), async (req, res) => {
+  const { project_id, user_id } = req.body;
+  if (!project_id || !user_id) return res.status(400).json({ error: 'Missing project_id or user_id' });
+  
+  try {
+    for (const file of req.files) {
+      const file_url = `/uploads/${file.filename}`;
+      await db.query('INSERT INTO deliverables (project_id, file_url, file_name, submitted_by) VALUES (?, ?, ?, ?)', [project_id, file_url, file.originalname, user_id]);
+    }
+    res.json({ message: 'Files uploaded successfully' });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Delete file by client
+router.delete('/files/:fileId', async (req, res) => {
+  const { user_id } = req.query;
+  const fileId = req.params.fileId;
+  
+  if (!user_id) return res.status(400).json({ error: 'Missing user_id' });
+  
+  try {
+    const [rows] = await db.query('SELECT submitted_by FROM deliverables WHERE id = ?', [fileId]);
+    if (rows.length === 0) return res.status(404).json({ error: 'File not found' });
+    
+    if (rows[0].submitted_by != user_id) {
+      return res.status(403).json({ error: 'You can only delete your own files' });
+    }
+    
+    await db.query('DELETE FROM deliverables WHERE id = ?', [fileId]);
+    res.json({ message: 'File deleted successfully' });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }

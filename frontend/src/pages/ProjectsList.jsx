@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { useNavigate } from 'react-router-dom';
-import { Search, Folder, Plus, X, FileSpreadsheet, Edit2, Trash2, Eye } from 'lucide-react';
+import { Search, Folder, Plus, X, FileSpreadsheet, Edit2, Trash2, Eye, MessageCircle, Lock, FileText, Bell } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import Pagination from '../components/Pagination';
 import './ProjectsList.css';
@@ -14,6 +14,7 @@ export default function ProjectsList() {
   const [invoices, setInvoices] = useState([]);
   const [categories, setCategories] = useState([]);
   const [teamMembers, setTeamMembers] = useState([]);
+  const [notifications, setNotifications] = useState([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('All Statuses');
   const [serviceFilter, setServiceFilter] = useState('All Services');
@@ -53,7 +54,20 @@ export default function ProjectsList() {
     fetchInvoices();
     fetchCategories();
     fetchTeamMembers();
+    fetchNotifications();
   }, []);
+
+  const fetchNotifications = async () => {
+    try {
+      const userStr = localStorage.getItem('user');
+      const user = userStr ? JSON.parse(userStr) : null;
+      if (!user) return;
+      const res = await axios.get(`/api/notifications?user_id=${user.id}`);
+      setNotifications(res.data || []);
+    } catch (error) {
+      console.error('Failed to fetch notifications', error);
+    }
+  };
 
   const fetchTeamMembers = async () => {
     try {
@@ -413,7 +427,40 @@ export default function ProjectsList() {
                         <div className="folder-icon-sm">
                           <Folder size={16} />
                         </div>
-                        <span>{project.title}</span>
+                        <span style={{ position: 'relative', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                          {project.title}
+                          {(() => {
+                            const unreadForProject = notifications.filter(n => !n.is_read && n.link && (n.link.includes(`/projects?id=${project.id}`) || n.link.includes(`/projects/${project.id}`)));
+                            if (unreadForProject.length > 0) {
+                              const commentsCount = unreadForProject.filter(n => n.type === 'comment').length;
+                              const internalCount = unreadForProject.filter(n => n.type === 'internal_chat').length;
+                              const docsCount = unreadForProject.filter(n => n.type === 'document').length;
+                              const otherCount = unreadForProject.length - commentsCount - internalCount - docsCount;
+                              
+                              const badgeStyle = {
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '2px',
+                                background: '#ef4444',
+                                color: 'white',
+                                fontSize: '0.65rem',
+                                fontWeight: 'bold',
+                                padding: '0.1rem 0.3rem',
+                                borderRadius: '10px'
+                              };
+
+                              return (
+                                <div style={{ display: 'flex', gap: '4px' }}>
+                                  {commentsCount > 0 && <span style={badgeStyle} title="New comments"><MessageCircle size={10} /> {commentsCount}</span>}
+                                  {internalCount > 0 && <span style={{...badgeStyle, background: '#f59e0b'}} title="New internal chats"><Lock size={10} /> {internalCount}</span>}
+                                  {docsCount > 0 && <span style={{...badgeStyle, background: '#3b82f6'}} title="New documents"><FileText size={10} /> {docsCount}</span>}
+                                  {otherCount > 0 && <span style={{...badgeStyle, background: '#8b5cf6'}} title="Other alerts"><Bell size={10} /> {otherCount}</span>}
+                                </div>
+                              );
+                            }
+                            return null;
+                          })()}
+                        </span>
                       </div>
                     </td>
                     <td style={{ color: '#475569', fontWeight: '500' }}>{project.client_name || 'No Client'}</td>

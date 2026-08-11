@@ -345,6 +345,21 @@ router.put('/:id', async (req, res) => {
     }
 
     await connection.commit();
+    
+    if (targetDueDate && invoice.due_date) {
+      const oldDate = new Date(invoice.due_date).getTime();
+      const newDate = new Date(targetDueDate).getTime();
+      if (newDate > oldDate) {
+        const [[client]] = await connection.query('SELECT user_id FROM clients WHERE id = ?', [targetClientId]);
+        if (client && client.user_id) {
+          await connection.query(
+            'INSERT INTO notifications (user_id, message, type, link) VALUES (?, ?, ?, ?)',
+            [client.user_id, `Invoice ${invoice.invoice_number} due date has been updated to ${targetDueDate}`, 'invoice_updated', '']
+          );
+        }
+      }
+    }
+
     res.json({ message: 'Invoice updated successfully' });
   } catch (error) {
     await connection.rollback();

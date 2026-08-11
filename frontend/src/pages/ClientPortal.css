@@ -1,28 +1,77 @@
 /* ClientPortal.css */
 
+.client-portal-sidebar {
+  background: linear-gradient(180deg, #0f172a 0%, #1e1b4b 100%);
+  border-right: 1px solid rgba(255, 255, 255, 0.05);
+  position: relative;
+  overflow: hidden;
+}
+
+/* Glassmorphism subtle glow */
+.client-portal-sidebar::before {
+  content: '';
+  position: absolute;
+  top: -100px;
+  right: -100px;
+  width: 250px;
+  height: 250px;
+  background: radial-gradient(circle, rgba(79, 70, 229, 0.15) 0%, rgba(0, 0, 0, 0) 70%);
+  border-radius: 50%;
+  pointer-events: none;
+}
+
+.client-portal-sidebar .sidebar-menu-title {
+  color: rgba(255, 255, 255, 0.4);
+  font-size: 0.7rem;
+  letter-spacing: 2px;
+  margin-top: 1rem;
+}
+
 /* Sidebar Navigation Buttons */
-.nav-links button.nav-button {
+.client-portal-sidebar .nav-links button.nav-button {
   display: flex;
   align-items: center;
   gap: 1rem;
-  padding: 0.75rem 1rem;
+  padding: 0.85rem 1.2rem;
   font-weight: 500;
-  color: rgba(255, 255, 255, 0.7);
-  border-radius: 8px;
-  transition: all 0.2s;
-  background: none;
-  border: none;
+  color: rgba(255, 255, 255, 0.6);
+  border-radius: 12px;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  background: transparent;
+  border: 1px solid transparent;
   width: 100%;
   text-align: left;
   cursor: pointer;
-  font-size: 1rem;
+  font-size: 0.95rem;
   font-family: inherit;
+  position: relative;
+  overflow: hidden;
 }
 
-.nav-links button.nav-button:hover, 
-.nav-links button.nav-button.active {
-  color: white;
-  background-color: var(--sidebar-hover);
+.client-portal-sidebar .nav-links button.nav-button:hover {
+  color: rgba(255, 255, 255, 0.9);
+  background-color: rgba(255, 255, 255, 0.05);
+  transform: translateX(4px);
+}
+
+.client-portal-sidebar .nav-links button.nav-button.active {
+  color: #ffffff;
+  background: linear-gradient(90deg, rgba(79, 70, 229, 0.15) 0%, rgba(79, 70, 229, 0.05) 100%);
+  border: 1px solid rgba(79, 70, 229, 0.2);
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+  font-weight: 600;
+}
+
+.client-portal-sidebar .nav-links button.nav-button.active::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 15%;
+  height: 70%;
+  width: 3px;
+  background: linear-gradient(180deg, #818cf8, #4f46e5);
+  border-radius: 0 4px 4px 0;
+  box-shadow: 0 0 10px rgba(129, 140, 248, 0.5);
 }
 
 .client-avatar {
@@ -76,48 +125,247 @@
   flex-direction: column;
 }
 
-/* Stat Cards */
-.portal-dashboard-grid {
+/* Premium Dashboard Grid & Layout */
+.dashboard-grid-container {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
-  gap: 1.5rem;
+  grid-template-columns: 2fr 1fr;
+  gap: 2rem;
+  margin-top: 1.5rem;
 }
 
+@media (max-width: 992px) {
+  .dashboard-grid-container {
+    grid-template-columns: 1fr;
+  }
+}
+
+.portal-dashboard-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 1.5rem;
+  margin-bottom: 2rem;
+}
+
+/* Premium Stat Cards (Glassmorphism) */
 .portal-stat-card {
-  background-color: var(--surface-color);
-  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.7);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(255, 255, 255, 0.5);
+  border-radius: 20px;
   padding: 1.5rem;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.03);
+  box-shadow: 0 8px 32px rgba(31, 38, 135, 0.05);
   display: flex;
   flex-direction: column;
-  gap: 0.5rem;
-  transition: transform 0.3s ease, box-shadow 0.3s ease;
-  border: 1px solid rgba(0, 0, 0, 0.02);
+  gap: 0.75rem;
+  transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+  position: relative;
+  overflow: hidden;
+}
+
+.portal-stat-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(135deg, rgba(255,255,255,0.4) 0%, rgba(255,255,255,0) 100%);
+  pointer-events: none;
 }
 
 .portal-stat-card:hover {
-  transform: translateY(-5px);
-  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.08);
+  transform: translateY(-8px) scale(1.02);
+  box-shadow: 0 15px 35px rgba(31, 38, 135, 0.1);
+  border-color: rgba(99, 102, 241, 0.3);
 }
+
+.portal-stat-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.portal-stat-icon {
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+}
+
+.icon-blue { background: linear-gradient(135deg, #3b82f6, #2563eb); }
+.icon-purple { background: linear-gradient(135deg, #8b5cf6, #6d28d9); }
+.icon-orange { background: linear-gradient(135deg, #f97316, #ea580c); }
 
 .portal-stat-card h3 {
   margin: 0;
-  font-size: 0.75rem;
+  font-size: 0.85rem;
   font-weight: 700;
-  color: var(--text-secondary);
-  letter-spacing: 0.8px;
+  color: #64748b;
   text-transform: uppercase;
+  letter-spacing: 1px;
 }
 
 .portal-stat-value {
-  font-size: 2rem;
+  font-size: 2.2rem;
   font-weight: 800;
-  color: var(--text-primary);
+  color: #0f172a;
   line-height: 1.1;
+  background: linear-gradient(90deg, #0f172a, #334155);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
 }
 
 .portal-stat-card.warning .portal-stat-value {
-  color: var(--danger);
+  background: linear-gradient(90deg, #ef4444, #b91c1c);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.stat-subtitle {
+  font-size: 0.85rem;
+  color: #64748b;
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+/* Dashboard Sections */
+.dashboard-section {
+  background: white;
+  border-radius: 20px;
+  padding: 1.75rem;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.03);
+  border: 1px solid rgba(0, 0, 0, 0.02);
+  margin-bottom: 1.5rem;
+}
+
+.dashboard-section h3 {
+  margin-top: 0;
+  margin-bottom: 1.5rem;
+  font-size: 1.2rem;
+  color: #1e293b;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+/* Dashboard Project Overview List */
+.dashboard-project-list {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+.dashboard-project-item {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  padding-bottom: 1.25rem;
+  border-bottom: 1px solid #f1f5f9;
+}
+
+.dashboard-project-item:last-child {
+  border-bottom: none;
+  padding-bottom: 0;
+}
+
+.dashboard-project-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.dashboard-project-header h4 {
+  margin: 0;
+  font-size: 1.05rem;
+  font-weight: 600;
+  color: #334155;
+  cursor: pointer;
+  transition: color 0.2s ease;
+}
+
+.dashboard-project-header h4:hover {
+  color: #4f46e5;
+}
+
+/* Progress Bar */
+.progress-container {
+  width: 100%;
+  height: 8px;
+  background-color: #e2e8f0;
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.progress-bar {
+  height: 100%;
+  background: linear-gradient(90deg, #4f46e5, #818cf8);
+  border-radius: 4px;
+  transition: width 1s ease-in-out;
+}
+
+/* Dashboard Invoice Alert */
+.dashboard-invoice-alert {
+  background: linear-gradient(to right, rgba(239, 68, 68, 0.05), rgba(239, 68, 68, 0.1));
+  border-left: 4px solid #ef4444;
+  padding: 1.25rem;
+  border-radius: 8px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1rem;
+  transition: transform 0.2s ease;
+}
+
+.dashboard-invoice-alert:hover {
+  transform: translateX(4px);
+}
+
+.invoice-alert-details h4 {
+  margin: 0 0 0.25rem 0;
+  color: #b91c1c;
+  font-size: 1rem;
+}
+
+.invoice-alert-details p {
+  margin: 0;
+  font-size: 0.85rem;
+  color: #7f1d1d;
+}
+
+/* Action Buttons Grid */
+.dashboard-actions-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+}
+
+.dashboard-action-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 1.25rem;
+  background-color: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  color: #475569;
+  font-weight: 500;
+  transition: all 0.2s ease;
+  cursor: pointer;
+}
+
+.dashboard-action-btn:hover {
+  background-color: #f1f5f9;
+  color: #4f46e5;
+  border-color: #cbd5e1;
+  transform: translateY(-2px);
 }
 
 /* Projects Grid */
@@ -299,4 +547,45 @@
 }
 .view-btn:hover {
   background-color: #e0f2fe;
+}
+
+/* Custom Table Styles for Client Portal */
+.custom-table {
+    width: 100%;
+    border-collapse: separate;
+    border-spacing: 0 8px;
+}
+.custom-table th {
+    background: transparent;
+    color: #64748b;
+    font-size: 0.75rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    padding: 1rem 1.5rem;
+    text-align: left;
+    border-bottom: 1px solid rgba(0, 0, 0, 0.05);
+}
+.custom-table td {
+    padding: 1.25rem 1.5rem;
+    background: white;
+    vertical-align: middle;
+    color: #1e293b;
+    font-size: 0.875rem;
+}
+.custom-table tbody tr {
+    box-shadow: 0 2px 4px rgba(0,0,0,0.02);
+    transition: all 0.2s ease;
+}
+.custom-table tbody tr:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+}
+.custom-table tbody tr td:first-child {
+    border-top-left-radius: 8px;
+    border-bottom-left-radius: 8px;
+}
+.custom-table tbody tr td:last-child {
+    border-top-right-radius: 8px;
+    border-bottom-right-radius: 8px;
 }

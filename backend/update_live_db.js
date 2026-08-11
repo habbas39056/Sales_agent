@@ -141,6 +141,21 @@ async function updateLiveDb() {
     `);
     console.log('✅ Ensured step_comments table exists.');
 
+    await connection.query(`
+      CREATE TABLE IF NOT EXISTS step_inhouse_chats (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        step_id INT NOT NULL,
+        user_id INT NOT NULL,
+        message TEXT NOT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        KEY step_id (step_id),
+        KEY user_id (user_id),
+        CONSTRAINT step_inhouse_chats_ibfk_1 FOREIGN KEY (step_id) REFERENCES project_steps(id) ON DELETE CASCADE,
+        CONSTRAINT step_inhouse_chats_ibfk_2 FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+    `);
+    console.log('✅ Ensured step_inhouse_chats table exists.');
+
     // 7. Step Activity Table
     await connection.query(`
       CREATE TABLE IF NOT EXISTS step_activity (
@@ -302,6 +317,25 @@ async function updateLiveDb() {
 
     // 16. Commissions Missing Columns
     await addColumnIfNotExists('commissions', 'step_id', 'INT NULL');
+
+    // 17. Client Reviews Table
+    await connection.query(`
+      CREATE TABLE IF NOT EXISTS client_reviews (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        project_id INT NOT NULL,
+        title VARCHAR(255) NOT NULL,
+        description TEXT,
+        file_url VARCHAR(255),
+        deadline DATE,
+        status ENUM('Pending Review', 'Approved', 'Revision Requested') DEFAULT 'Pending Review',
+        feedback_todos JSON,
+        feedback_attachments JSON,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+    `);
+    console.log('✅ Ensured client_reviews table exists.');
 
     console.log('\n🎉 Live database update completed successfully!');
   } catch (error) {

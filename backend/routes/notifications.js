@@ -57,4 +57,26 @@ router.put('/mark-all-read', async (req, res) => {
   }
 });
 
+// Mark all as read for specific project
+router.put('/read-project/:project_id', async (req, res) => {
+  const { user_id } = req.body;
+  if (!user_id) return res.status(400).json({ error: 'user_id is required' });
+
+  try {
+    const linkQuery1 = `%/projects?id=${req.params.project_id}%`;
+    const linkQuery2 = `%/projects/${req.params.project_id}%`;
+    const linkQuery3 = `%/client-portal?id=${req.params.project_id}%`;
+
+    await db.query(`
+      UPDATE notifications 
+      SET is_read = TRUE 
+      WHERE user_id = ? AND (link LIKE ? OR link LIKE ? OR link LIKE ?)
+    `, [user_id, linkQuery1, linkQuery2, linkQuery3]);
+
+    res.json({ message: 'Project notifications marked as read' });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 module.exports = router;

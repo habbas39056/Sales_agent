@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import axios from 'axios';
-import { ArrowLeft, FileText, UploadCloud, Download, CheckCircle, Clock, Plus, X, Check, ExternalLink, Image, FileCode, Film, Music, Archive, Upload, Edit, Link2, Trash2 } from 'lucide-react';
+import { ArrowLeft, FileText, UploadCloud, Download, CheckCircle, Clock, Plus, X, Check, ExternalLink, Image, FileCode, Film, Music, Archive, Upload, Edit, Link2, Trash2, AlertCircle } from 'lucide-react';
 import StepComments from '../components/StepComments';
+import StepInhouseChat from '../components/StepInhouseChat';
 import StepActivityLog from '../components/StepActivityLog';
 import './ProjectDetails.css';
 import './Modal.css';
@@ -31,12 +32,22 @@ export default function ProjectDetails() {
   const [deliverableName, setDeliverableName] = useState('');
   const [deliverableUrl, setDeliverableUrl] = useState('');
 
+  // Client Reviews State
+  const [clientReviews, setClientReviews] = useState([]);
+  const [isClientReviewModalOpen, setIsClientReviewModalOpen] = useState(false);
+  const [clientReviewForm, setClientReviewForm] = useState({ title: '', description: '', deadline: '', file: null });
+
   const currentUserStr = localStorage.getItem('user');
   const currentUser = currentUserStr ? JSON.parse(currentUserStr) : null;
   const canManageSteps = currentUser && ['Admin', 'Project Manager', 'PM', 'Product Manager', 'Production Manager'].includes(currentUser.role);
 
   useEffect(() => {
     fetchProjectDetails();
+    fetchClientReviews();
+    if (currentUser) {
+      axios.put(`/api/notifications/read-project/${id}`, { user_id: currentUser.id })
+        .catch(err => console.error('Failed to mark notifications as read', err));
+    }
   }, [id]);
 
   const fetchProjectDetails = async () => {
@@ -51,6 +62,44 @@ export default function ProjectDetails() {
     } catch (error) {
       console.error('Failed to fetch project details', error);
       setLoading(false);
+    }
+  };
+
+  const fetchClientReviews = async () => {
+    try {
+      const res = await axios.get(`/api/client-reviews/projects/${id}`);
+      setClientReviews(res.data);
+    } catch (error) {
+      console.error('Failed to fetch client reviews', error);
+    }
+  };
+
+  const handleClientReviewSubmit = async (e) => {
+    e.preventDefault();
+    if (!clientReviewForm.title || !clientReviewForm.file) {
+      alert("Title and File are required.");
+      return;
+    }
+
+    const formData = new FormData();
+    formData.append('title', clientReviewForm.title);
+    formData.append('description', clientReviewForm.description);
+    if (clientReviewForm.deadline) {
+      formData.append('deadline', clientReviewForm.deadline);
+    }
+    formData.append('file', clientReviewForm.file);
+
+    try {
+      await axios.post(`/api/client-reviews/projects/${id}`, formData, {
+        headers: { 'Content-Type': 'multipart/form-data' }
+      });
+      setIsClientReviewModalOpen(false);
+      setClientReviewForm({ title: '', description: '', deadline: '', file: null });
+      fetchClientReviews();
+      alert("Submitted for client review successfully!");
+    } catch (error) {
+      console.error('Failed to submit client review', error);
+      alert('Failed to submit: ' + (error.response?.data?.error || error.message));
     }
   };
 
@@ -110,15 +159,6 @@ export default function ProjectDetails() {
     }
   };
 
-  const handleToggleRevisionOption = async (stepId, currentVal) => {
-    try {
-      await axios.put(`/api/projects/${id}/steps/${stepId}`, { allow_revision: !currentVal });
-      fetchProjectDetails();
-    } catch(err) {
-      console.error('Failed to toggle revision option', err);
-      alert('Failed to update step');
-    }
-  };
 
   const handleForgiveLate = async (stepId, currentVal) => {
     try {
@@ -261,6 +301,8 @@ export default function ProjectDetails() {
           </div>
         </div>
       </div>
+
+
 
       {/* Workflow Steps Section */}
       <div className="workflow-section">
@@ -425,17 +467,6 @@ export default function ProjectDetails() {
                       </div>
                     </div>
                     <div className="workflow-item-right" onClick={(e) => e.stopPropagation()} style={{display: 'flex', gap: '1rem', alignItems: 'center'}}>
-                      <div className="revision-toggle" style={{display: 'flex', alignItems: 'center', gap: '0.5rem'}}>
-                        <span style={{fontSize: '0.8rem', color: 'var(--text-secondary)'}}>Allow Revision</span>
-                        <label className="toggle-switch" style={{transform: 'scale(0.8)'}}>
-                          <input 
-                            type="checkbox" 
-                            checked={!!step.allow_revision} 
-                            onChange={() => handleToggleRevisionOption(step.id, step.allow_revision)} 
-                          />
-                          <span className="slider round blue-slider"></span>
-                        </label>
-                      </div>
 
                       {canManageSteps && (
                         <>
@@ -628,7 +659,7 @@ export default function ProjectDetails() {
                   {isExpanded && (
                     <div className="step-expanded-content">
                       <div className="step-tabs">
-                        {['Details', 'Fields', 'Documents', 'Comments', 'Revisions', 'Invoices', 'Activity'].map(tab => (
+                        {['Details', 'Fields', 'Documents', 'Comments', 'Internal Chat', 'Revisions', 'Invoices', 'Activity'].map(tab => (
                           <button 
                             key={tab} 
                             className={`step-tab ${activeTab === tab ? 'active' : ''}`}
@@ -996,6 +1027,10 @@ export default function ProjectDetails() {
                           <StepComments stepId={step.id} />
                         )}
 
+                        {activeTab === 'Internal Chat' && (
+                          <StepInhouseChat stepId={step.id} />
+                        )}
+
                         {activeTab === 'Activity' && (
                           <StepActivityLog stepId={step.id} />
                         )}
@@ -1005,6 +1040,103 @@ export default function ProjectDetails() {
                 </div>
               );
             })}
+          </div>
+        )}
+      </div>
+
+      {/* Client Reviews Section */}
+      <div className="workflow-section" style={{ marginBottom: '2rem', marginTop: '2rem' }}>
+        <div className="workflow-header" style={{ flexWrap: 'wrap', gap: '1rem' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', flexWrap: 'wrap' }}>
+            <h2 style={{ margin: 0 }}>Client Reviews ({clientReviews.length})</h2>
+          </div>
+          {canManageSteps && (
+            <button className="btn-create" onClick={() => setIsClientReviewModalOpen(true)}>
+              <UploadCloud size={16} /> Submit for Client Review
+            </button>
+          )}
+        </div>
+        
+        {clientReviews.length === 0 ? (
+          <div className="workflow-empty-state">
+            <p>No submissions for client review yet.</p>
+          </div>
+        ) : (
+          <div className="workflow-list">
+            {clientReviews.map((review, index) => (
+              <div key={review.id} className="workflow-item" style={{ flexDirection: 'column', alignItems: 'stretch' }}>
+                <div className="workflow-item-header" style={{ cursor: 'default' }}>
+                  <div className="workflow-item-left">
+                    <div className="step-number" style={{ background: '#f59e0b' }}>R{index + 1}</div>
+                    <div className="step-info">
+                      <div className="step-title-row" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
+                        <h4>{review.title}</h4>
+                        <span style={{ 
+                          fontSize: '0.75rem', fontWeight: '700', padding: '2px 8px', borderRadius: '12px',
+                          background: review.status === 'Approved' ? '#d1fae5' : review.status === 'Revision Requested' ? '#fef2f2' : '#fef3c7',
+                          color: review.status === 'Approved' ? '#047857' : review.status === 'Revision Requested' ? '#ef4444' : '#b45309'
+                        }}>
+                          {review.status}
+                        </span>
+                        {review.deadline && (
+                          <span style={{ fontSize: '0.75rem', fontWeight: '600', padding: '2px 8px', borderRadius: '12px', background: '#e0e7ff', color: '#3730a3' }}>
+                            📅 Deadline: {new Date(review.deadline).toLocaleDateString()}
+                          </span>
+                        )}
+                      </div>
+                      <p style={{ margin: '0.5rem 0', fontSize: '0.85rem', color: '#64748b' }}>{review.description}</p>
+                      
+                      <a href={review.file_url} target="_blank" rel="noreferrer" style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem', fontSize: '0.8rem', color: '#4f46e5', textDecoration: 'none', fontWeight: '600', background: '#f5f3ff', padding: '0.35rem 0.75rem', borderRadius: '6px' }}>
+                        <FileText size={14} /> View Submitted File
+                      </a>
+                    </div>
+                  </div>
+                </div>
+                
+                {review.status === 'Revision Requested' && review.feedback_todos && (
+                  <div style={{ marginTop: '1rem', padding: '1rem', background: '#fff1f2', border: '1px solid #fecdd3', borderRadius: '8px' }}>
+                    <h5 style={{ margin: '0 0 0.5rem 0', color: '#be123c', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                      <AlertCircle size={16} /> Client Feedback & To-Dos
+                    </h5>
+                    <ul style={{ margin: 0, paddingLeft: '1.5rem', fontSize: '0.85rem', color: '#881337' }}>
+                      {(() => {
+                        let todos = [];
+                        try {
+                          if (review.feedback_todos) {
+                            todos = typeof review.feedback_todos === 'string' ? JSON.parse(review.feedback_todos) : review.feedback_todos;
+                          }
+                        } catch (e) {}
+                        return Array.isArray(todos) ? todos.map((todo, i) => (
+                          <li key={i} style={{ marginBottom: '0.25rem' }}>{todo.text || todo}</li>
+                        )) : null;
+                      })()}
+                    </ul>
+                    
+                    {(() => {
+                      let atts = [];
+                      try {
+                        if (review.feedback_attachments) {
+                          atts = typeof review.feedback_attachments === 'string' ? JSON.parse(review.feedback_attachments) : review.feedback_attachments;
+                        }
+                      } catch (e) {}
+                      if (!Array.isArray(atts) || atts.length === 0) return null;
+                      return (
+                        <div style={{ marginTop: '0.75rem' }}>
+                          <strong style={{ fontSize: '0.8rem', color: '#be123c' }}>Attachments:</strong>
+                          <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.25rem' }}>
+                            {atts.map((att, i) => (
+                              <a key={i} href={att} target="_blank" rel="noreferrer" style={{ display: 'inline-flex', alignItems: 'center', gap: '0.25rem', fontSize: '0.75rem', color: '#e11d48', background: '#ffe4e6', padding: '0.25rem 0.5rem', borderRadius: '4px', textDecoration: 'none' }}>
+                                <Download size={12} /> File {i + 1}
+                              </a>
+                            ))}
+                          </div>
+                        </div>
+                      );
+                    })()}
+                  </div>
+                )}
+              </div>
+            ))}
           </div>
         )}
       </div>
@@ -1107,6 +1239,80 @@ export default function ProjectDetails() {
                 Submit Deliverable
               </button>
             </div>
+          </div>
+        </div>
+      )}
+    {/* Client Review Submit Modal */}
+      {isClientReviewModalOpen && (
+        <div className="modal-overlay">
+          <div className="modal-content" style={{ maxWidth: '500px', width: '90%' }}>
+            <div className="modal-header">
+              <h2>Submit to Client for Review</h2>
+              <button className="btn-close" onClick={() => setIsClientReviewModalOpen(false)}>
+                <X size={20} />
+              </button>
+            </div>
+            
+            <form onSubmit={handleClientReviewSubmit} style={{ padding: '0 1.5rem', marginBottom: '1.5rem' }}>
+              <div className="form-group" style={{ marginBottom: '1.25rem' }}>
+                <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: '800', color: '#475569', marginBottom: '0.5rem', textTransform: 'uppercase' }}>TITLE *</label>
+                <input 
+                  type="text" 
+                  value={clientReviewForm.title}
+                  onChange={(e) => setClientReviewForm({...clientReviewForm, title: e.target.value})}
+                  placeholder="e.g. Logo Design - Draft 1"
+                  required
+                  style={{ width: '100%', padding: '0.65rem 1rem', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '0.9rem' }}
+                />
+              </div>
+
+              <div className="form-group" style={{ marginBottom: '1.25rem' }}>
+                <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: '800', color: '#475569', marginBottom: '0.5rem', textTransform: 'uppercase' }}>DESCRIPTION</label>
+                <textarea 
+                  value={clientReviewForm.description}
+                  onChange={(e) => setClientReviewForm({...clientReviewForm, description: e.target.value})}
+                  placeholder="Provide context for the client..."
+                  rows="3"
+                  style={{ width: '100%', padding: '0.65rem 1rem', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '0.9rem' }}
+                />
+              </div>
+
+              <div className="form-group" style={{ marginBottom: '1.25rem' }}>
+                <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: '800', color: '#475569', marginBottom: '0.5rem', textTransform: 'uppercase' }}>DELIVERABLE FILE *</label>
+                <input 
+                  type="file" 
+                  onChange={(e) => setClientReviewForm({...clientReviewForm, file: e.target.files[0]})}
+                  required
+                  style={{ width: '100%', padding: '0.5rem', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '0.9rem' }}
+                />
+              </div>
+
+              <div className="form-group" style={{ marginBottom: '1.25rem' }}>
+                <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: '800', color: '#475569', marginBottom: '0.5rem', textTransform: 'uppercase' }}>REVIEW DEADLINE</label>
+                <input 
+                  type="date" 
+                  value={clientReviewForm.deadline}
+                  onChange={(e) => setClientReviewForm({...clientReviewForm, deadline: e.target.value})}
+                  style={{ width: '100%', padding: '0.65rem 1rem', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '0.9rem' }}
+                />
+              </div>
+
+              <div className="modal-actions" style={{ display: 'flex', justifyContent: 'flex-end', gap: '1rem', marginTop: '1.5rem', paddingTop: '1.5rem', borderTop: '1px solid #e2e8f0' }}>
+                <button 
+                  type="button" 
+                  onClick={() => setIsClientReviewModalOpen(false)}
+                  style={{ background: 'none', border: 'none', color: '#64748b', fontWeight: '600', cursor: 'pointer' }}
+                >
+                  Cancel
+                </button>
+                <button 
+                  type="submit" 
+                  style={{ padding: '0.6rem 1.25rem', backgroundColor: '#4f46e5', color: '#fff', border: 'none', borderRadius: '8px', fontWeight: '700', cursor: 'pointer' }}
+                >
+                  Submit to Client
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

@@ -35,6 +35,42 @@ async function notifyManagers(projectId, message, type, link) {
   }
 }
 
+async function notifyInternalTeam(projectId, message, type, link, triggerUserId) {
+  const [[project]] = await db.query('SELECT pm_id, production_id FROM projects WHERE id = ?', [projectId]);
+  const [managers] = await db.query("SELECT id FROM users WHERE role IN ('Admin', 'Product Manager')");
+  const [members] = await db.query('SELECT user_id FROM project_members WHERE project_id = ?', [projectId]);
+  const [steps] = await db.query('SELECT assignee_id FROM project_steps WHERE project_id = ? AND assignee_id IS NOT NULL', [projectId]);
+  
+  const userIds = new Set();
+  if (project?.pm_id) userIds.add(project.pm_id);
+  if (project?.production_id) userIds.add(project.production_id);
+  managers.forEach(m => userIds.add(m.id));
+  members.forEach(m => userIds.add(m.user_id));
+  steps.forEach(s => userIds.add(s.assignee_id));
+  
+  if (triggerUserId) userIds.delete(parseInt(triggerUserId));
+
+  for (const uid of userIds) {
+    await db.query(
+      'INSERT INTO notifications (user_id, message, type, link) VALUES (?, ?, ?, ?)',
+      [uid, message, type, link]
+    );
+  }
+}
+
+async function notifyClient(projectId, message, type, link) {
+  const [[project]] = await db.query('SELECT client_id FROM projects WHERE id = ?', [projectId]);
+  if (project?.client_id) {
+    const [[client]] = await db.query('SELECT user_id FROM clients WHERE id = ?', [project.client_id]);
+    if (client?.user_id) {
+      await db.query(
+        'INSERT INTO notifications (user_id, message, type, link) VALUES (?, ?, ?, ?)',
+        [client.user_id, message, type, link]
+      );
+    }
+  }
+}
+
 // Get all projects
 router.get('/', async (req, res) => {
   try {
@@ -208,6 +244,11 @@ router.post('/', async (req, res) => {
         [primaryPmId, `You have been assigned as PM to a new project: ${title}`, 'project_assigned', projectLink]
       );
     }
+    
+    // Notify the client
+    if (client_id) {
+      await notifyClient(newProjectId, `New Project created: ${title}`, 'project_created', projectLink);
+    }
 
     res.json({ id: newProjectId });
   } catch (error) {
@@ -265,6 +306,7 @@ router.delete('/:id/steps/:step_id', async (req, res) => {
     }
 
     // Delete related data first
+    await connection.query('DELETE FROM step_inhouse_chats WHERE step_id = ?', [step_id]);
     await connection.query('DELETE FROM step_comments WHERE step_id = ?', [step_id]);
     await connection.query('DELETE FROM step_activity WHERE step_id = ?', [step_id]);
     
@@ -289,6 +331,7 @@ router.delete('/:id', async (req, res) => {
     await connection.beginTransaction();
 
     // Delete related data
+    await connection.query('DELETE FROM step_inhouse_chats WHERE step_id IN (SELECT id FROM project_steps WHERE project_id = ?)', [projectId]);
     await connection.query('DELETE FROM step_comments WHERE step_id IN (SELECT id FROM project_steps WHERE project_id = ?)', [projectId]);
     await connection.query('DELETE FROM step_activity WHERE step_id IN (SELECT id FROM project_steps WHERE project_id = ?)', [projectId]);
     await connection.query('DELETE FROM project_steps WHERE project_id = ?', [projectId]);
@@ -364,6 +407,11 @@ router.post('/:id/steps', upload.array('attachments', 5), async (req, res) => {
         [assignee_id, `You have been assigned a new step: ${title}`, 'step_assigned', `/projects/${req.params.id}`]
       );
     }
+    
+    // Notify client if action is required
+    if (req_client_form || req_payment) {
+      await notifyClient(req.params.id, `Action required for project step: ${title}`, 'client_action_required', `/client-portal?id=${req.params.id}`);
+    }
 
     res.json({ id: result.insertId });
   } catch (error) {
@@ -395,6 +443,11 @@ router.post('/:id/steps/:step_id/documents', upload.array('documents', 10), asyn
     await db.query('INSERT INTO step_activity (step_id, user_id, action_text) VALUES (?, ?, ?)',
       [req.params.step_id, null, `Uploaded ${req.files.length} document(s)`]
     );
+
+    const [[project]] = await db.query('SELECT title FROM projects WHERE id = ?', [req.params.id]);
+    const projTitle = project ? project.title : 'Project';
+    await notifyInternalTeam(req.params.id, `New documents uploaded on ${projTitle}`, 'document', `/projects?id=${req.params.id}`);
+    await notifyClient(req.params.id, `New documents uploaded to ${projTitle}`, 'document', '');
 
     res.json({ message: 'Documents uploaded', attachments: updatedFiles });
   } catch (error) {
@@ -652,6 +705,19 @@ router.post('/:id/submit-delivery', async (req, res) => {
 
 // Removed multer config as it was moved to the top
 
+// Client Approve Step
+router.post('/:id/steps/:stepId/client-approve', async (req, res) => {
+  const connection = await db.getConnection();
+  try {
+    await connection.query('UPDATE project_steps SET status = "Completed", completed_at = NOW() WHERE id = ?', [req.params.stepId]);
+    res.json({ message: 'Step approved' });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  } finally {
+    connection.release();
+  }
+});
+
 // Request Revision
 router.post('/:id/request-revision', upload.array('images', 5), async (req, res) => {
   const { title, description, step_id, image_url: legacy_url } = req.body;
@@ -676,17 +742,7 @@ router.post('/:id/request-revision', upload.array('images', 5), async (req, res)
     if (project.revision_cycles_remaining > 0) {
       await connection.query('UPDATE projects SET revision_cycles_remaining = revision_cycles_remaining - 1, status = "Revision Requested" WHERE id = ?', [req.params.id]);
     } else {
-      is_paid = true;
-      const [[setting]] = await connection.query('SELECT setting_value FROM settings WHERE setting_key = "paid_revision_cost"');
-      cost = parseFloat(setting.setting_value);
-      
-      // Add to invoice balance
-      const [[invoice]] = await connection.query('SELECT * FROM invoices WHERE project_id = ? LIMIT 1', [req.params.id]);
-      if (invoice) {
-        await connection.query('UPDATE invoices SET amount = amount + ?, balance = balance + ? WHERE id = ?', [cost, cost, invoice.id]);
-        await connection.query('INSERT INTO invoice_items (invoice_id, description, quantity, unit_price, total) VALUES (?, ?, 1, ?, ?)', [invoice.id, 'Paid Revision: ' + title, cost, cost]);
-      }
-      await connection.query('UPDATE projects SET status = "Revision Requested" WHERE id = ?', [req.params.id]);
+      return res.status(403).json({ error: 'You have no revision cycles remaining for this project.' });
     }
     
     await connection.query('INSERT INTO revisions (project_id, title, description, is_paid, cost, step_id, image_url) VALUES (?, ?, ?, ?, ?, ?, ?)', 
@@ -889,7 +945,73 @@ router.post('/steps/:step_id/comments', async (req, res) => {
       [req.params.step_id, user_id, `Posted a comment: "${message.trim().substring(0, 50)}${message.trim().length > 50 ? '...' : ''}"`]
     );
 
+    // Notifications
+    const [[step]] = await db.query('SELECT project_id, title FROM project_steps WHERE id = ?', [req.params.step_id]);
+    if (step) {
+      const [[project]] = await db.query('SELECT title FROM projects WHERE id = ?', [step.project_id]);
+      const projTitle = project ? project.title : 'Project';
+      await notifyInternalTeam(step.project_id, `New comment on ${projTitle}: ${step.title}`, 'comment', `/projects?id=${step.project_id}`, user_id);
+      
+      // If user is not client, notify client. (If user_role is Client, they shouldn't get notified of their own comment, which can be filtered if we pass triggerUserId, but we don't have triggerUserId for client notify yet. Let's just always notify client, or check if user is client.)
+      const [[user]] = await db.query('SELECT role FROM users WHERE id = ?', [user_id]);
+      if (user && user.role !== 'Client') {
+        await notifyClient(step.project_id, `New comment on your project ${projTitle}`, 'comment', `/client-portal?id=${step.project_id}`);
+      }
+    }
+
     res.json(newComment);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Step Inhouse Chat Endpoints
+router.get('/steps/:step_id/inhouse-chats', async (req, res) => {
+  try {
+    const [chats] = await db.query(`
+      SELECT sc.*, u.name as user_name, u.role as user_role 
+      FROM step_inhouse_chats sc 
+      JOIN users u ON sc.user_id = u.id 
+      WHERE sc.step_id = ? 
+      ORDER BY sc.created_at ASC
+    `, [req.params.step_id]);
+    res.json(chats);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+router.post('/steps/:step_id/inhouse-chats', async (req, res) => {
+  const { user_id, message } = req.body;
+  if (!user_id || !message || !message.trim()) {
+    return res.status(400).json({ error: 'User ID and message are required.' });
+  }
+  try {
+    const [result] = await db.query(
+      'INSERT INTO step_inhouse_chats (step_id, user_id, message) VALUES (?, ?, ?)',
+      [req.params.step_id, user_id, message.trim()]
+    );
+    const [[newChat]] = await db.query(`
+      SELECT sc.*, u.name as user_name, u.role as user_role 
+      FROM step_inhouse_chats sc 
+      JOIN users u ON sc.user_id = u.id 
+      WHERE sc.id = ?
+    `, [result.insertId]);
+
+    // Optionally log to activity (let's keep it internal or skip, skipping for now to keep activity clean)
+    // await db.query('INSERT INTO step_activity (step_id, user_id, action_text) VALUES (?, ?, ?)',
+    //   [req.params.step_id, user_id, `Posted an inhouse chat: "${message.trim().substring(0, 50)}${message.trim().length > 50 ? '...' : ''}"`]
+    // );
+
+    // Notifications
+    const [[step]] = await db.query('SELECT project_id, title FROM project_steps WHERE id = ?', [req.params.step_id]);
+    if (step) {
+      const [[project]] = await db.query('SELECT title FROM projects WHERE id = ?', [step.project_id]);
+      const projTitle = project ? project.title : 'Project';
+      await notifyInternalTeam(step.project_id, `New internal chat on ${projTitle}: ${step.title}`, 'internal_chat', `/projects?id=${step.project_id}`, user_id);
+    }
+
+    res.json(newChat);
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
