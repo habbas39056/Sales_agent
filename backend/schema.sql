@@ -110,6 +110,8 @@ CREATE TABLE IF NOT EXISTS revisions (
     description TEXT,
     is_paid BOOLEAN DEFAULT FALSE,
     cost DECIMAL(10, 2) DEFAULT 0.00,
+    step_id INT NULL,
+    image_url TEXT NULL,
     requested_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     status ENUM('Pending', 'In Progress', 'Completed') DEFAULT 'Pending',
     FOREIGN KEY (project_id) REFERENCES projects(id)

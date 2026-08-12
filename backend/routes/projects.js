@@ -742,6 +742,7 @@ router.post('/:id/request-revision', upload.array('images', 5), async (req, res)
     if (project.revision_cycles_remaining > 0) {
       await connection.query('UPDATE projects SET revision_cycles_remaining = revision_cycles_remaining - 1, status = "Revision Requested" WHERE id = ?', [req.params.id]);
     } else {
+      await connection.rollback();
       return res.status(403).json({ error: 'You have no revision cycles remaining for this project.' });
     }
     

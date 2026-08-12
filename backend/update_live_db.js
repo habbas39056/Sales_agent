@@ -58,6 +58,10 @@ async function updateLiveDb() {
     
     console.log('✅ Ensured settings table exists.');
 
+    // 4.5. Revisions table
+    await addColumnIfNotExists('revisions', 'step_id', 'INT NULL');
+    await addColumnIfNotExists('revisions', 'image_url', 'TEXT NULL');
+
     // Seed default settings if empty
     const [existingSettings] = await connection.query('SELECT COUNT(*) as count FROM settings');
     if (existingSettings[0].count === 0) {
