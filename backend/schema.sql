@@ -170,7 +170,7 @@ CREATE TABLE IF NOT EXISTS project_steps (
     project_id INT NOT NULL,
     title VARCHAR(255) NOT NULL,
     description TEXT,
-    status ENUM('Pending', 'In Progress', 'Completed') DEFAULT 'Pending',
+    status ENUM('Pending', 'In Progress', 'Completed', 'Pending Approval', 'Overdue') DEFAULT 'Pending',
     assignee_id INT,
     deadline DATE,
     completed_at TIMESTAMP NULL,

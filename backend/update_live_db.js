@@ -314,6 +314,12 @@ async function updateLiveDb() {
     await addColumnIfNotExists('project_steps', 'deliverable_name', 'VARCHAR(255) DEFAULT NULL');
     await addColumnIfNotExists('project_steps', 'deliverable_url', 'VARCHAR(1000) DEFAULT NULL');
 
+    try {
+      await connection.query("ALTER TABLE project_steps MODIFY COLUMN status ENUM('Pending', 'In Progress', 'Completed', 'Pending Approval', 'Overdue') DEFAULT 'Pending'");
+      console.log('✅ Updated status ENUM in project_steps.');
+    } catch (e) {
+      console.log('⚠️ Error updating status ENUM:', e.message);
+    }
     // 15. Projects Missing Columns
     await addColumnIfNotExists('projects', 'locked_deadline', 'DATE NULL');
 
