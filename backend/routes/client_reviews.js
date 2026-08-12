@@ -104,4 +104,38 @@ router.post('/:review_id/respond', upload.array('feedback_files', 5), async (req
   }
 });
 
+// Delete a client review
+router.delete('/:id', async (req, res) => {
+  try {
+    await db.query('DELETE FROM client_reviews WHERE id = ?', [req.params.id]);
+    res.json({ message: 'Review deleted successfully' });
+  } catch (error) {
+    console.error('Delete review error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Update a client review
+router.put('/:id', upload.single('file'), async (req, res) => {
+  const { title, description, deadline } = req.body;
+  try {
+    if (req.file) {
+      const file_url = `/uploads/${req.file.filename}`;
+      await db.query(
+        'UPDATE client_reviews SET title = ?, description = ?, deadline = ?, file_url = ? WHERE id = ?',
+        [title, description, deadline || null, file_url, req.params.id]
+      );
+    } else {
+      await db.query(
+        'UPDATE client_reviews SET title = ?, description = ?, deadline = ? WHERE id = ?',
+        [title, description, deadline || null, req.params.id]
+      );
+    }
+    res.json({ message: 'Review updated successfully' });
+  } catch (error) {
+    console.error('Put review error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 module.exports = router;

@@ -36,6 +36,8 @@ export default function ProjectDetails() {
   const [clientReviews, setClientReviews] = useState([]);
   const [isClientReviewModalOpen, setIsClientReviewModalOpen] = useState(false);
   const [clientReviewForm, setClientReviewForm] = useState({ title: '', description: '', deadline: '', file: null });
+  const [isEditReviewModalOpen, setIsEditReviewModalOpen] = useState(false);
+  const [editReviewForm, setEditReviewForm] = useState({ id: null, title: '', description: '', deadline: '', file: null });
 
   const currentUserStr = localStorage.getItem('user');
   const currentUser = currentUserStr ? JSON.parse(currentUserStr) : null;
@@ -100,6 +102,48 @@ export default function ProjectDetails() {
     } catch (error) {
       console.error('Failed to submit client review', error);
       alert('Failed to submit: ' + (error.response?.data?.error || error.message));
+    }
+  };
+  const handleEditReviewClick = (review) => {
+    setEditReviewForm({
+      id: review.id,
+      title: review.title,
+      description: review.description || '',
+      deadline: review.deadline ? new Date(review.deadline).toISOString().split('T')[0] : '',
+      file: null
+    });
+    setIsEditReviewModalOpen(true);
+  };
+
+  const handleEditReviewSubmit = async (e) => {
+    e.preventDefault();
+    const formData = new FormData();
+    formData.append('title', editReviewForm.title);
+    formData.append('description', editReviewForm.description);
+    if (editReviewForm.deadline) formData.append('deadline', editReviewForm.deadline);
+    if (editReviewForm.file) formData.append('file', editReviewForm.file);
+    
+    try {
+      await axios.put(`/api/client-reviews/${editReviewForm.id}`, formData, {
+        headers: { 'Content-Type': 'multipart/form-data' }
+      });
+      setIsEditReviewModalOpen(false);
+      fetchClientReviews();
+      alert('Review updated successfully.');
+    } catch (error) {
+      console.error('Failed to update review', error);
+      alert('Failed to update review.');
+    }
+  };
+
+  const handleDeleteReview = async (id) => {
+    if (!window.confirm('Are you sure you want to delete this review?')) return;
+    try {
+      await axios.delete(`/api/client-reviews/${id}`);
+      fetchClientReviews();
+    } catch (error) {
+      console.error('Failed to delete review', error);
+      alert('Failed to delete review.');
     }
   };
 
@@ -1091,6 +1135,16 @@ export default function ProjectDetails() {
                       </a>
                     </div>
                   </div>
+                  {canManageSteps && (
+                    <div className="workflow-item-right" style={{ display: 'flex', gap: '0.5rem', marginLeft: 'auto' }}>
+                      <button className="btn-icon" onClick={() => handleEditReviewClick(review)} title="Edit Review">
+                        <Edit size={16} />
+                      </button>
+                      <button className="btn-icon" onClick={() => handleDeleteReview(review.id)} title="Delete Review" style={{ color: '#ef4444' }}>
+                        <Trash2 size={16} />
+                      </button>
+                    </div>
+                  )}
                 </div>
                 
                 {review.status === 'Revision Requested' && review.feedback_todos && (
@@ -1310,6 +1364,82 @@ export default function ProjectDetails() {
                   style={{ padding: '0.6rem 1.25rem', backgroundColor: '#4f46e5', color: '#fff', border: 'none', borderRadius: '8px', fontWeight: '700', cursor: 'pointer' }}
                 >
                   Submit to Client
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+      
+      {isEditReviewModalOpen && (
+        <div className="modal-overlay">
+          <div className="modal-content" style={{ maxWidth: '500px', width: '90%' }}>
+            <div className="modal-header">
+              <h2>Edit Client Review</h2>
+              <button className="btn-close" onClick={() => setIsEditReviewModalOpen(false)}>
+                <X size={20} />
+              </button>
+            </div>
+            
+            <form onSubmit={handleEditReviewSubmit} style={{ padding: '0 1.5rem', marginBottom: '1.5rem' }}>
+              <div className="form-group" style={{ marginBottom: '1.25rem' }}>
+                <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: '800', color: '#475569', marginBottom: '0.5rem', textTransform: 'uppercase' }}>TITLE *</label>
+                <input 
+                  type="text" 
+                  required
+                  value={editReviewForm.title}
+                  onChange={(e) => setEditReviewForm({...editReviewForm, title: e.target.value})}
+                  placeholder="e.g. Website Mockup V1"
+                  style={{ width: '100%', padding: '0.65rem 1rem', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '0.9rem' }}
+                />
+              </div>
+
+              <div className="form-group" style={{ marginBottom: '1.25rem' }}>
+                <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: '800', color: '#475569', marginBottom: '0.5rem', textTransform: 'uppercase' }}>DESCRIPTION (OPTIONAL)</label>
+                <textarea 
+                  rows={3}
+                  value={editReviewForm.description}
+                  onChange={(e) => setEditReviewForm({...editReviewForm, description: e.target.value})}
+                  placeholder="Any context the client should know..."
+                  style={{ width: '100%', padding: '0.65rem 1rem', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '0.9rem', resize: 'vertical' }}
+                />
+              </div>
+
+              <div className="form-group" style={{ marginBottom: '1.25rem' }}>
+                <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: '800', color: '#475569', marginBottom: '0.5rem', textTransform: 'uppercase' }}>NEW FILE (OPTIONAL)</label>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.5rem', border: '1px dashed #cbd5e1', borderRadius: '8px', background: '#f8fafc' }}>
+                  <input 
+                    type="file" 
+                    onChange={(e) => setEditReviewForm({...editReviewForm, file: e.target.files[0]})}
+                    style={{ fontSize: '0.85rem' }}
+                  />
+                </div>
+                <small style={{ display: 'block', marginTop: '0.5rem', color: '#64748b' }}>Leave blank to keep existing file.</small>
+              </div>
+
+              <div className="form-group">
+                <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: '800', color: '#475569', marginBottom: '0.5rem', textTransform: 'uppercase' }}>DEADLINE (OPTIONAL)</label>
+                <input 
+                  type="date" 
+                  value={editReviewForm.deadline}
+                  onChange={(e) => setEditReviewForm({...editReviewForm, deadline: e.target.value})}
+                  style={{ width: '100%', padding: '0.65rem 1rem', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '0.9rem' }}
+                />
+              </div>
+
+              <div className="modal-actions" style={{ display: 'flex', justifyContent: 'flex-end', gap: '1rem', marginTop: '1.5rem', paddingTop: '1.5rem', borderTop: '1px solid #e2e8f0' }}>
+                <button 
+                  type="button" 
+                  onClick={() => setIsEditReviewModalOpen(false)}
+                  style={{ background: 'none', border: 'none', color: '#64748b', fontWeight: '600', cursor: 'pointer' }}
+                >
+                  Cancel
+                </button>
+                <button 
+                  type="submit" 
+                  style={{ padding: '0.6rem 1.25rem', backgroundColor: '#4f46e5', color: '#fff', border: 'none', borderRadius: '8px', fontWeight: '700', cursor: 'pointer' }}
+                >
+                  Save Changes
                 </button>
               </div>
             </form>
