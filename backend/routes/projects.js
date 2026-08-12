@@ -441,7 +441,7 @@ router.post('/:id/steps/:step_id/documents', upload.array('documents', 10), asyn
 
     // Log to step activity
     await db.query('INSERT INTO step_activity (step_id, user_id, action_text) VALUES (?, ?, ?)',
-      [req.params.step_id, null, `Uploaded ${req.files.length} document(s)`]
+      [req.params.step_id, req.user.id, `Uploaded ${req.files.length} document(s)`]
     );
 
     const [[project]] = await db.query('SELECT title FROM projects WHERE id = ?', [req.params.id]);
@@ -492,7 +492,7 @@ router.put('/:id/steps/:step_id', async (req, res) => {
       
       if (actions.length > 0) {
         await db.query('INSERT INTO step_activity (step_id, user_id, action_text) VALUES (?, ?, ?)',
-          [req.params.step_id, null, actions.join(', ')]
+          [req.params.step_id, req.user ? req.user.id : null, actions.join(', ')]
         );
       }
 

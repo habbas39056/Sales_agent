@@ -161,7 +161,7 @@ async function updateLiveDb() {
       CREATE TABLE IF NOT EXISTS step_activity (
         id INT AUTO_INCREMENT PRIMARY KEY,
         step_id INT NOT NULL,
-        user_id INT NOT NULL,
+        user_id INT NULL,
         action_text TEXT NOT NULL,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         KEY step_id (step_id),
@@ -171,6 +171,14 @@ async function updateLiveDb() {
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
     `);
     console.log('✅ Ensured step_activity table exists.');
+    
+    // Modify user_id to be nullable for system events
+    try {
+      await connection.query('ALTER TABLE step_activity MODIFY COLUMN user_id INT NULL');
+      console.log('✅ Modified step_activity user_id to be nullable.');
+    } catch (e) {
+      console.log('⚠️ Error modifying step_activity user_id:', e.message);
+    }
 
     // 8. Payroll Table & Users base_salary
     await addColumnIfNotExists('users', 'base_salary', 'DECIMAL(10,2) DEFAULT 0.00');
