@@ -311,6 +311,8 @@ async function updateLiveDb() {
     await addColumnIfNotExists('project_steps', 'completed_at', 'TIMESTAMP NULL');
     await addColumnIfNotExists('project_steps', 'forgive_late_commission', 'BOOLEAN DEFAULT FALSE');
     await addColumnIfNotExists('project_steps', 'commission_released', 'BOOLEAN DEFAULT FALSE');
+    await addColumnIfNotExists('project_steps', 'deliverable_name', 'VARCHAR(255) DEFAULT NULL');
+    await addColumnIfNotExists('project_steps', 'deliverable_url', 'VARCHAR(1000) DEFAULT NULL');
 
     // 15. Projects Missing Columns
     await addColumnIfNotExists('projects', 'locked_deadline', 'DATE NULL');
