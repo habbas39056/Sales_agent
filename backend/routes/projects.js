@@ -775,8 +775,8 @@ router.post('/:id/approve', async (req, res) => {
 });
 
 // Reassign a completed step with a new deadline
-router.post('/:id/steps/:step_id/reassign', async (req, res) => {
-  const { new_deadline } = req.body;
+router.post('/:id/steps/:step_id/reassign', upload.array('attachments', 10), async (req, res) => {
+  const { new_deadline, user_id, todos } = req.body;
   if (!new_deadline) {
     return res.status(400).json({ error: 'New deadline is required for reassignment.' });
   }
@@ -789,6 +789,19 @@ router.post('/:id/steps/:step_id/reassign', async (req, res) => {
     if (!step) throw new Error('Step not found');
     if (step.commission_released) throw new Error('Cannot reassign a step whose commission is already released.');
 
+    let finalTodosJSON = null;
+    if (todos) {
+      const parsedTodos = JSON.parse(todos);
+      let finalTodos = parsedTodos.map(todo => {
+        let fileUrl = null;
+        if (todo.hasFile && req.files && req.files[todo.fileIndex]) {
+          fileUrl = `/uploads/${req.files[todo.fileIndex].filename}`;
+        }
+        return { text: todo.text, file_url: fileUrl };
+      });
+      finalTodosJSON = JSON.stringify(finalTodos);
+    }
+
     // Reset step to In Progress, update deadline, reset acceptance
     await connection.query(
       `UPDATE project_steps 
@@ -799,19 +812,77 @@ router.post('/:id/steps/:step_id/reassign', async (req, res) => {
            proposed_deadline = NULL,
            deadline_appeal_reason = NULL,
            appealed_by = NULL,
-           appealed_at = NULL
+           appealed_at = NULL,
+           reassign_todos = ?
        WHERE id = ?`,
-      [new_deadline, step.id]
+      [new_deadline, finalTodosJSON, step.id]
     );
 
     // Insert activity log
     await connection.query(
-      `INSERT INTO step_activity (step_id, user_id, action_text) VALUES (?, NULL, 'Step reassigned with a new deadline by Project Manager.')`,
-      [step.id]
+      `INSERT INTO step_activity (step_id, user_id, action_text) VALUES (?, ?, 'Step reassigned with a new deadline by Project Manager.')`,
+      [step.id, user_id || null]
     );
 
     await connection.commit();
     res.json({ message: 'Step reassigned successfully.' });
+  } catch (error) {
+    await connection.rollback();
+    res.status(500).json({ error: error.message });
+  } finally {
+    connection.release();
+  }
+});
+
+// Reject and Reassign a step with feedback
+router.post('/:id/steps/:step_id/reject', upload.array('attachments', 10), async (req, res) => {
+  const { new_deadline, user_id, todos } = req.body;
+  if (!new_deadline) {
+    return res.status(400).json({ error: 'New deadline is required to reject and reassign.' });
+  }
+
+  const connection = await db.getConnection();
+  try {
+    await connection.beginTransaction();
+
+    const [[step]] = await connection.query('SELECT * FROM project_steps WHERE id = ? AND project_id = ?', [req.params.step_id, req.params.id]);
+    if (!step) throw new Error('Step not found');
+
+    let finalTodosJSON = null;
+    if (todos) {
+      const parsedTodos = JSON.parse(todos);
+      let finalTodos = parsedTodos.map(todo => {
+        let fileUrl = null;
+        if (todo.hasFile && req.files && req.files[todo.fileIndex]) {
+          fileUrl = `/uploads/${req.files[todo.fileIndex].filename}`;
+        }
+        return { text: todo.text, file_url: fileUrl };
+      });
+      finalTodosJSON = JSON.stringify(finalTodos);
+    }
+    
+    await connection.query(
+      `UPDATE project_steps 
+       SET status = 'Pending', 
+           deadline = ?, 
+           deadline_status = 'Pending Acceptance', 
+           completed_at = NULL,
+           proposed_deadline = NULL,
+           deliverable_name = NULL,
+           deliverable_url = NULL,
+           reject_todos = ?
+       WHERE id = ?`,
+      [new_deadline, finalTodosJSON, step.id]
+    );
+
+    // Add activity log
+    await connection.query(
+      `INSERT INTO step_activity (step_id, user_id, action_text) VALUES (?, ?, 'Step rejected and reassigned with a new deadline.')`,
+      [step.id, user_id || null]
+    );
+
+    await connection.commit();
+    res.json({ message: 'Step rejected and reassigned successfully.' });
   } catch (error) {
     await connection.rollback();
     res.status(500).json({ error: error.message });
@@ -834,7 +905,7 @@ router.post('/:id/steps/:step_id/approve-commission', async (req, res) => {
 
     // Commission Logic
     const [[late_setting]] = await connection.query('SELECT setting_value FROM settings WHERE setting_key = "late_delivery_deduction_pct"');
-    const late_deduction_pct = parseFloat(late_setting.setting_value) || 0;
+    const late_deduction_pct = late_setting ? (parseFloat(late_setting.setting_value) || 0) : 0;
     
     let step_is_late = false;
     if (step.deadline && step.completed_at) {

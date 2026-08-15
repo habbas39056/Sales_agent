@@ -567,6 +567,59 @@ export default function ClientPortal() {
                       </button>
                     </div>
                   </div>
+
+                  {/* Recent Alerts Widget */}
+                  <div className="dashboard-section" style={{ padding: '1.25rem', marginTop: '1.5rem' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+                      <h3 style={{ fontSize: '1.05rem', margin: 0, display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                        <Bell size={18} color="#f59e0b" /> Recent Alerts
+                      </h3>
+                    </div>
+                    
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                      {notifications.length === 0 ? (
+                        <p style={{ color: '#94a3b8', fontStyle: 'italic', fontSize: '0.9rem', margin: 0 }}>No recent alerts.</p>
+                      ) : (
+                        notifications.slice(0, 5).map(n => (
+                          <div 
+                            key={n.id} 
+                            style={{ 
+                              padding: '0.75rem', 
+                              borderRadius: '8px', 
+                              background: n.is_read ? '#f8fafc' : '#eff6ff', 
+                              border: `1px solid ${n.is_read ? '#e2e8f0' : '#bfdbfe'}`,
+                              display: 'flex',
+                              gap: '0.5rem',
+                              alignItems: 'flex-start'
+                            }}
+                          >
+                            <div style={{ 
+                              width: '8px', 
+                              height: '8px', 
+                              borderRadius: '50%', 
+                              background: n.is_read ? 'transparent' : '#3b82f6',
+                              marginTop: '6px',
+                              flexShrink: 0
+                            }}></div>
+                            <div style={{ flex: 1 }}>
+                              <p style={{ 
+                                margin: 0, 
+                                fontSize: '0.9rem', 
+                                color: n.is_read ? '#475569' : '#0f172a',
+                                fontWeight: n.is_read ? '400' : '500',
+                                lineHeight: '1.4'
+                              }}>
+                                {n.message}
+                              </p>
+                              <span style={{ fontSize: '0.75rem', color: '#94a3b8', marginTop: '0.25rem', display: 'block' }}>
+                                {new Date(n.created_at).toLocaleString()}
+                              </span>
+                            </div>
+                          </div>
+                        ))
+                      )}
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>

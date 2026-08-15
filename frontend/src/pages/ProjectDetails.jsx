@@ -8,6 +8,35 @@ import StepActivityLog from '../components/StepActivityLog';
 import './ProjectDetails.css';
 import './Modal.css';
 
+const renderDescriptionWithCheckboxes = (text) => {
+  if (!text) return null;
+  const lines = text.split('\n');
+  return lines.map((line, idx) => {
+    const trimmed = line.trim();
+    const isUnchecked = trimmed.startsWith('- [ ]');
+    const isChecked = trimmed.startsWith('- [x]') || trimmed.startsWith('- [X]');
+    
+    if (isUnchecked || isChecked) {
+      const content = trimmed.substring(5).trim();
+      return (
+        <div key={idx} style={{ display: 'flex', alignItems: 'flex-start', gap: '0.5rem', marginBottom: '0.25rem' }}>
+          <input type="checkbox" checked={isChecked} readOnly style={{ marginTop: '0.25rem' }} />
+          <span style={{ textDecoration: isChecked ? 'line-through' : 'none', color: isChecked ? '#94a3b8' : 'inherit' }}>
+            {content}
+          </span>
+        </div>
+      );
+    }
+    
+    return (
+      <React.Fragment key={idx}>
+        {line}
+        {idx < lines.length - 1 && <br />}
+      </React.Fragment>
+    );
+  });
+};
+
 export default function ProjectDetails() {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -26,6 +55,13 @@ export default function ProjectDetails() {
   const [isReassignModalOpen, setIsReassignModalOpen] = useState(false);
   const [stepToReassign, setStepToReassign] = useState(null);
   const [newDeadline, setNewDeadline] = useState('');
+  const [reassignTodos, setReassignTodos] = useState([{ id: Date.now(), text: '', file: null }]);
+
+  // Reject Modal State
+  const [isRejectModalOpen, setIsRejectModalOpen] = useState(false);
+  const [stepToReject, setStepToReject] = useState(null);
+  const [rejectDeadline, setRejectDeadline] = useState('');
+  const [rejectTodos, setRejectTodos] = useState([{ id: Date.now(), text: '', file: null }]);
 
   // Submit Deliverable Modal State
   const [submitModal, setSubmitModal] = useState({ isOpen: false, stepId: null });
@@ -78,8 +114,8 @@ export default function ProjectDetails() {
 
   const handleClientReviewSubmit = async (e) => {
     e.preventDefault();
-    if (!clientReviewForm.title || !clientReviewForm.file) {
-      alert("Title and File are required.");
+    if (!clientReviewForm.title) {
+      alert("Title is required.");
       return;
     }
 
@@ -232,18 +268,95 @@ export default function ProjectDetails() {
       alert('Please select a new deadline.');
       return;
     }
+
+    const todosData = [];
+    const formData = new FormData();
+    formData.append('new_deadline', newDeadline);
+    formData.append('user_id', currentUser ? currentUser.id : '');
+
+    let fileIndex = 0;
+    reassignTodos.forEach(todo => {
+      if (todo.text.trim()) {
+        const todoItem = { text: todo.text, hasFile: false };
+        if (todo.file) {
+          formData.append('attachments', todo.file);
+          todoItem.hasFile = true;
+          todoItem.fileIndex = fileIndex;
+          fileIndex++;
+        }
+        todosData.push(todoItem);
+      }
+    });
+
+    if (todosData.length === 0) {
+      alert('Please provide at least one feedback/to-do item.');
+      return;
+    }
+
+    formData.append('todos', JSON.stringify(todosData));
+
     try {
-      await axios.post(`/api/projects/${id}/steps/${stepToReassign.id}/reassign`, {
-        new_deadline: newDeadline
+      await axios.post(`/api/projects/${id}/steps/${stepToReassign.id}/reassign`, formData, {
+        headers: { 'Content-Type': 'multipart/form-data' }
       });
       setIsReassignModalOpen(false);
       setStepToReassign(null);
       setNewDeadline('');
+      setReassignTodos([{ id: Date.now(), text: '', file: null }]);
       alert('Step successfully reassigned!');
       fetchProjectDetails();
     } catch (err) {
       console.error('Failed to reassign step', err);
       alert(err.response?.data?.error || 'Failed to reassign step');
+    }
+  };
+
+  const handleRejectSubmit = async (e) => {
+    e.preventDefault();
+    if (!rejectDeadline) {
+      alert('Please select a new deadline.');
+      return;
+    }
+
+    const todosData = [];
+    const formData = new FormData();
+    formData.append('new_deadline', rejectDeadline);
+    formData.append('user_id', currentUser ? currentUser.id : '');
+
+    let fileIndex = 0;
+    rejectTodos.forEach(todo => {
+      if (todo.text.trim()) {
+        const todoItem = { text: todo.text, hasFile: false };
+        if (todo.file) {
+          formData.append('attachments', todo.file);
+          todoItem.hasFile = true;
+          todoItem.fileIndex = fileIndex;
+          fileIndex++;
+        }
+        todosData.push(todoItem);
+      }
+    });
+
+    if (todosData.length === 0) {
+      alert('Please provide at least one feedback/to-do item.');
+      return;
+    }
+
+    formData.append('todos', JSON.stringify(todosData));
+
+    try {
+      await axios.post(`/api/projects/${id}/steps/${stepToReject.id}/reject`, formData, {
+        headers: { 'Content-Type': 'multipart/form-data' }
+      });
+      setIsRejectModalOpen(false);
+      setStepToReject(null);
+      setRejectDeadline('');
+      setRejectTodos([{ id: Date.now(), text: '', file: null }]);
+      alert('Step successfully rejected and reassigned!');
+      fetchProjectDetails();
+    } catch (err) {
+      console.error('Failed to reject step', err);
+      alert(err.response?.data?.error || 'Failed to reject step');
     }
   };
 
@@ -508,6 +621,51 @@ export default function ProjectDetails() {
                           </div>
                         )}
 
+                        {(step.reassign_todos || step.reject_todos) && (() => {
+                          const todosList = step.reject_todos || step.reassign_todos;
+                          let parsedTodos = [];
+                          try {
+                            parsedTodos = typeof todosList === 'string' ? JSON.parse(todosList) : todosList;
+                          } catch (e) {}
+                          
+                          if (Array.isArray(parsedTodos) && parsedTodos.length > 0) {
+                            return (
+                              <div style={{ marginTop: '0.8rem', padding: '1rem', background: '#fff1f2', border: '1px solid #fecaca', borderRadius: '8px', display: 'flex', flexDirection: 'column', gap: '0.5rem', width: '100%' }}>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '0.5rem' }}>
+                                  <strong style={{ fontSize: '0.85rem', color: '#e11d48', display: 'flex', alignItems: 'center', gap: '0.4rem', textTransform: 'uppercase' }}>
+                                    ⚠️ FEEDBACK TO-DOS
+                                  </strong>
+                                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
+                                    <span style={{ background: '#e11d48', color: 'white', fontSize: '0.7rem', padding: '2px 6px', borderRadius: '4px', fontWeight: 'bold' }}>
+                                      REASSIGNED
+                                    </span>
+                                    {step.deadline && (
+                                      <span style={{ background: '#fef2f2', color: '#e11d48', fontSize: '0.7rem', padding: '2px 6px', borderRadius: '4px', border: '1px solid #fecaca', fontWeight: 'bold' }}>
+                                        Deadline: {new Date(step.deadline).toLocaleDateString()}
+                                      </span>
+                                    )}
+                                  </div>
+                                </div>
+                                <ul style={{ margin: 0, paddingLeft: '1.5rem', display: 'flex', flexDirection: 'column', gap: '0.5rem', color: '#4c1d95', fontSize: '0.9rem' }}>
+                                  {parsedTodos.map((todo, idx) => (
+                                    <li key={idx} style={{ lineHeight: '1.4' }}>
+                                      {todo.text}
+                                      {todo.file_url && (
+                                        <div style={{ marginTop: '0.2rem' }}>
+                                          <a href={`http://localhost:5000${todo.file_url}`} target="_blank" rel="noopener noreferrer" style={{ display: 'inline-flex', alignItems: 'center', gap: '0.2rem', fontSize: '0.8rem', color: '#2563eb', textDecoration: 'none', background: '#eff6ff', padding: '0.2rem 0.5rem', borderRadius: '4px', border: '1px solid #bfdbfe' }}>
+                                            <ExternalLink size={12} /> View Attached File
+                                          </a>
+                                        </div>
+                                      )}
+                                    </li>
+                                  ))}
+                                </ul>
+                              </div>
+                            );
+                          }
+                          return null;
+                        })()}
+
                       </div>
                     </div>
                     <div className="workflow-item-right" onClick={(e) => e.stopPropagation()} style={{display: 'flex', gap: '1rem', alignItems: 'center'}}>
@@ -580,9 +738,8 @@ export default function ProjectDetails() {
                                 type="button"
                                 onClick={(e) => {
                                   e.stopPropagation();
-                                  if (window.confirm('Are you sure you want to reject this step and send it back to production?')) {
-                                    handleStatusChange(step.id, 'Active');
-                                  }
+                                  setStepToReject(step);
+                                  setIsRejectModalOpen(true);
                                 }}
                                 style={{ padding: '0.4rem 0.75rem', borderRadius: '6px', border: '1px solid #ef4444', backgroundColor: '#fef2f2', color: '#ef4444', fontWeight: '600', cursor: 'pointer' }}
                               >
@@ -720,7 +877,7 @@ export default function ProjectDetails() {
                             <div className="tp-grid">
                               <div className="tp-col">
                                 <label>Description:</label>
-                                <p>{step.description || 'No description provided.'}</p>
+                                <div>{step.description ? renderDescriptionWithCheckboxes(step.description) : 'No description provided.'}</div>
                               </div>
                               <div className="tp-col">
                                 <label>Assigned To:</label>
@@ -1194,6 +1351,113 @@ export default function ProjectDetails() {
           </div>
         )}
       </div>
+      {/* Reject Step Modal */}
+      {isRejectModalOpen && stepToReject && (
+        <div className="modal-overlay">
+          <div className="modal-content" style={{ maxWidth: '500px' }}>
+            <div className="modal-header">
+              <h2>Reject & Reassign Step</h2>
+              <button className="modal-close" onClick={() => setIsRejectModalOpen(false)}>
+                <X size={20} />
+              </button>
+            </div>
+            <form onSubmit={handleRejectSubmit}>
+              <div className="form-group" style={{ marginBottom: '1rem' }}>
+                <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: '600' }}>
+                  New Deadline for "{stepToReject.title}"
+                </label>
+                <input 
+                  type="date" 
+                  required
+                  value={rejectDeadline}
+                  onChange={(e) => setRejectDeadline(e.target.value)}
+                  style={{ width: '100%', padding: '0.6rem', borderRadius: '6px', border: '1px solid #cbd5e1' }}
+                />
+              </div>
+              <div className="form-group" style={{ marginBottom: '1rem' }}>
+                <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: '800', fontSize: '0.8rem', color: '#475569', textTransform: 'uppercase' }}>
+                  FEEDBACK TO-DOS
+                </label>
+                
+                {rejectTodos.map((todo, index) => (
+                  <div key={todo.id} style={{ marginBottom: '1rem' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                      <input 
+                        type="text"
+                        value={todo.text}
+                        onChange={(e) => {
+                          const newTodos = [...rejectTodos];
+                          newTodos[index].text = e.target.value;
+                          setRejectTodos(newTodos);
+                        }}
+                        placeholder={`Change requested #${index + 1}...`}
+                        style={{ flex: 1, padding: '0.6rem', borderRadius: '6px', border: '1px solid #cbd5e1' }}
+                      />
+                      
+                      <label style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', width: '36px', height: '36px', border: '1px solid #cbd5e1', borderRadius: '6px', backgroundColor: '#f8fafc', color: todo.file ? '#10b981' : '#64748b' }}>
+                        <Image size={18} />
+                        <input 
+                          type="file" 
+                          style={{ display: 'none' }}
+                          onChange={(e) => {
+                            if (e.target.files && e.target.files.length > 0) {
+                              const newTodos = [...rejectTodos];
+                              newTodos[index].file = e.target.files[0];
+                              setRejectTodos(newTodos);
+                            }
+                          }}
+                        />
+                      </label>
+
+                      {rejectTodos.length > 1 && (
+                        <button 
+                          type="button"
+                          onClick={() => {
+                            const newTodos = rejectTodos.filter(t => t.id !== todo.id);
+                            setRejectTodos(newTodos);
+                          }}
+                          style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', width: '36px', height: '36px', border: '1px solid #fecaca', borderRadius: '6px', backgroundColor: '#fef2f2', color: '#ef4444' }}
+                        >
+                          <Trash2 size={18} />
+                        </button>
+                      )}
+                    </div>
+                    {todo.file && (
+                      <div style={{ fontSize: '0.75rem', color: '#64748b', marginTop: '0.25rem', paddingLeft: '0.25rem' }}>
+                        1 file(s) attached: {todo.file.name}
+                      </div>
+                    )}
+                  </div>
+                ))}
+                
+                <button 
+                  type="button" 
+                  onClick={() => setRejectTodos([...rejectTodos, { id: Date.now(), text: '', file: null }])}
+                  style={{ background: 'none', border: 'none', color: '#4f46e5', fontWeight: '700', fontSize: '0.85rem', cursor: 'pointer', padding: '0', display: 'flex', alignItems: 'center', gap: '0.25rem' }}
+                >
+                  <Plus size={16} /> Add Another Point
+                </button>
+              </div>
+              <div className="modal-actions" style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.5rem' }}>
+                <button 
+                  type="button" 
+                  onClick={() => setIsRejectModalOpen(false)}
+                  style={{ padding: '0.5rem 1rem', background: '#e2e8f0', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: '600' }}
+                >
+                  Cancel
+                </button>
+                <button 
+                  type="submit"
+                  style={{ padding: '0.5rem 1rem', background: '#ef4444', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: '600' }}
+                >
+                  Confirm Reject
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
       {/* Reassign Step Modal */}
       {isReassignModalOpen && stepToReassign && (
         <div className="modal-overlay">
@@ -1219,6 +1483,70 @@ export default function ProjectDetails() {
                 <small style={{ display: 'block', marginTop: '0.5rem', color: '#64748b' }}>
                   This will reset the step status back to 'Pending' and send it back to the assigned team member.
                 </small>
+              </div>
+              <div className="form-group" style={{ marginBottom: '1rem' }}>
+                <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: '800', fontSize: '0.8rem', color: '#475569', textTransform: 'uppercase' }}>
+                  FEEDBACK TO-DOS
+                </label>
+                
+                {reassignTodos.map((todo, index) => (
+                  <div key={todo.id} style={{ marginBottom: '1rem' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                      <input 
+                        type="text"
+                        value={todo.text}
+                        onChange={(e) => {
+                          const newTodos = [...reassignTodos];
+                          newTodos[index].text = e.target.value;
+                          setReassignTodos(newTodos);
+                        }}
+                        placeholder={`Change requested #${index + 1}...`}
+                        style={{ flex: 1, padding: '0.6rem', borderRadius: '6px', border: '1px solid #cbd5e1' }}
+                      />
+                      
+                      <label style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', width: '36px', height: '36px', border: '1px solid #cbd5e1', borderRadius: '6px', backgroundColor: '#f8fafc', color: todo.file ? '#10b981' : '#64748b' }}>
+                        <Image size={18} />
+                        <input 
+                          type="file" 
+                          style={{ display: 'none' }}
+                          onChange={(e) => {
+                            if (e.target.files && e.target.files.length > 0) {
+                              const newTodos = [...reassignTodos];
+                              newTodos[index].file = e.target.files[0];
+                              setReassignTodos(newTodos);
+                            }
+                          }}
+                        />
+                      </label>
+
+                      {reassignTodos.length > 1 && (
+                        <button 
+                          type="button"
+                          onClick={() => {
+                            const newTodos = reassignTodos.filter(t => t.id !== todo.id);
+                            setReassignTodos(newTodos);
+                          }}
+                          style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', width: '36px', height: '36px', border: '1px solid #fecaca', borderRadius: '6px', backgroundColor: '#fef2f2', color: '#ef4444' }}
+                        >
+                          <Trash2 size={18} />
+                        </button>
+                      )}
+                    </div>
+                    {todo.file && (
+                      <div style={{ fontSize: '0.75rem', color: '#64748b', marginTop: '0.25rem', paddingLeft: '0.25rem' }}>
+                        1 file(s) attached: {todo.file.name}
+                      </div>
+                    )}
+                  </div>
+                ))}
+                
+                <button 
+                  type="button" 
+                  onClick={() => setReassignTodos([...reassignTodos, { id: Date.now(), text: '', file: null }])}
+                  style={{ background: 'none', border: 'none', color: '#4f46e5', fontWeight: '700', fontSize: '0.85rem', cursor: 'pointer', padding: '0', display: 'flex', alignItems: 'center', gap: '0.25rem' }}
+                >
+                  <Plus size={16} /> Add Another Point
+                </button>
               </div>
               <div className="modal-actions" style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.5rem' }}>
                 <button 
@@ -1332,11 +1660,10 @@ export default function ProjectDetails() {
               </div>
 
               <div className="form-group" style={{ marginBottom: '1.25rem' }}>
-                <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: '800', color: '#475569', marginBottom: '0.5rem', textTransform: 'uppercase' }}>DELIVERABLE FILE *</label>
+                <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: '800', color: '#475569', marginBottom: '0.5rem', textTransform: 'uppercase' }}>DELIVERABLE FILE</label>
                 <input 
                   type="file" 
                   onChange={(e) => setClientReviewForm({...clientReviewForm, file: e.target.files[0]})}
-                  required
                   style={{ width: '100%', padding: '0.5rem', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '0.9rem' }}
                 />
               </div>

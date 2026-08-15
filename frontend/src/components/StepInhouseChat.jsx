@@ -92,12 +92,19 @@ export default function StepInhouseChat({ stepId, currentUser }) {
         </div>
 
         <form className="comments-input-area" onSubmit={handleSubmit}>
-          <input 
-            type="text" 
-            placeholder="Type an internal message to the team..." 
+          <textarea 
+            placeholder="Type an internal message to the team (Shift+Enter for newline)..." 
             value={newChat} 
             onChange={(e) => setNewChat(e.target.value)}
             disabled={sending}
+            rows={2}
+            style={{ resize: 'vertical', minHeight: '40px', padding: '10px', width: '100%', fontFamily: 'inherit' }}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                handleSubmit(e);
+              }
+            }}
           />
           <button type="submit" className="btn-send-comment inhouse-btn" disabled={!newChat.trim() || sending}>
             <Send size={16} /> Send

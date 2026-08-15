@@ -18,12 +18,12 @@ const upload = multer({ storage: storage });
 // Create a new client review submission
 router.post('/projects/:project_id', upload.single('file'), async (req, res) => {
   const { title, description, deadline } = req.body;
-  if (!title || !req.file) {
-    return res.status(400).json({ error: 'Title and file are required.' });
+  if (!title) {
+    return res.status(400).json({ error: 'Title is required.' });
   }
 
   try {
-    const file_url = `/uploads/${req.file.filename}`;
+    const file_url = req.file ? `/uploads/${req.file.filename}` : null;
     const [result] = await db.query(
       'INSERT INTO client_reviews (project_id, title, description, file_url, deadline) VALUES (?, ?, ?, ?, ?)',
       [req.params.project_id, title, description, file_url, deadline || null]

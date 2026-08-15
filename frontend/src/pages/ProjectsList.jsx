@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { useNavigate } from 'react-router-dom';
+import Select from 'react-select';
 import { Search, Folder, Plus, X, FileSpreadsheet, Edit2, Trash2, Eye, MessageCircle, Lock, FileText, Bell } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import Pagination from '../components/Pagination';
@@ -565,10 +566,25 @@ export default function ProjectsList() {
               <div className="form-row">
                 <div className="form-group">
                   <label>Client *</label>
-                  <select name="client_id" value={formData.client_id} onChange={handleInputChange} required>
-                    <option value="">Select a Client...</option>
-                    {clients.map(c => <option key={c.id} value={c.id}>{c.full_name} ({c.business_name || 'Individual'})</option>)}
-                  </select>
+                  <Select
+                    options={clients.map(c => ({ value: c.id, label: `${c.full_name} (${c.business_name || 'Individual'})` }))}
+                    value={(() => {
+                      if (!formData.client_id) return null;
+                      const found = clients.find(c => String(c.id) === String(formData.client_id));
+                      return found ? { value: found.id, label: `${found.full_name} (${found.business_name || 'Individual'})` } : null;
+                    })()}
+                    onChange={(selectedOption) => handleInputChange({ target: { name: 'client_id', value: selectedOption ? selectedOption.value : '' } })}
+                    placeholder="Select a Client..."
+                    isSearchable={true}
+                    isClearable={true}
+                    required
+                    styles={{
+                      menu: (base) => ({
+                        ...base,
+                        zIndex: 9999
+                      })
+                    }}
+                  />
                 </div>
 
                 <div className="form-group">
@@ -718,15 +734,25 @@ export default function ProjectsList() {
               <div className="form-row">
                 <div className="form-group">
                   <label>Client *</label>
-                  <select 
-                    name="client_id" 
-                    value={editFormData.client_id} 
-                    onChange={(e) => setEditFormData({ ...editFormData, client_id: e.target.value })} 
+                  <Select
+                    options={clients.map(c => ({ value: c.id, label: `${c.full_name} (${c.business_name || 'Individual'})` }))}
+                    value={(() => {
+                      if (!editFormData.client_id) return null;
+                      const found = clients.find(c => String(c.id) === String(editFormData.client_id));
+                      return found ? { value: found.id, label: `${found.full_name} (${found.business_name || 'Individual'})` } : null;
+                    })()}
+                    onChange={(selectedOption) => setEditFormData({ ...editFormData, client_id: selectedOption ? selectedOption.value : '' })}
+                    placeholder="Select a Client..."
+                    isSearchable={true}
+                    isClearable={true}
                     required
-                  >
-                    <option value="">Select a Client...</option>
-                    {clients.map(c => <option key={c.id} value={c.id}>{c.full_name} ({c.business_name || 'Individual'})</option>)}
-                  </select>
+                    styles={{
+                      menu: (base) => ({
+                        ...base,
+                        zIndex: 9999
+                      })
+                    }}
+                  />
                 </div>
               </div>
 

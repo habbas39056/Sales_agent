@@ -1,6 +1,6 @@
 import React from 'react';
 import { BrowserRouter as Router, Routes, Route, Link, useLocation, useNavigate, Navigate } from 'react-router-dom';
-import { LayoutDashboard, Users, FileText, PlusCircle, Calendar, Clock, CheckSquare, MessageSquare, RotateCcw, CreditCard, Banknote, LogOut, Shield, Settings as SettingsIcon } from 'lucide-react';
+import { LayoutDashboard, Users, FileText, PlusCircle, Calendar, Clock, CheckSquare, MessageSquare, RotateCcw, CreditCard, Banknote, LogOut, Shield, Settings as SettingsIcon, CheckCircle2 } from 'lucide-react';
 import Dashboard from './pages/Dashboard';
 import Login from './pages/Login';
 import ClientsList from './pages/ClientsList';
@@ -154,7 +154,16 @@ function AppContent() {
             )}
 
             {(!user || user.role === 'Admin' || (user.modules_access && user.modules_access.includes('DEADLINES'))) && (
-              <li><Link to="/deadlines" className={location.pathname.startsWith('/deadlines') ? 'active' : ''}><Clock size={20} /> Deadline Workflow</Link></li>
+              <>
+                <li><Link to="/deadlines" className={location.pathname.startsWith('/deadlines') ? 'active' : ''}><Clock size={20} /> Deadline Workflow</Link></li>
+                {location.pathname.startsWith('/deadlines') && (user?.role === 'Admin' || user?.role === 'Product Manager' || user?.role === 'PM' || user?.role === 'Project Manager') && (
+                  <li className="submenu-item">
+                    <Link to="/deadlines?tab=approval" className={`sidebar-link ${location.search.includes('tab=approval') ? 'active' : ''}`} style={{ paddingLeft: '3.2rem', fontSize: '0.9rem', opacity: 0.9 }}>
+                      <CheckCircle2 size={16} /> Tasks for Approval
+                    </Link>
+                  </li>
+                )}
+              </>
             )}
             
             {(!user || user.role === 'Admin' || (user.modules_access && user.modules_access.includes('CASHBOOK'))) && (

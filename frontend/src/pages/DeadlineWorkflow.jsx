@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
-import { useNavigate } from 'react-router-dom';
-import { Clock, CheckCircle2, XCircle, ArrowRight, User, AlertCircle, FolderKanban, RefreshCw, Calendar, ShieldCheck, Edit3, ExternalLink } from 'lucide-react';
+import { useNavigate, useLocation } from 'react-router-dom';
+import { Clock, CheckCircle2, XCircle, ArrowRight, User, AlertCircle, FolderKanban, RefreshCw, Calendar, ShieldCheck, Edit3, ExternalLink, Search } from 'lucide-react';
 import './DeadlineWorkflow.css';
 
 export default function DeadlineWorkflow() {
@@ -11,6 +11,14 @@ export default function DeadlineWorkflow() {
   const [filterTab, setFilterTab] = useState('Pending Acceptance');
 
   const navigate = useNavigate();
+  const location = useLocation();
+
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    if (params.get('tab') === 'approval') {
+      setFilterTab('Tasks for Approval');
+    }
+  }, [location.search]);
 
   // Extension Appeal Modal state
   const [appealModalStep, setAppealModalStep] = useState(null);
@@ -129,26 +137,53 @@ export default function DeadlineWorkflow() {
     }
   };
 
+  const handleApproveTask = async (stepId, projectId) => {
+    if (!window.confirm('Are you sure you want to approve this task and mark it as completed?')) return;
+    setProcessingId(stepId);
+    try {
+      await axios.put(`/api/projects/${projectId}/steps/${stepId}`, { status: 'Completed' });
+      alert('Task approved successfully!');
+      fetchAppeals();
+    } catch (error) {
+      console.error('Failed to approve task', error);
+      alert('Failed to approve task.');
+    } finally {
+      setProcessingId(null);
+    }
+  };
+
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
+  const [searchQuery, setSearchQuery] = useState('');
+
+  const getLocalDateString = (d) => {
+    const date = new Date(d);
+    date.setMinutes(date.getMinutes() - date.getTimezoneOffset());
+    return date.toISOString().split('T')[0];
+  };
 
   const setQuickDateFilter = (type) => {
     const today = new Date();
     if (type === 'today') {
-      const dateStr = today.toISOString().split('T')[0];
+      const dateStr = getLocalDateString(today);
       setStartDate(dateStr);
       setEndDate(dateStr);
     } else if (type === 'tomorrow') {
       const tmrw = new Date(today);
       tmrw.setDate(tmrw.getDate() + 1);
-      const dateStr = tmrw.toISOString().split('T')[0];
+      const dateStr = getLocalDateString(tmrw);
       setStartDate(dateStr);
       setEndDate(dateStr);
     } else if (type === 'this_week') {
-      const endOfWeek = new Date(today);
-      endOfWeek.setDate(endOfWeek.getDate() + (7 - endOfWeek.getDay())); // Sunday
-      setStartDate(today.toISOString().split('T')[0]);
-      setEndDate(endOfWeek.toISOString().split('T')[0]);
+      const startOfWeek = new Date(today);
+      const day = startOfWeek.getDay() || 7; // Convert Sunday (0) to 7
+      startOfWeek.setDate(startOfWeek.getDate() - (day - 1)); // Set to Monday
+      
+      const endOfWeek = new Date(startOfWeek);
+      endOfWeek.setDate(startOfWeek.getDate() + 6); // Set to Sunday
+      
+      setStartDate(getLocalDateString(startOfWeek));
+      setEndDate(getLocalDateString(endOfWeek));
     }
   };
 
@@ -157,25 +192,33 @@ export default function DeadlineWorkflow() {
   const pendingAcceptanceCount = appeals.filter(a => a.deadline_status === 'Pending Acceptance' || !a.deadline_status).length;
   const extensionAppealsCount = appeals.filter(a => a.deadline_status === 'Appealed').length;
   const confirmedCount = appeals.filter(a => a.deadline_status === 'Accepted').length;
+  const tasksForApprovalCount = appeals.filter(a => a.step_status === 'Pending Approval').length;
 
   // Filter items
   const filteredItems = appeals.filter(item => {
     if (filterTab === 'Appealed' && item.deadline_status !== 'Appealed') return false;
     if (filterTab === 'Pending Acceptance' && item.deadline_status !== 'Pending Acceptance' && item.deadline_status) return false;
     if (filterTab === 'Accepted' && item.deadline_status !== 'Accepted') return false;
+    if (filterTab === 'Tasks for Approval' && item.step_status !== 'Pending Approval') return false;
 
     if (startDate || endDate) {
       if (!item.original_deadline) return false;
       const itemDate = new Date(item.original_deadline);
-      if (startDate) {
-        const s = new Date(startDate);
-        s.setHours(0, 0, 0, 0);
-        if (itemDate < s) return false;
-      }
-      if (endDate) {
-        const e = new Date(endDate);
-        e.setHours(23, 59, 59, 999);
-        if (itemDate > e) return false;
+      const itemDateStr = getLocalDateString(itemDate);
+      
+      if (startDate && itemDateStr < startDate) return false;
+      if (endDate && itemDateStr > endDate) return false;
+    }
+
+    if (searchQuery) {
+      const q = searchQuery.toLowerCase();
+      const matchesProject = item.project_title && item.project_title.toLowerCase().includes(q);
+      const matchesStep = item.step_title && item.step_title.toLowerCase().includes(q);
+      const matchesClient = item.client_name && item.client_name.toLowerCase().includes(q);
+      const matchesEmployee = item.employee_name && item.employee_name.toLowerCase().includes(q);
+      
+      if (!matchesProject && !matchesStep && !matchesClient && !matchesEmployee) {
+        return false;
       }
     }
 
@@ -188,8 +231,17 @@ export default function DeadlineWorkflow() {
       {/* Header */}
       <div className="deadline-wf-header">
         <div className="deadline-wf-title">
-          <h1>Deadline Workflow & Appeals Center ⏳</h1>
-          <p>Track, accept, request extensions, or update all project step deadlines across the agency.</p>
+          {filterTab === 'Tasks for Approval' ? (
+            <>
+              <h1>Tasks for Approval Center ✅</h1>
+              <p>Review and approve tasks submitted by the production team.</p>
+            </>
+          ) : (
+            <>
+              <h1>Deadline Workflow & Appeals Center ⏳</h1>
+              <p>Track, accept, request extensions, or update all project step deadlines across the agency.</p>
+            </>
+          )}
         </div>
         <button 
           onClick={fetchAppeals} 
@@ -199,100 +251,121 @@ export default function DeadlineWorkflow() {
         </button>
       </div>
 
-      {/* KPI Stats */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1.25rem' }}>
-        <div style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '14px', padding: '1.25rem', display: 'flex', alignItems: 'center', gap: '1rem' }}>
-          <div style={{ width: '48px', height: '48px', borderRadius: '12px', background: '#e0e7ff', color: '#4338ca', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            <Calendar size={22} />
+      {/* KPI Stats - Hidden in Tasks for Approval */}
+      {filterTab !== 'Tasks for Approval' && (
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1.25rem' }}>
+          <div style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '14px', padding: '1.25rem', display: 'flex', alignItems: 'center', gap: '1rem' }}>
+            <div style={{ width: '48px', height: '48px', borderRadius: '12px', background: '#e0e7ff', color: '#4338ca', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <Calendar size={22} />
+            </div>
+            <div>
+              <div style={{ fontSize: '1.5rem', fontWeight: '800', color: '#0f172a' }}>{totalCount}</div>
+              <div style={{ fontSize: '0.8rem', color: '#64748b', fontWeight: '600' }}>Tracked Step Deadlines</div>
+            </div>
           </div>
-          <div>
-            <div style={{ fontSize: '1.5rem', fontWeight: '800', color: '#0f172a' }}>{totalCount}</div>
-            <div style={{ fontSize: '0.8rem', color: '#64748b', fontWeight: '600' }}>Tracked Step Deadlines</div>
+
+          <div style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '14px', padding: '1.25rem', display: 'flex', alignItems: 'center', gap: '1rem' }}>
+            <div style={{ width: '48px', height: '48px', borderRadius: '12px', background: '#fef3c7', color: '#b45309', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <Clock size={22} />
+            </div>
+            <div>
+              <div style={{ fontSize: '1.5rem', fontWeight: '800', color: '#0f172a' }}>{pendingAcceptanceCount}</div>
+              <div style={{ fontSize: '0.8rem', color: '#64748b', fontWeight: '600' }}>Pending Acceptance</div>
+            </div>
+          </div>
+
+          <div style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '14px', padding: '1.25rem', display: 'flex', alignItems: 'center', gap: '1rem' }}>
+            <div style={{ width: '48px', height: '48px', borderRadius: '12px', background: '#ffe4e6', color: '#e11d48', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <AlertCircle size={22} />
+            </div>
+            <div>
+              <div style={{ fontSize: '1.5rem', fontWeight: '800', color: '#0f172a' }}>{extensionAppealsCount}</div>
+              <div style={{ fontSize: '0.8rem', color: '#64748b', fontWeight: '600' }}>Extension Appeals</div>
+            </div>
+          </div>
+
+          <div style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '14px', padding: '1.25rem', display: 'flex', alignItems: 'center', gap: '1rem' }}>
+            <div style={{ width: '48px', height: '48px', borderRadius: '12px', background: '#d1fae5', color: '#047857', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <CheckCircle2 size={22} />
+            </div>
+            <div>
+              <div style={{ fontSize: '1.5rem', fontWeight: '800', color: '#0f172a' }}>{confirmedCount}</div>
+              <div style={{ fontSize: '0.8rem', color: '#64748b', fontWeight: '600' }}>Confirmed & Aligned</div>
+            </div>
           </div>
         </div>
+      )}
 
-        <div style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '14px', padding: '1.25rem', display: 'flex', alignItems: 'center', gap: '1rem' }}>
-          <div style={{ width: '48px', height: '48px', borderRadius: '12px', background: '#fef3c7', color: '#b45309', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            <Clock size={22} />
-          </div>
-          <div>
-            <div style={{ fontSize: '1.5rem', fontWeight: '800', color: '#0f172a' }}>{pendingAcceptanceCount}</div>
-            <div style={{ fontSize: '0.8rem', color: '#64748b', fontWeight: '600' }}>Pending Acceptance</div>
-          </div>
+      {/* Filter Bar - Hidden in Tasks for Approval */}
+      {filterTab !== 'Tasks for Approval' && (
+        <div style={{ display: 'flex', gap: '0.5rem', overflowX: 'auto', paddingBottom: '0.25rem' }}>
+          <button 
+            onClick={() => { navigate('/deadlines'); setFilterTab('All'); }}
+            style={{ 
+              background: filterTab === 'All' ? '#0f172a' : '#ffffff', 
+              color: filterTab === 'All' ? '#ffffff' : '#64748b', 
+              border: '1px solid #cbd5e1', padding: '0.5rem 1.1rem', borderRadius: '10px', fontWeight: '600', fontSize: '0.85rem', cursor: 'pointer' 
+            }}
+          >
+            All Deadlines ({totalCount})
+          </button>
+
+          <button 
+            onClick={() => { navigate('/deadlines'); setFilterTab('Appealed'); }}
+            style={{ 
+              background: filterTab === 'Appealed' ? '#0f172a' : '#ffffff', 
+              color: filterTab === 'Appealed' ? '#ffffff' : '#64748b', 
+              border: '1px solid #cbd5e1', padding: '0.5rem 1.1rem', borderRadius: '10px', fontWeight: '600', fontSize: '0.85rem', cursor: 'pointer' 
+            }}
+          >
+            ⚠️ Extension Appeals ({extensionAppealsCount})
+          </button>
+
+          <button 
+            onClick={() => { navigate('/deadlines'); setFilterTab('Pending Acceptance'); }}
+            style={{ 
+              background: filterTab === 'Pending Acceptance' ? '#0f172a' : '#ffffff', 
+              color: filterTab === 'Pending Acceptance' ? '#ffffff' : '#64748b', 
+              border: '1px solid #cbd5e1', padding: '0.5rem 1.1rem', borderRadius: '10px', fontWeight: '600', fontSize: '0.85rem', cursor: 'pointer' 
+            }}
+          >
+            ⏳ Pending Acceptance ({pendingAcceptanceCount})
+          </button>
+
+          <button 
+            onClick={() => { navigate('/deadlines'); setFilterTab('Accepted'); }}
+            style={{ 
+              background: filterTab === 'Accepted' ? '#0f172a' : '#ffffff', 
+              color: filterTab === 'Accepted' ? '#ffffff' : '#64748b', 
+              border: '1px solid #cbd5e1', padding: '0.5rem 1.1rem', borderRadius: '10px', fontWeight: '600', fontSize: '0.85rem', cursor: 'pointer' 
+            }}
+          >
+            ✅ Confirmed ({confirmedCount})
+          </button>
         </div>
+      )}
 
-        <div style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '14px', padding: '1.25rem', display: 'flex', alignItems: 'center', gap: '1rem' }}>
-          <div style={{ width: '48px', height: '48px', borderRadius: '12px', background: '#ffe4e6', color: '#e11d48', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            <AlertCircle size={22} />
-          </div>
-          <div>
-            <div style={{ fontSize: '1.5rem', fontWeight: '800', color: '#0f172a' }}>{extensionAppealsCount}</div>
-            <div style={{ fontSize: '0.8rem', color: '#64748b', fontWeight: '600' }}>Extension Appeals</div>
-          </div>
-        </div>
-
-        <div style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '14px', padding: '1.25rem', display: 'flex', alignItems: 'center', gap: '1rem' }}>
-          <div style={{ width: '48px', height: '48px', borderRadius: '12px', background: '#d1fae5', color: '#047857', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            <CheckCircle2 size={22} />
-          </div>
-          <div>
-            <div style={{ fontSize: '1.5rem', fontWeight: '800', color: '#0f172a' }}>{confirmedCount}</div>
-            <div style={{ fontSize: '0.8rem', color: '#64748b', fontWeight: '600' }}>Confirmed & Aligned</div>
-          </div>
-        </div>
-      </div>
-
-      {/* Filter Bar */}
-      <div style={{ display: 'flex', gap: '0.5rem', overflowX: 'auto', paddingBottom: '0.25rem' }}>
-        <button 
-          onClick={() => setFilterTab('All')}
-          style={{ 
-            background: filterTab === 'All' ? '#0f172a' : '#ffffff', 
-            color: filterTab === 'All' ? '#ffffff' : '#64748b', 
-            border: '1px solid #cbd5e1', padding: '0.5rem 1.1rem', borderRadius: '10px', fontWeight: '600', fontSize: '0.85rem', cursor: 'pointer' 
-          }}
-        >
-          All Deadlines ({totalCount})
-        </button>
-
-        <button 
-          onClick={() => setFilterTab('Appealed')}
-          style={{ 
-            background: filterTab === 'Appealed' ? '#0f172a' : '#ffffff', 
-            color: filterTab === 'Appealed' ? '#ffffff' : '#64748b', 
-            border: '1px solid #cbd5e1', padding: '0.5rem 1.1rem', borderRadius: '10px', fontWeight: '600', fontSize: '0.85rem', cursor: 'pointer' 
-          }}
-        >
-          ⚠️ Extension Appeals ({extensionAppealsCount})
-        </button>
-
-        <button 
-          onClick={() => setFilterTab('Pending Acceptance')}
-          style={{ 
-            background: filterTab === 'Pending Acceptance' ? '#0f172a' : '#ffffff', 
-            color: filterTab === 'Pending Acceptance' ? '#ffffff' : '#64748b', 
-            border: '1px solid #cbd5e1', padding: '0.5rem 1.1rem', borderRadius: '10px', fontWeight: '600', fontSize: '0.85rem', cursor: 'pointer' 
-          }}
-        >
-          ⏳ Pending Acceptance ({pendingAcceptanceCount})
-        </button>
-
-        <button 
-          onClick={() => setFilterTab('Accepted')}
-          style={{ 
-            background: filterTab === 'Accepted' ? '#0f172a' : '#ffffff', 
-            color: filterTab === 'Accepted' ? '#ffffff' : '#64748b', 
-            border: '1px solid #cbd5e1', padding: '0.5rem 1.1rem', borderRadius: '10px', fontWeight: '600', fontSize: '0.85rem', cursor: 'pointer' 
-          }}
-        >
-          ✅ Confirmed ({confirmedCount})
-        </button>
-      </div>
-
-      {/* Date Filters */}
+      {/* Filters (Date + Search) */}
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: '1rem', background: '#ffffff', padding: '1rem', borderRadius: '12px', border: '1px solid #e2e8f0', marginTop: '1rem', alignItems: 'center' }}>
+        
+        {/* Search Bar */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flex: '1', minWidth: '200px' }}>
+          <div style={{ position: 'relative', width: '100%' }}>
+            <Search size={16} color="#94a3b8" style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)' }} />
+            <input 
+              type="text" 
+              placeholder="Search by project, task, client, or team member..." 
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              style={{ width: '100%', padding: '0.45rem 1rem 0.45rem 2rem', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '0.85rem' }}
+            />
+          </div>
+        </div>
+
+        <div style={{ width: '1px', height: '24px', background: '#e2e8f0', margin: '0 0.5rem' }}></div>
+
         <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
-          <span style={{ fontSize: '0.8rem', color: '#64748b', fontWeight: '600', marginRight: '0.25rem' }}>Quick Find:</span>
+          <span style={{ fontSize: '0.75rem', fontWeight: '700', color: '#94a3b8', textTransform: 'uppercase', marginRight: '0.25rem' }}>Quick Find:</span>
           <button 
             type="button"
             onClick={() => setQuickDateFilter('today')} 
@@ -388,6 +461,11 @@ export default function DeadlineWorkflow() {
                     >
                       {item.step_title}
                     </h4>
+                    {(item.reassign_todos || item.reject_todos) && (
+                      <span style={{ background: '#e11d48', color: 'white', fontSize: '0.7rem', padding: '2px 6px', borderRadius: '8px', fontWeight: '700', textTransform: 'uppercase' }}>
+                        Reassigned
+                      </span>
+                    )}
                     {isAppealed && (
                       <span style={{ background: '#fef3c7', color: '#b45309', fontSize: '0.7rem', padding: '2px 6px', borderRadius: '8px', fontWeight: '700' }}>
                         ⚠️ Extension Appealed
@@ -415,28 +493,30 @@ export default function DeadlineWorkflow() {
                   </div>
                 </div>
 
-                {/* Deadline Comparison Box */}
-                <div className="appeal-date-comparison">
-                  <div className="date-box">
-                    <span className="date-box-lbl">Target Step Deadline</span>
-                    <span className="date-box-val">
-                      {item.original_deadline ? new Date(item.original_deadline).toLocaleDateString() : 'No Date Set'}
-                    </span>
+                {/* Deadline Comparison Box - Hidden in Tasks for Approval */}
+                {filterTab !== 'Tasks for Approval' && (
+                  <div className="appeal-date-comparison">
+                    <div className="date-box">
+                      <span className="date-box-lbl">Target Step Deadline</span>
+                      <span className="date-box-val">
+                        {item.original_deadline ? new Date(item.original_deadline).toLocaleDateString() : 'No Date Set'}
+                      </span>
+                    </div>
+
+                    {isAppealed && (
+                      <>
+                        <ArrowRight size={18} color="#94a3b8" />
+
+                        <div className="date-box">
+                          <span className="date-box-lbl">Proposed Extension</span>
+                          <span className="date-box-val proposed">
+                            {item.proposed_deadline ? new Date(item.proposed_deadline).toLocaleDateString() : 'N/A'}
+                          </span>
+                        </div>
+                      </>
+                    )}
                   </div>
-
-                  {isAppealed && (
-                    <>
-                      <ArrowRight size={18} color="#94a3b8" />
-
-                      <div className="date-box">
-                        <span className="date-box-lbl">Proposed Extension</span>
-                        <span className="date-box-val proposed">
-                          {item.proposed_deadline ? new Date(item.proposed_deadline).toLocaleDateString() : 'N/A'}
-                        </span>
-                      </div>
-                    </>
-                  )}
-                </div>
+                )}
 
                 {/* Inline Edit Date Control */}
                 {editingDateStepId === item.step_id && (
@@ -472,6 +552,16 @@ export default function DeadlineWorkflow() {
 
                 {/* Actions Footer */}
                 <div className="appeal-actions" style={{ flexWrap: 'wrap', gap: '0.4rem' }}>
+                  {filterTab === 'Tasks for Approval' && (currentUser.role === 'Admin' || currentUser.role === 'Product Manager' || currentUser.role === 'PM' || currentUser.role === 'Project Manager') && (
+                    <button 
+                      type="button"
+                      disabled={processingId === item.step_id}
+                      onClick={() => handleApproveTask(item.step_id, item.project_id)}
+                      style={{ background: '#10b981', color: 'white', border: 'none', padding: '0.45rem 0.8rem', borderRadius: '8px', fontSize: '0.8rem', fontWeight: '700', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.3rem' }}
+                    >
+                      <CheckCircle2 size={15} /> Approve Task
+                    </button>
+                  )}
                   {isAppealed && (currentUser.role === 'Admin' || currentUser.role === 'Product Manager' || currentUser.role === 'PM' || currentUser.role === 'Project Manager') && (
                     <>
                       <button 

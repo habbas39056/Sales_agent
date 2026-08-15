@@ -187,6 +187,9 @@
   line-height: 1.5;
   margin-bottom: 1.25rem;
   flex: 1;
+  word-break: break-word;
+  overflow-wrap: break-word;
+  white-space: pre-wrap;
 }
 
 .no-desc {

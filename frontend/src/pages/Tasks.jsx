@@ -4,6 +4,35 @@ import { useNavigate, Link } from 'react-router-dom';
 import { CheckSquare, Clock, Calendar, ExternalLink, CheckCircle2, FolderKanban, Paperclip } from 'lucide-react';
 import './Tasks.css';
 
+const renderDescriptionWithCheckboxes = (text) => {
+  if (!text) return null;
+  const lines = text.split('\n');
+  return lines.map((line, idx) => {
+    const trimmed = line.trim();
+    const isUnchecked = trimmed.startsWith('- [ ]');
+    const isChecked = trimmed.startsWith('- [x]') || trimmed.startsWith('- [X]');
+    
+    if (isUnchecked || isChecked) {
+      const content = trimmed.substring(5).trim();
+      return (
+        <div key={idx} style={{ display: 'flex', alignItems: 'flex-start', gap: '0.5rem', marginBottom: '0.25rem' }}>
+          <input type="checkbox" checked={isChecked} readOnly style={{ marginTop: '0.25rem' }} />
+          <span style={{ textDecoration: isChecked ? 'line-through' : 'none', color: isChecked ? '#94a3b8' : 'inherit' }}>
+            {content}
+          </span>
+        </div>
+      );
+    }
+    
+    return (
+      <React.Fragment key={idx}>
+        {line}
+        {idx < lines.length - 1 && <br />}
+      </React.Fragment>
+    );
+  });
+};
+
 export default function Tasks() {
   const [tasks, setTasks] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -298,7 +327,7 @@ export default function Tasks() {
                 </div>
 
                 <div className="task-description">
-                  {task.description ? task.description : <span className="no-desc">No description provided.</span>}
+                  {task.description ? renderDescriptionWithCheckboxes(task.description) : <span className="no-desc">No description provided.</span>}
                 </div>
 
                 {renderAttachments(task.attachments)}

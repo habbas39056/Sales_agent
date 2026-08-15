@@ -13,10 +13,13 @@ router.get('/appeals', async (req, res) => {
         ps.id as step_id,
         ps.project_id,
         ps.title as step_title,
+        ps.status as step_status,
         ps.deadline as original_deadline,
         ps.proposed_deadline,
         ps.deadline_appeal_reason as appeal_reason,
         ps.appealed_at,
+        ps.reassign_todos,
+        ps.reject_todos,
         COALESCE(ps.deadline_status, 'Pending Acceptance') as deadline_status,
         ps.invoice_item_ids,
         p.title as project_title,
@@ -33,8 +36,8 @@ router.get('/appeals', async (req, res) => {
     const queryParams = [];
 
     if (!isAdminOrPm && user_id) {
-      query += ` WHERE (ps.assignee_id = ? OR ps.appealed_by = ? OR p.pm_id = ? OR p.production_id = ?)`;
-      queryParams.push(user_id, user_id, user_id, user_id);
+      query += ` WHERE (ps.assignee_id = ? OR ps.appealed_by = ? OR p.pm_id = ?)`;
+      queryParams.push(user_id, user_id, user_id);
     }
 
     query += `
@@ -93,8 +96,8 @@ router.get('/appeals/count', async (req, res) => {
     const queryParams = [];
 
     if (!isAdminOrPm && user_id) {
-      query += " AND (ps.assignee_id = ? OR ps.appealed_by = ? OR p.pm_id = ? OR p.production_id = ?)";
-      queryParams.push(user_id, user_id, user_id, user_id);
+      query += " AND (ps.assignee_id = ? OR ps.appealed_by = ? OR p.pm_id = ?)";
+      queryParams.push(user_id, user_id, user_id);
     }
 
     const [[result]] = await db.query(query, queryParams);
