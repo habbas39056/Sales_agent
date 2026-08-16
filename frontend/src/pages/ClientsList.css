@@ -106,3 +106,61 @@
   color: var(--text-secondary);
   padding: 2rem !important;
 }
+
+/* Client Mockup Table Styles */
+.client-mockup-table th {
+  background: #ffffff !important;
+  color: #0f172a !important;
+  font-weight: 700;
+  border-bottom: 1px solid #e2e8f0;
+  padding: 1rem 0.75rem !important;
+  font-size: 0.85rem;
+}
+
+.client-mockup-table td {
+  padding: 1rem 0.75rem !important;
+  vertical-align: top;
+  border-bottom: 1px solid #f1f5f9;
+}
+
+.action-dropdown-menu {
+  position: absolute;
+  right: 1.5rem;
+  top: 1rem;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+  min-width: 150px;
+  z-index: 100;
+  display: flex;
+  flex-direction: column;
+  padding: 0.5rem 0;
+}
+
+.dropdown-item {
+  background: none;
+  border: none;
+  padding: 0.5rem 1rem;
+  text-align: left;
+  font-size: 0.8rem;
+  color: #334155;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  text-decoration: none;
+  font-weight: 500;
+}
+
+.dropdown-item:hover {
+  background: #f8fafc;
+}
+
+.dropdown-item.danger {
+  color: #ef4444;
+}
+
+.dropdown-item.danger:hover {
+  background: #fef2f2;
+}

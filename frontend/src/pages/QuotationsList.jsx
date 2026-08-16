@@ -1,0 +1,472 @@
+import React, { useState, useEffect } from 'react';
+import axios from 'axios';
+import { useNavigate } from 'react-router-dom';
+import { Search, Plus, FileText, Eye, X, Check, Trash2, Printer, Banknote, Edit, FileSpreadsheet, Send } from 'lucide-react';
+import * as XLSX from 'xlsx';
+import Pagination from '../components/Pagination';
+import './QuotationsList.css';
+
+export default function QuotationsList() {
+  const navigate = useNavigate();
+  const [quotations, setQuotations] = useState([]);
+  const [clients, setClients] = useState([]);
+  const [projects, setProjects] = useState([]);
+  const [products, setProducts] = useState([]);
+  const [searchTerm, setSearchTerm] = useState('');
+  
+  // Filters
+  const [statusFilter, setStatusFilter] = useState('All Statuses');
+  const [salesPersonFilter, setSalesPersonFilter] = useState('All Sales Persons');
+  const [salesPersons, setSalesPersons] = useState([]);
+  const [fromDate, setFromDate] = useState('');
+  const [toDate, setToDate] = useState('');
+  
+  // Pagination
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 15;
+  
+  // Modals
+  const [previewQuotation, setPreviewQuotation] = useState(null); // When not null, opens preview modal
+  const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
+  
+  // Payment Form State
+  const [paymentData, setPaymentData] = useState({
+    amount: '',
+    payment_date: new Date().toISOString().split('T')[0],
+    payment_method: 'Bank Transfer',
+    notes: ''
+  });
+
+  useEffect(() => {
+    fetchData();
+  }, []);
+
+  const fetchData = async () => {
+    try {
+      const userStr = localStorage.getItem('user');
+      const user = userStr ? JSON.parse(userStr) : null;
+      let queryParams = '';
+      if (user) {
+        queryParams = `?user_id=${user.id}&role=${encodeURIComponent(user.role)}`;
+      }
+
+      const [invRes, cliRes, projRes, prodRes, salesRes] = await Promise.all([
+        axios.get(`/api/quotations${queryParams}`),
+        axios.get(`/api/clients${queryParams}`),
+        axios.get('/api/projects'),
+        axios.get('/api/products'),
+        axios.get('/api/users/specialists')
+      ]);
+      setQuotations(invRes.data);
+      setClients(cliRes.data);
+      setProjects(projRes.data);
+      setProducts(prodRes.data);
+      setSalesPersons(salesRes.data || []);
+    } catch (error) {
+      console.error('Failed to fetch data:', error);
+    }
+  };
+
+  const openPreview = async (id) => {
+    try {
+      const res = await axios.get(`/api/quotations/${id}`);
+      setPreviewQuotation(res.data);
+    } catch (error) {
+      console.error('Failed to load quotation preview:', error);
+    }
+  };
+
+  const handlePaymentChange = (e) => {
+    setPaymentData({ ...paymentData, [e.target.name]: e.target.value });
+  };
+
+  const openPaymentModal = () => {
+    setPaymentData({
+      amount: previewQuotation.balance || previewQuotation.amount,
+      payment_date: new Date().toISOString().split('T')[0],
+      payment_method: 'Bank Transfer',
+      notes: ''
+    });
+    setIsPaymentModalOpen(true);
+  };
+
+  const handleRecordPayment = async (e) => {
+    e.preventDefault();
+    try {
+      await axios.post(`/api/quotations/${previewQuotation.id}/payments`, paymentData);
+      setIsPaymentModalOpen(false);
+      // Refresh the quotation preview data
+      openPreview(previewQuotation.id);
+      // Refresh the main list
+      fetchData();
+    } catch (error) {
+      console.error('Failed to record payment:', error);
+      alert(error.response?.data?.error || 'Error recording payment.');
+    }
+  };
+
+  const handleDeleteQuotation = async (id) => {
+    if (window.confirm("Are you sure you want to delete this quotation? This action cannot be undone.")) {
+      try {
+        await axios.delete(`/api/quotations/${id}`);
+        fetchData();
+      } catch (error) {
+        console.error('Failed to delete quotation:', error);
+        alert(error.response?.data?.error || 'Failed to delete quotation');
+      }
+    }
+  };
+
+  const updateQuotationStatus = async (id, newStatus) => {
+    try {
+      await axios.put(`/api/quotations/${id}/status`, { status: newStatus });
+      fetchData(); // Refresh the list
+    } catch (error) {
+      console.error('Failed to update status:', error);
+      alert(error.response?.data?.error || 'Failed to update status');
+    }
+  };
+
+  const handleExportExcel = () => {
+    if (!filteredQuotations || filteredQuotations.length === 0) {
+      alert('No quotations to export!');
+      return;
+    }
+
+    const wb = XLSX.utils.book_new();
+
+    const quotationData = filteredQuotations.map(inv => ({
+      'Quotation #': inv.quotation_number,
+      'Amount': inv.amount,
+      'Date': inv.issue_date ? new Date(inv.issue_date).toLocaleDateString() : '',
+      'Customer': inv.client_name || 'N/A',
+      'Sales Person': inv.agent_name || 'N/A',
+      'Project': inv.project_title || 'N/A',
+      'Due Date': inv.due_date ? new Date(inv.due_date).toLocaleDateString() : '',
+      'Balance': inv.balance !== undefined && inv.balance !== null ? inv.balance : 0,
+      'Status': inv.status
+    }));
+
+    const ws = XLSX.utils.json_to_sheet(quotationData);
+    XLSX.utils.book_append_sheet(wb, ws, 'Quotations');
+
+    const dateStr = new Date().toISOString().slice(0, 10);
+    XLSX.writeFile(wb, `Quotations_Export_${dateStr}.xlsx`);
+  };
+
+  const filteredQuotations = quotations.filter(inv => {
+    const term = searchTerm.trim().toLowerCase();
+
+    // Multi-field search across Quotation #, Client Name, Sales Person, Project Title, Amount, Balance, ID
+    const matchesSearch = !term || 
+      (inv.quotation_number && inv.quotation_number.toLowerCase().includes(term)) || 
+      (inv.client_name && inv.client_name.toLowerCase().includes(term)) || 
+      (inv.amount && inv.amount.toString().includes(term)) || 
+      (inv.id && inv.id.toString().includes(term));
+
+    const matchesStatus = statusFilter === 'All Statuses' || inv.status === statusFilter;
+
+    // Date Range Filter
+    let matchesDate = true;
+    if (inv.issue_date) {
+      const invDateStr = new Date(inv.issue_date).toISOString().slice(0, 10);
+      if (fromDate && invDateStr < fromDate) matchesDate = false;
+      if (toDate && invDateStr > toDate) matchesDate = false;
+    }
+    
+    return matchesSearch && matchesStatus && matchesDate;
+  });
+
+  const currentQuotations = filteredQuotations.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
+
+  return (
+    <div className="quotation-management-container modern-ui">
+      <div className="recent-orders-panel" style={{ marginTop: '0' }}>
+        <div className="panel-header-ref" style={{ flexWrap: 'wrap', gap: '1rem', alignItems: 'center', justifyContent: 'space-between' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap', flex: 1 }}>
+            <div className="search-box-ref" style={{ flex: '1 1 220px', minWidth: '200px' }}>
+              <Search size={16} />
+              <input 
+                type="text" 
+                placeholder="Search by quote #, client, amount..." 
+                value={searchTerm}
+                onChange={e => {
+                  setSearchTerm(e.target.value);
+                  setCurrentPage(1);
+                }}
+              />
+            </div>
+
+            <select 
+              className="filter-select"
+              value={statusFilter}
+              onChange={(e) => {
+                setStatusFilter(e.target.value);
+                setCurrentPage(1);
+              }}
+              style={{ padding: '0.5rem 0.75rem', borderRadius: '20px', border: '1px solid #e2e8f0', background: '#f8fafc', fontSize: '0.85rem', outline: 'none' }}
+            >
+              <option value="All Statuses">All Statuses</option>
+              <option value="Draft">Draft</option>
+              <option value="Sent">Sent</option>
+              <option value="Accepted">Accepted</option>
+              <option value="Rejected">Rejected</option>
+            </select>
+
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '20px', padding: '0.35rem 0.75rem' }}>
+              <span style={{ fontSize: '0.8rem', color: '#64748b', fontWeight: 600 }}>From:</span>
+              <input 
+                type="date" 
+                value={fromDate} 
+                onChange={e => {
+                  setFromDate(e.target.value);
+                  setCurrentPage(1);
+                }}
+                style={{ border: 'none', background: 'transparent', fontSize: '0.82rem', color: '#1e293b', outline: 'none' }}
+              />
+              <span style={{ fontSize: '0.8rem', color: '#64748b', fontWeight: 600 }}>To:</span>
+              <input 
+                type="date" 
+                value={toDate} 
+                onChange={e => {
+                  setToDate(e.target.value);
+                  setCurrentPage(1);
+                }}
+                style={{ border: 'none', background: 'transparent', fontSize: '0.82rem', color: '#1e293b', outline: 'none' }}
+              />
+              {(fromDate || toDate) && (
+                <button 
+                  onClick={() => { setFromDate(''); setToDate(''); setCurrentPage(1); }}
+                  style={{ border: 'none', background: 'transparent', color: '#ef4444', cursor: 'pointer', fontSize: '0.8rem', fontWeight: 'bold', marginLeft: '0.25rem' }}
+                  title="Clear Date Filter"
+                >
+                  ✕
+                </button>
+              )}
+            </div>
+          </div>
+
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+            <button 
+              className="btn-excel" 
+              onClick={handleExportExcel} 
+              title="Download Excel Listing"
+              style={{ borderRadius: '20px', fontSize: '0.85rem', whiteSpace: 'nowrap', display: 'flex', alignItems: 'center', gap: '0.4rem', background: '#ffffff', border: '1px solid #10b981', color: '#10b981', padding: '0.5rem 1rem', cursor: 'pointer', fontWeight: '600' }}
+            >
+              <FileSpreadsheet size={16} /> Export Excel
+            </button>
+            <button className="btn-primary" onClick={() => navigate('/quotations/new')} style={{ borderRadius: '20px', fontSize: '0.85rem', whiteSpace: 'nowrap' }}>
+              <Plus size={16} /> Create Quotation
+            </button>
+          </div>
+        </div>
+
+        <div className="table-responsive-ref">
+          <table className="ref-table">
+            <thead>
+              <tr>
+                <th>QUOTATION #</th>
+                <th>AMOUNT</th>
+                <th>DATE</th>
+                <th>CUSTOMER</th>
+                <th>EXPIRY DATE</th>
+                <th>STATUS</th>
+                <th>ACTIONS</th>
+              </tr>
+            </thead>
+            <tbody>
+              {currentQuotations.map(inv => (
+                <tr key={inv.id}>
+                  <td><strong>{inv.quotation_number}</strong></td>
+                  <td><strong>PKR {Number(inv.amount).toFixed(2)}</strong></td>
+                  <td>{inv.issue_date ? new Date(inv.issue_date).toLocaleDateString() : '-'}</td>
+                  <td><strong>{inv.client_name}</strong></td>
+                  <td>{inv.expiry_date ? new Date(inv.expiry_date).toLocaleDateString() : '-'}</td>
+                  <td>
+                    <span className={`status-pill ${inv.status.toLowerCase()}`}>
+                      {inv.status}
+                    </span>
+                  </td>
+                  <td>
+                    <div className="action-buttons">
+                      {inv.status === 'Draft' && (
+                        <button className="btn-icon" style={{ color: '#3b82f6' }} onClick={() => updateQuotationStatus(inv.id, 'Sent')} title="Mark as Sent"><Send size={18} /></button>
+                      )}
+                      <button className="btn-icon view-btn" onClick={() => openPreview(inv.id)} title="Preview Quotation"><Eye size={18} /></button>
+                      <button className="btn-icon edit-btn" onClick={() => navigate(`/quotations/edit/${inv.id}`)} title="Edit Quotation"><Edit size={18} /></button>
+                      <button className="btn-icon delete-btn" onClick={() => handleDeleteQuotation(inv.id)} title="Delete Quotation"><Trash2 size={18} /></button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+              {currentQuotations.length === 0 && (
+                <tr>
+                  <td colSpan="9" className="empty-state">No quotations found.</td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+        
+        {filteredQuotations.length > 0 && (
+          <Pagination 
+            currentPage={currentPage}
+            totalItems={filteredQuotations.length}
+            itemsPerPage={itemsPerPage}
+            onPageChange={setCurrentPage}
+          />
+        )}
+      </div>
+
+
+
+      {/* PREVIEW MODAL */}
+      {previewQuotation && (
+        <div className="modal-overlay">
+          <div className="modal-content preview-modal">
+            <div className="modal-header print-hide" style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid var(--border-color)', paddingBottom: '1rem', marginBottom: '1.5rem'}}>
+              <h2 style={{margin: 0}}>Quotation Preview</h2>
+              <div style={{display: 'flex', alignItems: 'center', gap: '1rem'}}>
+                {previewQuotation.status !== 'Paid' && (
+                  <button className="btn-success" onClick={openPaymentModal}>
+                    <Banknote size={18} style={{marginRight:'0.5rem', verticalAlign:'middle'}}/> Record Payment
+                  </button>
+                )}
+                <button className="btn" style={{backgroundColor: '#e2e8f0', color: '#1e293b', display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.5rem 1rem', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: '500'}} onClick={() => window.print()}><Printer size={18} /> Print</button>
+                <button className="btn" style={{backgroundColor: '#e2e8f0', color: '#1e293b', padding: '0.5rem', border: 'none', borderRadius: '6px', cursor: 'pointer', display: 'flex', alignItems: 'center'}} onClick={() => setPreviewQuotation(null)}><X size={20} /></button>
+              </div>
+            </div>
+            
+            <div className={`quotation-document ${previewQuotation.status === 'Paid' ? 'is-paid' : 'is-unpaid'}`} id="printable-quotation" style={{ padding: '2rem', fontFamily: 'Arial, sans-serif' }}>
+              
+              {/* STAMP */}
+              <div className="quotation-stamp">
+                {previewQuotation.status === 'Paid' ? 'PAID' : (previewQuotation.status === 'Overdue' ? 'OVERDUE' : 'UNPAID')}
+              </div>
+              
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '2rem' }}>
+                <div style={{ flex: 1 }}>
+                  <div style={{ marginBottom: '1.5rem' }}>
+                    <img src="/Adwise-Labs-Primary-Logo.png" alt="Adwise Labs Logo" style={{ maxWidth: '220px', height: 'auto', display: 'block' }} />
+                  </div>
+                  <h2 style={{ fontSize: '1.2rem', marginBottom: '1.5rem' }}>Quotation {previewQuotation.quotation_number}</h2>
+                  
+                  <div style={{ fontSize: '0.9rem', lineHeight: '1.5' }}>
+                    <div style={{ fontWeight: 'bold', marginBottom: '0.25rem' }}>Quotation To,</div>
+                    <div>{previewQuotation.client_name}</div>
+                    {previewQuotation.business_name && <div>{previewQuotation.business_name}</div>}
+                    {previewQuotation.physical_address && <div style={{ maxWidth: '250px' }}>{previewQuotation.physical_address}</div>}
+                    <div>{previewQuotation.client_email}</div>
+                  </div>
+                </div>
+                
+                <div style={{ flex: 1, textAlign: 'right', fontSize: '0.9rem', lineHeight: '1.5' }}>
+                  <div style={{ fontWeight: 'bold', marginBottom: '1rem' }}>Date: {new Date(previewQuotation.issue_date).toLocaleDateString()}</div>
+                  <div style={{ letterSpacing: '2px', marginBottom: '1rem' }}>******************************</div>
+                  
+                  <div style={{ fontWeight: 'bold' }}>Account Title: Adwise labs</div>
+                  <div style={{ fontWeight: 'bold' }}>Bank Al Falah</div>
+                  <div style={{ fontWeight: 'bold' }}>Account Number: 56395002519988</div>
+                  <div style={{ fontWeight: 'bold' }}>info@adwiselabs.com</div>
+                  <div style={{ fontWeight: 'bold' }}>www.adwiselabs.com</div>
+                </div>
+              </div>
+
+              <table className="quotation-table" style={{ border: '1px solid #000', marginBottom: '2rem' }}>
+                <thead>
+                  <tr>
+                    <th style={{ border: '1px solid #000', textAlign: 'left', backgroundColor: 'transparent', color: '#000', fontWeight: 'bold' }}>Description</th>
+                    <th style={{ border: '1px solid #000', textAlign: 'center', backgroundColor: 'transparent', color: '#000', fontWeight: 'bold' }}>Qty</th>
+                    <th style={{ border: '1px solid #000', textAlign: 'center', backgroundColor: 'transparent', color: '#000', fontWeight: 'bold' }}>Rate</th>
+                    <th style={{ border: '1px solid #000', textAlign: 'right', backgroundColor: 'transparent', color: '#000', fontWeight: 'bold' }}>Amount</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {previewQuotation.items?.map(item => (
+                    <tr key={item.id}>
+                      <td style={{ border: '1px solid #000', padding: '0.75rem 1rem' }}>
+                        <div>{item.description}</div>
+                        {item.details && <div style={{ fontSize: '0.85rem', color: '#475569', marginTop: '0.25rem', whiteSpace: 'pre-wrap' }}>{item.details}</div>}
+                      </td>
+                      <td style={{ border: '1px solid #000', padding: '0.75rem 1rem', textAlign: 'center' }}>{item.quantity} {item.unit}</td>
+                      <td style={{ border: '1px solid #000', padding: '0.75rem 1rem', textAlign: 'center' }}>PKR {Number(item.unit_price).toFixed(2)}</td>
+                      <td style={{ border: '1px solid #000', padding: '0.75rem 1rem', textAlign: 'right' }}>PKR {Number(item.total).toFixed(2)}</td>
+                    </tr>
+                  ))}
+                  <tr>
+                    <td colSpan="3" style={{ border: '1px solid #000', padding: '0.75rem 1rem', textAlign: 'right', fontWeight: 'bold' }}>Sub Total</td>
+                    <td style={{ border: '1px solid #000', padding: '0.75rem 1rem', textAlign: 'right', fontWeight: 'bold' }}>PKR {Number(previewQuotation.amount).toFixed(2)}</td>
+                  </tr>
+
+                </tbody>
+              </table>
+
+              <div style={{ textAlign: 'center', color: '#0369a1', fontSize: '0.9rem', fontWeight: 'bold', lineHeight: '1.6', marginTop: '3rem' }}>
+                <div style={{ marginBottom: '0.5rem' }}>Prompt Payments are Appreciated!</div>
+                <div style={{ marginBottom: '0.5rem' }}>Thank You</div>
+                <div style={{ marginBottom: '0.5rem' }}>Accounts Department – Adwise Labs</div>
+                <div style={{ color: '#000', fontSize: '0.8rem' }}>ADWISE LABS | A-205/II Saba Ave, DHA Karachi Phase VIII Zone A, 76500</div>
+                <div style={{ color: '#000', fontSize: '0.8rem', fontWeight: 'normal' }}>Contact No. +1 (774) 674-1872 | +92 329 2371279 | Email: info@adwiselabs.com</div>
+              </div>
+
+              {/* SEPARATE PAGE: TERMS & CONDITIONS */}
+              {previewQuotation?.terms_and_conditions && (
+                <div className="terms-page-break">
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem', borderBottom: '2px solid #0f172a', paddingBottom: '1rem' }}>
+                    <img src="/Adwise-Labs-Primary-Logo.png" alt="Adwise Labs Logo" style={{ maxWidth: '180px', height: 'auto' }} />
+                    <h2 style={{ fontSize: '1.3rem', color: '#0f172a', margin: 0, textTransform: 'uppercase', letterSpacing: '1px' }}>Terms & Conditions</h2>
+                  </div>
+                  
+                  <div style={{ fontSize: '0.92rem', color: '#334155', lineHeight: '1.8', whiteSpace: 'pre-wrap' }}>
+                    {previewQuotation.terms_and_conditions}
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* RECORD PAYMENT MODAL */}
+      {isPaymentModalOpen && (
+        <div className="modal-overlay" style={{ zIndex: 2000 }}>
+          <div className="modal-content" style={{ maxWidth: '400px' }}>
+            <div className="modal-header">
+              <h2>Record Payment</h2>
+              <button className="btn-close" onClick={() => setIsPaymentModalOpen(false)}><X size={24} /></button>
+            </div>
+            <form onSubmit={handleRecordPayment}>
+              <div className="form-group">
+                <label>Amount Received *</label>
+                <input type="number" name="amount" value={paymentData.amount} onChange={handlePaymentChange} min="0.01" step="0.01" max={previewQuotation?.balance} required />
+              </div>
+              <div className="form-group">
+                <label>Payment Date *</label>
+                <input type="date" name="payment_date" value={paymentData.payment_date} onChange={handlePaymentChange} required />
+              </div>
+              <div className="form-group">
+                <label>Payment Method</label>
+                <select name="payment_method" value={paymentData.payment_method} onChange={handlePaymentChange}>
+                  <option value="Bank Transfer">Bank Transfer</option>
+                  <option value="Credit Card">Credit Card</option>
+                  <option value="Cash">Cash</option>
+                  <option value="Check">Check</option>
+                  <option value="PayPal">PayPal</option>
+                  <option value="Other">Other</option>
+                </select>
+              </div>
+              <div className="form-group">
+                <label>Notes / Ref (Optional)</label>
+                <input type="text" name="notes" value={paymentData.notes} onChange={handlePaymentChange} />
+              </div>
+              <div className="modal-actions" style={{ marginTop: '1.5rem' }}>
+                <button type="button" className="btn-secondary" onClick={() => setIsPaymentModalOpen(false)}>Cancel</button>
+                <button type="submit" className="btn-success">Save Payment</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}

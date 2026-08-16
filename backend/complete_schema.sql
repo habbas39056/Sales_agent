@@ -389,6 +389,43 @@ CREATE TABLE `project_categories` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- ============================================
+-- QUOTATIONS TABLE
+-- ============================================
+CREATE TABLE `quotations` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `quotation_number` varchar(50) NOT NULL,
+  `amount` decimal(10,2) DEFAULT '0.00',
+  `status` enum('Draft','Sent','Accepted','Rejected') DEFAULT 'Draft',
+  `client_id` int(11) DEFAULT NULL,
+  `issue_date` date DEFAULT NULL,
+  `expiry_date` date DEFAULT NULL,
+  `terms_and_conditions` text,
+  `created_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `created_by` int(11) DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `quotation_number` (`quotation_number`),
+  KEY `client_id` (`client_id`),
+  KEY `created_by` (`created_by`),
+  CONSTRAINT `quotations_ibfk_1` FOREIGN KEY (`client_id`) REFERENCES `clients` (`id`) ON DELETE SET NULL,
+  CONSTRAINT `quotations_ibfk_2` FOREIGN KEY (`created_by`) REFERENCES `users` (`id`) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- ============================================
+-- QUOTATION ITEMS TABLE
+-- ============================================
+CREATE TABLE `quotation_items` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `quotation_id` int(11) NOT NULL,
+  `description` text NOT NULL,
+  `quantity` decimal(10,2) DEFAULT '1.00',
+  `unit_price` decimal(10,2) DEFAULT '0.00',
+  `total` decimal(10,2) DEFAULT '0.00',
+  PRIMARY KEY (`id`),
+  KEY `quotation_id` (`quotation_id`),
+  CONSTRAINT `quotation_items_ibfk_1` FOREIGN KEY (`quotation_id`) REFERENCES `quotations` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- ============================================
 -- DEFAULT SETTINGS DATA
 -- ============================================
 INSERT IGNORE INTO settings (setting_key, setting_value) VALUES

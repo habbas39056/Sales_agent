@@ -1,7 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import axios from 'axios';
-import { Search, Plus, User, Edit, Trash2 } from 'lucide-react';
+import { Search, Plus, User, Edit, Trash2, MoreVertical, Eye, RefreshCw, FileText, Download, Upload } from 'lucide-react';
+import { jsPDF } from 'jspdf';
+import autoTable from 'jspdf-autotable';
+import * as XLSX from 'xlsx';
 import Pagination from '../components/Pagination';
 import './ClientsList.css';
 import './Modal.css';
@@ -11,6 +14,23 @@ export default function ClientsList() {
   const [searchTerm, setSearchTerm] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingClient, setEditingClient] = useState(null);
+  const [activeDropdown, setActiveDropdown] = useState(null);
+  const [agentsList, setAgentsList] = useState([]);
+  
+  useEffect(() => {
+    const fetchAgents = async () => {
+      try {
+        const token = localStorage.getItem('token');
+        const res = await axios.get('/api/users/specialists', {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        setAgentsList(res.data);
+      } catch (err) {
+        console.error('Failed to fetch agents:', err);
+      }
+    };
+    fetchAgents();
+  }, []);
   
   // Pagination
   const [currentPage, setCurrentPage] = useState(1);
@@ -118,9 +138,137 @@ export default function ClientsList() {
     }
   };
 
-  const [typeFilter, setTypeFilter] = useState('All Types');
+  const handleRefresh = () => {
+    fetchClients();
+  };
+
+  const handleExportPDF = () => {
+    try {
+      const doc = new jsPDF();
+      doc.setFontSize(16);
+      doc.setTextColor(15, 23, 42);
+      doc.text("Clients Statement Report", 14, 18);
+      
+      doc.setFontSize(9);
+      doc.setTextColor(100, 116, 139);
+      doc.text(`Generated: ${new Date().toLocaleDateString('en-GB')} | Total Records: ${filteredClients.length}`, 14, 25);
+      
+      const tableColumn = ["Client / Business Name", "WhatsApp", "Email", "Address", "Created Date"];
+      const tableRows = filteredClients.map(client => [
+        client.business_name ? `${client.business_name}\n(${client.full_name})` : (client.full_name || '-'),
+        client.whatsapp_number || '-',
+        client.email || 'None',
+        client.physical_address || '-',
+        client.created_at ? new Date(client.created_at).toLocaleDateString('en-GB') : '-'
+      ]);
+      
+      autoTable(doc, {
+        head: [tableColumn],
+        body: tableRows,
+        startY: 30,
+        styles: { fontSize: 8.5, cellPadding: 3 },
+        headStyles: { fillColor: [15, 23, 42], textColor: [255, 255, 255], fontStyle: 'bold' },
+        alternateRowStyles: { fillColor: [248, 250, 252] }
+      });
+      doc.save("clients_statement.pdf");
+    } catch (error) {
+      console.error("PDF Export error:", error);
+      alert("Failed to export PDF: " + error.message);
+    }
+  };
+
+  const handleExportExcel = () => {
+    const exportData = filteredClients.map(client => ({
+      Name: client.business_name || client.full_name,
+      Type: client.business_name ? 'Business' : 'Individual',
+      WhatsApp: client.whatsapp_number || '-',
+      Email: client.email || 'None',
+      CreatedDate: new Date(client.created_at).toLocaleDateString('en-GB')
+    }));
+
+    const worksheet = XLSX.utils.json_to_sheet(exportData);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, "Clients");
+    XLSX.writeFile(workbook, "clients_list.xlsx");
+  };
+
+  const handleImportExcel = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = async (evt) => {
+      const bstr = evt.target.result;
+      const wb = XLSX.read(bstr, { type: 'binary' });
+      const wsname = wb.SheetNames[0];
+      const ws = wb.Sheets[wsname];
+      const data = XLSX.utils.sheet_to_json(ws);
+      
+      let successCount = 0;
+      let errorCount = 0;
+      
+      const token = localStorage.getItem('token');
+      const currentUser = JSON.parse(localStorage.getItem('user')) || {};
+
+      for (const row of data) {
+        try {
+          const payload = {
+            full_name: row.Name || row.full_name || 'Imported Client',
+            business_name: row.BusinessName || row.business_name || '',
+            email: row.Email || row.email || `imported_${Date.now()}@example.com`,
+            whatsapp_number: row.WhatsApp || row.whatsapp_number || '',
+            physical_address: row.Address || row.physical_address || '',
+            password: 'password123',
+            created_by: currentUser.id
+          };
+          await axios.post('/api/clients', payload, {
+            headers: { Authorization: `Bearer ${token}` }
+          });
+          successCount++;
+        } catch (err) {
+          console.error("Import error for row", row, err);
+          errorCount++;
+        }
+      }
+      
+      alert(`Import complete! Successfully added: ${successCount}. Errors: ${errorCount}.`);
+      fetchClients();
+    };
+    reader.readAsBinaryString(file);
+    e.target.value = null; // reset input
+  };
+
+  const [datePreset, setDatePreset] = useState('All Dates');
+  const [agentFilter, setAgentFilter] = useState('All Sales Agents');
   const [fromDate, setFromDate] = useState('');
   const [toDate, setToDate] = useState('');
+
+  // Handle Date Presets
+  useEffect(() => {
+    if (datePreset === 'All Dates') {
+      setFromDate('');
+      setToDate('');
+    } else if (datePreset === 'Today') {
+      const today = new Date().toISOString().slice(0, 10);
+      setFromDate(today);
+      setToDate(today);
+    } else if (datePreset === 'This Week') {
+      const curr = new Date();
+      const first = curr.getDate() - curr.getDay() + 1;
+      const firstday = new Date(curr.setDate(first)).toISOString().slice(0, 10);
+      const lastday = new Date(curr.setDate(curr.getDate() + 6)).toISOString().slice(0, 10);
+      setFromDate(firstday);
+      setToDate(lastday);
+    } else if (datePreset === 'This Month') {
+      const curr = new Date();
+      const firstday = new Date(curr.getFullYear(), curr.getMonth(), 1).toISOString().slice(0, 10);
+      const lastday = new Date(curr.getFullYear(), curr.getMonth() + 1, 0).toISOString().slice(0, 10);
+      setFromDate(firstday);
+      setToDate(lastday);
+    } else if (datePreset === 'Custom') {
+      // Leave dates as they are, user will select
+    }
+  }, [datePreset]);
 
   const filteredClients = clients.filter(c => {
     const term = searchTerm.trim().toLowerCase();
@@ -134,14 +282,6 @@ export default function ClientsList() {
       (c.physical_address && c.physical_address.toLowerCase().includes(term)) || 
       (c.id && c.id.toString().includes(term));
 
-    // Client Type Filter
-    let matchesType = true;
-    if (typeFilter === 'Corporate / Business') {
-      matchesType = Boolean(c.business_name && c.business_name.trim());
-    } else if (typeFilter === 'Individual') {
-      matchesType = !c.business_name || !c.business_name.trim();
-    }
-
     // Date Range Filter
     let matchesDate = true;
     if (c.created_at) {
@@ -154,134 +294,227 @@ export default function ClientsList() {
       }
     }
 
-    return matchesSearch && matchesType && matchesDate;
+    // Agent Filter
+    let matchesAgent = true;
+    if (agentFilter !== 'All Sales Agents') {
+      matchesAgent = c.created_by === parseInt(agentFilter, 10);
+    }
+
+    return matchesSearch && matchesDate && matchesAgent;
   });
 
   const currentClients = filteredClients.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
 
   return (
     <div className="clients-list-container modern-ui">
-      <div className="recent-orders-panel" style={{ marginTop: '2rem' }}>
-        <div className="panel-header-ref" style={{ display: 'flex', flexWrap: 'wrap', gap: '1rem', alignItems: 'center', justifyContent: 'space-between' }}>
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.75rem', flex: 1, alignItems: 'center' }}>
-            <div className="search-box-ref" style={{ flex: '1 1 220px', minWidth: '200px' }}>
-              <Search size={16} />
-              <input 
-                type="text" 
-                placeholder="Search by name, email, phone, address..." 
-                value={searchTerm}
-                onChange={e => {
-                  setSearchTerm(e.target.value);
-                  setCurrentPage(1);
-                }}
-              />
-            </div>
+      {/* Top Header: Title & Action Buttons */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem', marginTop: '1rem', marginBottom: '0.5rem' }}>
+        <div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+            <h1 style={{ fontSize: '1.6rem', fontWeight: '700', color: '#0f172a', margin: 0, letterSpacing: '-0.02em' }}>
+              Clients Directory
+            </h1>
+            <span style={{ background: '#e0e7ff', color: '#4338ca', fontSize: '0.75rem', fontWeight: '600', padding: '0.2rem 0.6rem', borderRadius: '12px' }}>
+              {filteredClients.length} {filteredClients.length === 1 ? 'Client' : 'Clients'}
+            </span>
+          </div>
+          <p style={{ margin: '0.25rem 0 0 0', fontSize: '0.85rem', color: '#64748b' }}>
+            Manage client profiles, contact information, and portal credentials
+          </p>
+        </div>
 
-            <select 
-              className="filter-select"
-              value={typeFilter}
+        <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', alignItems: 'center' }}>
+          <button 
+            className="btn-secondary" 
+            onClick={handleRefresh} 
+            style={{ display: 'flex', alignItems: 'center', gap: '0.45rem', padding: '0.55rem 0.9rem', borderRadius: '8px', border: '1px solid #e2e8f0', background: '#ffffff', color: '#334155', cursor: 'pointer', fontSize: '0.85rem', fontWeight: 500, boxShadow: '0 1px 2px rgba(0,0,0,0.04)' }}
+          >
+            <RefreshCw size={15} color="#64748b" /> Refresh
+          </button>
+          <button 
+            className="btn-secondary" 
+            onClick={handleExportPDF} 
+            style={{ display: 'flex', alignItems: 'center', gap: '0.45rem', padding: '0.55rem 0.9rem', borderRadius: '8px', border: 'none', background: '#0f172a', color: '#ffffff', cursor: 'pointer', fontSize: '0.85rem', fontWeight: 500, boxShadow: '0 1px 3px rgba(15,23,42,0.15)' }}
+          >
+            <FileText size={15} /> PDF Statement
+          </button>
+          <button 
+            className="btn-secondary" 
+            onClick={handleExportExcel} 
+            style={{ display: 'flex', alignItems: 'center', gap: '0.45rem', padding: '0.55rem 0.9rem', borderRadius: '8px', border: '1px solid #e2e8f0', background: '#ffffff', color: '#334155', cursor: 'pointer', fontSize: '0.85rem', fontWeight: 500, boxShadow: '0 1px 2px rgba(0,0,0,0.04)' }}
+          >
+            <Download size={15} color="#64748b" /> Export Excel
+          </button>
+          <label 
+            className="btn-secondary" 
+            style={{ display: 'flex', alignItems: 'center', gap: '0.45rem', padding: '0.55rem 0.9rem', borderRadius: '8px', border: '1px solid #e2e8f0', background: '#ffffff', color: '#334155', cursor: 'pointer', fontSize: '0.85rem', fontWeight: 500, boxShadow: '0 1px 2px rgba(0,0,0,0.04)' }}
+          >
+            <Upload size={15} color="#64748b" /> Import Excel
+            <input type="file" accept=".xlsx, .xls, .csv" style={{ display: 'none' }} onChange={handleImportExcel} />
+          </label>
+          <button 
+            className="btn-primary" 
+            onClick={openAddModal} 
+            style={{ borderRadius: '8px', fontSize: '0.85rem', padding: '0.55rem 1.15rem', background: '#4f46e5', color: '#ffffff', border: 'none', display: 'flex', alignItems: 'center', gap: '0.45rem', cursor: 'pointer', fontWeight: 600, boxShadow: '0 1px 3px rgba(79,70,229,0.25)' }}
+          >
+            <Plus size={16} /> Add New Client
+          </button>
+        </div>
+      </div>
+
+      <div className="recent-orders-panel" style={{ marginTop: '0.5rem' }}>
+        {/* Search & Filter Toolbar inside Card */}
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '0.75rem', paddingBottom: '1.25rem', borderBottom: '1px solid #f1f5f9', marginBottom: '0.5rem' }}>
+          {/* Search Box */}
+          <div style={{ position: 'relative', flex: '1 1 240px', maxWidth: '360px' }}>
+            <Search size={16} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: '#94a3b8', pointerEvents: 'none' }} />
+            <input 
+              type="text" 
+              placeholder="Search by name, email, phone, address..." 
+              value={searchTerm}
               onChange={e => {
-                setTypeFilter(e.target.value);
+                setSearchTerm(e.target.value);
                 setCurrentPage(1);
               }}
-              style={{ padding: '0.5rem 0.75rem', borderRadius: '20px', border: '1px solid #e2e8f0', background: '#f8fafc', fontSize: '0.85rem', outline: 'none' }}
+              style={{ width: '100%', height: '38px', padding: '0 12px 0 38px', borderRadius: '8px', border: '1px solid #e2e8f0', background: '#f8fafc', fontSize: '0.85rem', color: '#1e293b', outline: 'none', boxSizing: 'border-box' }}
+            />
+          </div>
+
+          {/* Filters Row */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
+            <select 
+              value={datePreset}
+              onChange={e => {
+                setDatePreset(e.target.value);
+                setCurrentPage(1);
+              }}
+              style={{ height: '38px', padding: '0 0.85rem', borderRadius: '8px', border: '1px solid #e2e8f0', background: '#f8fafc', color: '#334155', fontSize: '0.85rem', outline: 'none', cursor: 'pointer', fontWeight: 500 }}
             >
-              <option value="All Types">All Client Types</option>
-              <option value="Corporate / Business">Corporate / Business</option>
-              <option value="Individual">Individual</option>
+              <option value="All Dates">All Dates</option>
+              <option value="Today">Today</option>
+              <option value="This Week">This Week</option>
+              <option value="This Month">This Month</option>
+              <option value="Custom">Custom</option>
             </select>
 
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '20px', padding: '0.35rem 0.75rem' }}>
-              <span style={{ fontSize: '0.8rem', color: '#64748b', fontWeight: 600 }}>From:</span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '8px', padding: '0 0.65rem', height: '38px', boxSizing: 'border-box' }}>
               <input 
                 type="date" 
                 value={fromDate} 
                 onChange={e => {
                   setFromDate(e.target.value);
+                  setDatePreset('Custom');
                   setCurrentPage(1);
                 }}
-                style={{ border: 'none', background: 'transparent', fontSize: '0.82rem', color: '#1e293b', outline: 'none' }}
+                style={{ border: 'none', background: 'transparent', fontSize: '0.8rem', color: '#334155', outline: 'none', cursor: 'pointer', fontFamily: 'inherit' }}
               />
-              <span style={{ fontSize: '0.8rem', color: '#64748b', fontWeight: 600 }}>To:</span>
+              <span style={{ color: '#94a3b8', fontSize: '0.8rem' }}>to</span>
               <input 
                 type="date" 
                 value={toDate} 
                 onChange={e => {
                   setToDate(e.target.value);
+                  setDatePreset('Custom');
                   setCurrentPage(1);
                 }}
-                style={{ border: 'none', background: 'transparent', fontSize: '0.82rem', color: '#1e293b', outline: 'none' }}
+                style={{ border: 'none', background: 'transparent', fontSize: '0.8rem', color: '#334155', outline: 'none', cursor: 'pointer', fontFamily: 'inherit' }}
               />
               {(fromDate || toDate) && (
                 <button 
-                  onClick={() => { setFromDate(''); setToDate(''); setCurrentPage(1); }}
-                  style={{ border: 'none', background: 'transparent', color: '#ef4444', cursor: 'pointer', fontSize: '0.8rem', fontWeight: 'bold', marginLeft: '0.25rem' }}
+                  onClick={() => { setFromDate(''); setToDate(''); setDatePreset('All Dates'); setCurrentPage(1); }}
+                  style={{ border: 'none', background: '#e2e8f0', color: '#64748b', cursor: 'pointer', fontSize: '0.7rem', fontWeight: 'bold', marginLeft: '0.2rem', padding: '0.15rem 0.35rem', borderRadius: '4px' }}
                   title="Clear Date Filter"
                 >
                   ✕
                 </button>
               )}
             </div>
-          </div>
 
-          <button className="btn-primary" onClick={openAddModal} style={{ borderRadius: '20px', fontSize: '0.85rem', whiteSpace: 'nowrap' }}>
-            <Plus size={16} /> Add New Client
-          </button>
+            <select 
+              value={agentFilter}
+              onChange={e => {
+                setAgentFilter(e.target.value);
+                setCurrentPage(1);
+              }}
+              style={{ height: '38px', padding: '0 0.85rem', borderRadius: '8px', border: '1px solid #e2e8f0', background: '#f8fafc', color: '#334155', fontSize: '0.85rem', outline: 'none', cursor: 'pointer', fontWeight: 500 }}
+            >
+              <option value="All Sales Agents">All Sales Agents</option>
+              {agentsList.map(agent => (
+                <option key={agent.id} value={agent.id}>{agent.full_name}</option>
+              ))}
+            </select>
+          </div>
         </div>
 
-        <div className="table-responsive-ref">
-          <table className="ref-table">
+        <div className="table-responsive-ref" style={{ overflow: 'visible' }}>
+          <table className="ref-table client-mockup-table">
             <thead>
               <tr>
-                <th>CLIENT</th>
-                <th>CONTACT</th>
-                <th>ADDRESS</th>
-                <th>JOINED</th>
-                <th>ACTIONS</th>
+                <th>Name</th>
+                <th>WhatsApp</th>
+                <th>Email</th>
+                <th>Portal Credentials</th>
+                <th>Created Date</th>
+                <th></th>
               </tr>
             </thead>
             <tbody>
               {currentClients.map(client => (
                 <tr key={client.id}>
                   <td>
-                    <div className="client-cell">
-                      {client.profile_image_url ? (
-                        <img src={client.profile_image_url} alt={client.full_name} className="avatar" />
-                      ) : (
-                        <div className="avatar placeholder"><User size={20} /></div>
+                    <div style={{ display: 'flex', flexDirection: 'column' }}>
+                      <Link to={`/clients/${client.id}`} style={{ color: '#4f46e5', textDecoration: 'none', fontWeight: '600', fontSize: '0.85rem' }}>
+                        {client.business_name || client.full_name}
+                      </Link>
+                      {client.business_name && client.business_name !== client.full_name && (
+                        <span style={{ fontSize: '0.75rem', color: '#64748b', marginTop: '0.1rem' }}>
+                          {client.full_name}
+                        </span>
                       )}
-                      <div>
-                        <strong>{client.full_name}</strong>
-                        {client.business_name && <div className="text-small text-secondary">{client.business_name}</div>}
+                    </div>
+                  </td>
+                  <td style={{ color: '#64748b', fontSize: '0.85rem' }}>
+                    {client.whatsapp_number || '-'}
+                  </td>
+                  <td style={{ color: '#64748b', fontSize: '0.85rem' }}>
+                    {client.email || 'None'}
+                  </td>
+                  <td style={{ fontSize: '0.75rem', color: '#334155', lineHeight: '1.4' }}>
+                    <div><span style={{ color: '#94a3b8' }}>User:</span> <strong>{client.email ? client.email.split('@')[0] : 'N/A'}</strong></div>
+                    <div><span style={{ color: '#94a3b8' }}>Pass:</span> <strong>••••••••</strong></div>
+                    <div><span style={{ color: '#94a3b8' }}>PIN:</span> <strong>****</strong></div>
+                  </td>
+                  <td style={{ color: '#64748b', fontSize: '0.85rem' }}>
+                    {new Date(client.created_at).toLocaleDateString('en-GB')}
+                  </td>
+                  <td style={{ position: 'relative' }}>
+                    <button 
+                      className="btn-icon" 
+                      style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#94a3b8', padding: '0.25rem' }}
+                      onClick={() => setActiveDropdown(activeDropdown === client.id ? null : client.id)}
+                    >
+                      <MoreVertical size={18} />
+                    </button>
+
+                    {activeDropdown === client.id && (
+                      <div className="action-dropdown-menu">
+                        <Link to={`/clients/${client.id}`} className="dropdown-item">
+                          <Eye size={14} /> View Details
+                        </Link>
+                        <button className="dropdown-item" onClick={() => { setActiveDropdown(null); openEditModal(client); }}>
+                          <Edit size={14} /> Edit Client
+                        </button>
+                        <button className="dropdown-item danger" onClick={() => { setActiveDropdown(null); handleDelete(client.id); }}>
+                          <Trash2 size={14} /> Delete Client
+                        </button>
                       </div>
-                    </div>
-                  </td>
-                  <td>
-                    <div className="text-small">{client.email}</div>
-                    {client.whatsapp_number && <div className="text-small text-secondary">{client.whatsapp_number}</div>}
-                  </td>
-                  <td>
-                    <div className="text-small text-secondary" style={{ maxWidth: '200px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                      {client.physical_address || '-'}
-                    </div>
-                  </td>
-                  <td>{new Date(client.created_at).toLocaleDateString()}</td>
-                  <td>
-                    <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
-                      <Link to={`/clients/${client.id}`} className="btn-link">View Profile</Link>
-                      <button className="btn-icon" style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-secondary)' }} onClick={() => openEditModal(client)} title="Edit Client">
-                        <Edit size={18} />
-                      </button>
-                      <button className="btn-icon" style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--danger)' }} onClick={() => handleDelete(client.id)} title="Delete Client">
-                        <Trash2 size={18} />
-                      </button>
-                    </div>
+                    )}
                   </td>
                 </tr>
               ))}
               {currentClients.length === 0 && (
                 <tr>
-                  <td colSpan="5" className="empty-state">No clients found.</td>
+                  <td colSpan="8" className="empty-state">No clients found.</td>
                 </tr>
               )}
             </tbody>

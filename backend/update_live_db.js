@@ -361,6 +361,37 @@ async function updateLiveDb() {
     `);
     console.log('✅ Ensured client_reviews table exists.');
 
+    // Quotations Tables
+    await connection.query(`
+      CREATE TABLE IF NOT EXISTS quotations (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        quotation_number VARCHAR(50) UNIQUE NOT NULL,
+        amount DECIMAL(10,2) DEFAULT 0.00,
+        status ENUM('Draft', 'Sent', 'Accepted', 'Rejected') DEFAULT 'Draft',
+        client_id INT NULL,
+        issue_date DATE,
+        expiry_date DATE,
+        terms_and_conditions TEXT,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        created_by INT NULL,
+        FOREIGN KEY (client_id) REFERENCES clients(id) ON DELETE SET NULL,
+        FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+    `);
+    
+    await connection.query(`
+      CREATE TABLE IF NOT EXISTS quotation_items (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        quotation_id INT NOT NULL,
+        description TEXT NOT NULL,
+        quantity DECIMAL(10,2) DEFAULT 1.00,
+        unit_price DECIMAL(10,2) DEFAULT 0.00,
+        total DECIMAL(10,2) DEFAULT 0.00,
+        FOREIGN KEY (quotation_id) REFERENCES quotations(id) ON DELETE CASCADE
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+    `);
+    console.log('✅ Ensured quotations and quotation_items tables exist.');
+
     console.log('\n🎉 Live database update completed successfully!');
   } catch (error) {
     console.error('\n❌ Migration failed:', error);

@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { useNavigate } from 'react-router-dom';
-import { Search, Plus, FileText, Eye, X, Check, Trash2, Printer, Banknote, Edit, FileSpreadsheet } from 'lucide-react';
+import { Search, Plus, FileText, Eye, X, Check, Trash2, Printer, Banknote, Edit, FileSpreadsheet, RefreshCw } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import Pagination from '../components/Pagination';
 import './InvoiceManagement.css';
@@ -20,6 +20,31 @@ export default function InvoiceManagement() {
   const [salesPersons, setSalesPersons] = useState([]);
   const [fromDate, setFromDate] = useState('');
   const [toDate, setToDate] = useState('');
+  const [datePreset, setDatePreset] = useState('All Dates');
+
+  // Handle Date Presets
+  useEffect(() => {
+    if (datePreset === 'All Dates') {
+      setFromDate('');
+      setToDate('');
+    } else if (datePreset === 'Today') {
+      const today = new Date().toISOString().slice(0, 10);
+      setFromDate(today);
+      setToDate(today);
+    } else if (datePreset === 'This Week') {
+      const now = new Date();
+      const firstday = new Date(now.setDate(now.getDate() - now.getDay())).toISOString().slice(0, 10);
+      const lastday = new Date(now.setDate(now.getDate() - now.getDay() + 6)).toISOString().slice(0, 10);
+      setFromDate(firstday);
+      setToDate(lastday);
+    } else if (datePreset === 'This Month') {
+      const now = new Date();
+      const firstday = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().slice(0, 10);
+      const lastday = new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString().slice(0, 10);
+      setFromDate(firstday);
+      setToDate(lastday);
+    }
+  }, [datePreset]);
   
   // Pagination
   const [currentPage, setCurrentPage] = useState(1);
@@ -175,30 +200,74 @@ export default function InvoiceManagement() {
 
   return (
     <div className="invoice-management-container modern-ui">
-      <div className="recent-orders-panel" style={{ marginTop: '0' }}>
-        <div className="panel-header-ref" style={{ flexWrap: 'wrap', gap: '1rem', alignItems: 'center', justifyContent: 'space-between' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap', flex: 1 }}>
-            <div className="search-box-ref" style={{ flex: '1 1 220px', minWidth: '200px' }}>
-              <Search size={16} />
-              <input 
-                type="text" 
-                placeholder="Search by inv #, client, project, amount..." 
-                value={searchTerm}
-                onChange={e => {
-                  setSearchTerm(e.target.value);
-                  setCurrentPage(1);
-                }}
-              />
-            </div>
+      {/* Top Header: Title & Action Buttons */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem', marginTop: '0.5rem', marginBottom: '0.25rem' }}>
+        <div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+            <h1 style={{ fontSize: '1.6rem', fontWeight: '700', color: '#0f172a', margin: 0, letterSpacing: '-0.02em' }}>
+              Invoices Directory
+            </h1>
+            <span style={{ background: '#e0e7ff', color: '#4338ca', fontSize: '0.75rem', fontWeight: '600', padding: '0.2rem 0.6rem', borderRadius: '12px' }}>
+              {filteredInvoices.length} {filteredInvoices.length === 1 ? 'Invoice' : 'Invoices'}
+            </span>
+          </div>
+          <p style={{ margin: '0.25rem 0 0 0', fontSize: '0.85rem', color: '#64748b' }}>
+            Track customer invoices, payment statuses, and sales records
+          </p>
+        </div>
 
+        <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', alignItems: 'center' }}>
+          <button 
+            className="btn-secondary" 
+            onClick={fetchData} 
+            style={{ display: 'flex', alignItems: 'center', gap: '0.45rem', padding: '0.55rem 0.9rem', borderRadius: '8px', border: '1px solid #e2e8f0', background: '#ffffff', color: '#334155', cursor: 'pointer', fontSize: '0.85rem', fontWeight: 500, boxShadow: '0 1px 2px rgba(0,0,0,0.04)' }}
+          >
+            <RefreshCw size={15} color="#64748b" /> Refresh
+          </button>
+          <button 
+            className="btn-secondary" 
+            onClick={handleExportExcel} 
+            style={{ display: 'flex', alignItems: 'center', gap: '0.45rem', padding: '0.55rem 0.9rem', borderRadius: '8px', border: '1px solid #e2e8f0', background: '#ffffff', color: '#334155', cursor: 'pointer', fontSize: '0.85rem', fontWeight: 500, boxShadow: '0 1px 2px rgba(0,0,0,0.04)' }}
+          >
+            <FileSpreadsheet size={15} color="#10b981" /> Export Excel
+          </button>
+          <button 
+            className="btn-primary" 
+            onClick={() => navigate('/invoices/new')} 
+            style={{ borderRadius: '8px', fontSize: '0.85rem', padding: '0.55rem 1.15rem', background: '#f97316', color: '#ffffff', border: 'none', display: 'flex', alignItems: 'center', gap: '0.45rem', cursor: 'pointer', fontWeight: 600, boxShadow: '0 1px 3px rgba(249,115,22,0.25)' }}
+          >
+            <Plus size={16} /> Create Invoice
+          </button>
+        </div>
+      </div>
+
+      <div className="recent-orders-panel" style={{ marginTop: '0.5rem' }}>
+        {/* Search & Filter Toolbar inside Card */}
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '0.75rem', paddingBottom: '1.25rem', borderBottom: '1px solid #f1f5f9', marginBottom: '0.5rem' }}>
+          {/* Search Box */}
+          <div style={{ position: 'relative', flex: '1 1 240px', maxWidth: '340px' }}>
+            <Search size={16} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: '#94a3b8', pointerEvents: 'none' }} />
+            <input 
+              type="text" 
+              placeholder="Search by inv #, client, project, amount..." 
+              value={searchTerm}
+              onChange={e => {
+                setSearchTerm(e.target.value);
+                setCurrentPage(1);
+              }}
+              style={{ width: '100%', height: '38px', padding: '0 12px 0 38px', borderRadius: '8px', border: '1px solid #e2e8f0', background: '#f8fafc', fontSize: '0.85rem', color: '#1e293b', outline: 'none', boxSizing: 'border-box' }}
+            />
+          </div>
+
+          {/* Filters Row */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
             <select 
-              className="filter-select"
               value={statusFilter}
               onChange={(e) => {
                 setStatusFilter(e.target.value);
                 setCurrentPage(1);
               }}
-              style={{ padding: '0.5rem 0.75rem', borderRadius: '20px', border: '1px solid #e2e8f0', background: '#f8fafc', fontSize: '0.85rem', outline: 'none' }}
+              style={{ height: '38px', padding: '0 0.85rem', borderRadius: '8px', border: '1px solid #e2e8f0', background: '#f8fafc', color: '#334155', fontSize: '0.85rem', outline: 'none', cursor: 'pointer', fontWeight: 500 }}
             >
               <option value="All Statuses">All Statuses</option>
               <option value="Paid">Paid</option>
@@ -207,63 +276,64 @@ export default function InvoiceManagement() {
             </select>
 
             <select 
-              className="filter-select"
               value={salesPersonFilter}
               onChange={(e) => {
                 setSalesPersonFilter(e.target.value);
                 setCurrentPage(1);
               }}
-              style={{ padding: '0.5rem 0.75rem', borderRadius: '20px', border: '1px solid #e2e8f0', background: '#f8fafc', fontSize: '0.85rem', outline: 'none', maxWidth: '180px' }}
+              style={{ height: '38px', padding: '0 0.85rem', borderRadius: '8px', border: '1px solid #e2e8f0', background: '#f8fafc', color: '#334155', fontSize: '0.85rem', outline: 'none', cursor: 'pointer', fontWeight: 500, maxWidth: '170px' }}
             >
               <option value="All Sales Persons">All Sales Persons</option>
               {salesPersons.map(sp => <option key={sp.id} value={sp.full_name}>{sp.full_name}</option>)}
             </select>
 
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '20px', padding: '0.35rem 0.75rem' }}>
-              <span style={{ fontSize: '0.8rem', color: '#64748b', fontWeight: 600 }}>From:</span>
+            <select 
+              value={datePreset}
+              onChange={e => {
+                setDatePreset(e.target.value);
+                setCurrentPage(1);
+              }}
+              style={{ height: '38px', padding: '0 0.85rem', borderRadius: '8px', border: '1px solid #e2e8f0', background: '#f8fafc', color: '#334155', fontSize: '0.85rem', outline: 'none', cursor: 'pointer', fontWeight: 500 }}
+            >
+              <option value="All Dates">All Dates</option>
+              <option value="Today">Today</option>
+              <option value="This Week">This Week</option>
+              <option value="This Month">This Month</option>
+              <option value="Custom">Custom</option>
+            </select>
+
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '8px', padding: '0 0.65rem', height: '38px', boxSizing: 'border-box' }}>
               <input 
                 type="date" 
                 value={fromDate} 
                 onChange={e => {
                   setFromDate(e.target.value);
+                  setDatePreset('Custom');
                   setCurrentPage(1);
                 }}
-                style={{ border: 'none', background: 'transparent', fontSize: '0.82rem', color: '#1e293b', outline: 'none' }}
+                style={{ border: 'none', background: 'transparent', fontSize: '0.8rem', color: '#334155', outline: 'none', cursor: 'pointer', fontFamily: 'inherit' }}
               />
-              <span style={{ fontSize: '0.8rem', color: '#64748b', fontWeight: 600 }}>To:</span>
+              <span style={{ color: '#94a3b8', fontSize: '0.8rem' }}>to</span>
               <input 
                 type="date" 
                 value={toDate} 
                 onChange={e => {
                   setToDate(e.target.value);
+                  setDatePreset('Custom');
                   setCurrentPage(1);
                 }}
-                style={{ border: 'none', background: 'transparent', fontSize: '0.82rem', color: '#1e293b', outline: 'none' }}
+                style={{ border: 'none', background: 'transparent', fontSize: '0.8rem', color: '#334155', outline: 'none', cursor: 'pointer', fontFamily: 'inherit' }}
               />
               {(fromDate || toDate) && (
                 <button 
-                  onClick={() => { setFromDate(''); setToDate(''); setCurrentPage(1); }}
-                  style={{ border: 'none', background: 'transparent', color: '#ef4444', cursor: 'pointer', fontSize: '0.8rem', fontWeight: 'bold', marginLeft: '0.25rem' }}
+                  onClick={() => { setFromDate(''); setToDate(''); setDatePreset('All Dates'); setCurrentPage(1); }}
+                  style={{ border: 'none', background: '#e2e8f0', color: '#64748b', cursor: 'pointer', fontSize: '0.7rem', fontWeight: 'bold', marginLeft: '0.2rem', padding: '0.15rem 0.35rem', borderRadius: '4px' }}
                   title="Clear Date Filter"
                 >
                   ✕
                 </button>
               )}
             </div>
-          </div>
-
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-            <button 
-              className="btn-excel" 
-              onClick={handleExportExcel} 
-              title="Download Excel Listing"
-              style={{ borderRadius: '20px', fontSize: '0.85rem', whiteSpace: 'nowrap', display: 'flex', alignItems: 'center', gap: '0.4rem', background: '#ffffff', border: '1px solid #10b981', color: '#10b981', padding: '0.5rem 1rem', cursor: 'pointer', fontWeight: '600' }}
-            >
-              <FileSpreadsheet size={16} /> Export Excel
-            </button>
-            <button className="btn-primary" onClick={() => navigate('/invoices/new')} style={{ borderRadius: '20px', fontSize: '0.85rem', whiteSpace: 'nowrap' }}>
-              <Plus size={16} /> Create Invoice
-            </button>
           </div>
         </div>
 

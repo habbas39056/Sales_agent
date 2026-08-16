@@ -7,6 +7,8 @@ import ClientsList from './pages/ClientsList';
 import ClientProfile from './pages/ClientProfile';
 import InvoiceManagement from './pages/InvoiceManagement';
 import CreateInvoice from './pages/CreateInvoice';
+import QuotationsList from './pages/QuotationsList';
+import CreateQuotation from './pages/CreateQuotation';
 import ProjectsList from './pages/ProjectsList';
 import ProjectDetails from './pages/ProjectDetails';
 import AddStep from './pages/AddStep';
@@ -140,6 +142,10 @@ function AppContent() {
               <li><Link to="/invoices" className={`sidebar-link ${location.pathname === '/invoices' ? 'active' : ''}`}><FileText size={20} /> Invoice Management</Link></li>
             )}
             
+            {(!user || user.role === 'Admin' || (user.modules_access && user.modules_access.includes('INVOICES'))) && (
+              <li><Link to="/quotations" className={`sidebar-link ${location.pathname.startsWith('/quotations') ? 'active' : ''}`}><FileText size={20} /> Quotations</Link></li>
+            )}
+            
             {(!user || user.role === 'Admin' || (user.modules_access && user.modules_access.includes('PROJECTS'))) && (
               <>
                 <li><Link to="/projects" className={`sidebar-link ${location.pathname === '/projects' ? 'active' : ''}`}><PlusCircle size={20} /> Project Creation</Link></li>
@@ -218,6 +224,9 @@ function AppContent() {
             <Route path="/invoices" element={<ProtectedRoute><InvoiceManagement /></ProtectedRoute>} />
             <Route path="/invoices/new" element={<ProtectedRoute><CreateInvoice /></ProtectedRoute>} />
             <Route path="/invoices/edit/:id" element={<ProtectedRoute><CreateInvoice /></ProtectedRoute>} />
+            <Route path="/quotations" element={<ProtectedRoute><QuotationsList /></ProtectedRoute>} />
+            <Route path="/quotations/new" element={<ProtectedRoute><CreateQuotation /></ProtectedRoute>} />
+            <Route path="/quotations/edit/:id" element={<ProtectedRoute><CreateQuotation /></ProtectedRoute>} />
             <Route path="/projects" element={<ProtectedRoute><ProjectsList /></ProtectedRoute>} />
             <Route path="/projects/:id" element={<ProtectedRoute><ProjectDetails /></ProtectedRoute>} />
             <Route path="/projects/:id/steps/new" element={<ProtectedRoute><AddStep /></ProtectedRoute>} />

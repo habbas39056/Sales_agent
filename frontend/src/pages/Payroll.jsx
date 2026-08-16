@@ -72,6 +72,26 @@ export default function Payroll() {
 
   const [isPayslipModalOpen, setIsPayslipModalOpen] = useState(false);
   const [payslipItem, setPayslipItem] = useState(null);
+  const [employeeBreakdown, setEmployeeBreakdown] = useState([]);
+
+  const openPayslipModal = async (item) => {
+    setPayslipItem(item);
+    setIsPayslipModalOpen(true);
+    setEmployeeBreakdown([]);
+    
+    try {
+      if (!item.month) return;
+      const start = `${item.month}-01`;
+      const [year, month] = item.month.split('-');
+      const lastDay = new Date(year, month, 0).getDate();
+      const end = `${item.month}-${lastDay}`;
+      
+      const res = await axios.get(`${API_URL}/commissions/breakdown?agent_id=${item.user_id}&start_date=${start}&end_date=${end}`);
+      setEmployeeBreakdown(res.data || []);
+    } catch (err) {
+      console.error('Failed to fetch commission breakdown for payslip:', err);
+    }
+  };
 
   // Fetch Data
   useEffect(() => {
@@ -583,10 +603,7 @@ export default function Payroll() {
                           )}
                           <button 
                             className="action-btn-slip" 
-                            onClick={() => {
-                              setPayslipItem(item);
-                              setIsPayslipModalOpen(true);
-                            }}
+                            onClick={() => openPayslipModal(item)}
                             title="View / Print Payslip"
                           >
                             <Printer size={14} /> Payslip
@@ -887,7 +904,7 @@ export default function Payroll() {
                       />
                     </div>
                     <div className="form-group">
-                      <label>Overtime (PKR)</label>
+                      <label>Commission (PKR)</label>
                       <input 
                         type="number" 
                         step="0.01"
@@ -1104,7 +1121,7 @@ export default function Payroll() {
                           <td style={{ textAlign: 'right' }}>{base.toFixed(2)}</td>
                         </tr>
                         <tr>
-                          <td>Overtime / Allowance</td>
+                          <td>Commission Earned</td>
                           <td style={{ textAlign: 'right' }}>{overtime.toFixed(2)}</td>
                         </tr>
                         <tr>
@@ -1168,6 +1185,60 @@ export default function Payroll() {
                   <div className="payslip-sig-line">Employee Signature</div>
                   <div className="payslip-sig-line">Authorized Signatory (Adwise)</div>
                 </div>
+
+                {/* COMMISSION BREAKDOWN SECTION */}
+                {employeeBreakdown && employeeBreakdown.length > 0 && (
+                  <div style={{ pageBreakBefore: 'always', marginTop: '2rem' }}>
+                    <div className="payslip-header" style={{ marginBottom: '1.5rem', borderBottom: '2px solid #0f172a', paddingBottom: '1rem' }}>
+                      <h3 style={{ margin: 0, fontSize: '1.3rem', color: '#0f172a' }}>COMMISSION BREAKDOWN</h3>
+                      <p style={{ margin: '0.25rem 0 0 0', color: '#64748b' }}>For {payslipItem.employee_name} ({payslipItem.month})</p>
+                    </div>
+                    
+                    <table className="payslip-table" style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.85rem' }}>
+                      <thead>
+                        <tr>
+                          <th style={{ textAlign: 'left', padding: '0.75rem', borderBottom: '1px solid #cbd5e1' }}>Project / Step</th>
+                          <th style={{ textAlign: 'left', padding: '0.75rem', borderBottom: '1px solid #cbd5e1' }}>Invoice / Products</th>
+                          <th style={{ textAlign: 'center', padding: '0.75rem', borderBottom: '1px solid #cbd5e1' }}>Comm. %</th>
+                          <th style={{ textAlign: 'right', padding: '0.75rem', borderBottom: '1px solid #cbd5e1' }}>Potential</th>
+                          <th style={{ textAlign: 'right', padding: '0.75rem', borderBottom: '1px solid #cbd5e1' }}>Earned</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {employeeBreakdown.map((item, idx) => (
+                          <tr key={idx} style={{ borderBottom: '1px solid #e2e8f0' }}>
+                            <td style={{ padding: '0.75rem' }}>
+                              <div style={{ fontWeight: 600, color: '#1e293b' }}>{item.project_title}</div>
+                              <div style={{ fontSize: '0.75rem', color: '#64748b' }}>{item.step_title}</div>
+                            </td>
+                            <td style={{ padding: '0.75rem' }}>
+                              {item.invoice_numbers && item.invoice_numbers.length > 0 && (
+                                <div style={{ fontSize: '0.75rem', color: '#475569', marginBottom: '0.25rem' }}>
+                                  Invoices: {item.invoice_numbers.join(', ')}
+                                </div>
+                              )}
+                              {item.products && item.products.length > 0 && (
+                                <div style={{ fontSize: '0.7rem', color: '#64748b' }}>
+                                  {item.products.map((p, i) => <div key={i}>• {p.description}</div>)}
+                                </div>
+                              )}
+                            </td>
+                            <td style={{ textAlign: 'center', padding: '0.75rem', fontWeight: '500' }}>
+                              {item.commission_percentage || 0}%
+                            </td>
+                            <td style={{ textAlign: 'right', padding: '0.75rem', color: '#64748b' }}>
+                              PKR {Number(item.potential_commission || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                            </td>
+                            <td style={{ textAlign: 'right', padding: '0.75rem', fontWeight: 600, color: '#16a34a' }}>
+                              PKR {Number(item.earned_commission || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+
               </div>
             </div>
           </div>
