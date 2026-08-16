@@ -22,6 +22,11 @@ router.get('/appeals', async (req, res) => {
         ps.reject_todos,
         COALESCE(ps.deadline_status, 'Pending Acceptance') as deadline_status,
         ps.invoice_item_ids,
+        ps.deliverable_name,
+        ps.deliverable_url,
+        ps.description,
+        ps.attachments,
+        ps.completed_at,
         p.title as project_title,
         c.full_name as client_name,
         u.name as employee_name,
@@ -30,7 +35,7 @@ router.get('/appeals', async (req, res) => {
       FROM project_steps ps
       JOIN projects p ON ps.project_id = p.id
       LEFT JOIN clients c ON p.client_id = c.id
-      LEFT JOIN users u ON COALESCE(ps.appealed_by, ps.assignee_id) = u.id
+      LEFT JOIN users u ON COALESCE(ps.assignee_id, ps.appealed_by) = u.id
     `;
 
     const queryParams = [];
@@ -225,6 +230,80 @@ router.post('/appeals/:step_id/review', async (req, res) => {
 
       res.json({ message: 'Deadline appeal rejected' });
     }
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+router.post('/tasks/:step_id/approve', async (req, res) => {
+  const { step_id } = req.params;
+  const { user_id } = req.body;
+
+  try {
+    const [[step]] = await db.query(`
+      SELECT ps.id, ps.title, ps.project_id, ps.assignee_id, p.pm_id 
+      FROM project_steps ps 
+      JOIN projects p ON ps.project_id = p.id 
+      WHERE ps.id = ?
+    `, [step_id]);
+
+    if (!step) return res.status(404).json({ error: 'Step not found' });
+
+    await db.query('UPDATE project_steps SET status = "Completed", completed_at = NOW() WHERE id = ?', [step_id]);
+
+    await db.query(
+      'INSERT INTO step_activity (step_id, user_id, action_text) VALUES (?, ?, ?)',
+      [step_id, user_id || null, 'Approved task deliverable and marked step as Completed']
+    );
+
+    // Notify assignee
+    if (step.assignee_id) {
+      await db.query(
+        'INSERT INTO notifications (user_id, message, type, link) VALUES (?, ?, ?, ?)',
+        [step.assignee_id, `Your deliverable for step "${step.title}" has been approved!`, 'step_approved', `/projects/${step.project_id}`]
+      );
+    }
+
+    res.json({ message: 'Task approved successfully' });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Direct Reject Task / Request Revision Endpoint
+router.post('/tasks/:step_id/reject', async (req, res) => {
+  const { step_id } = req.params;
+  const { user_id, feedback } = req.body;
+
+  try {
+    const [[step]] = await db.query(`
+      SELECT ps.id, ps.title, ps.project_id, ps.assignee_id, p.pm_id 
+      FROM project_steps ps 
+      JOIN projects p ON ps.project_id = p.id 
+      WHERE ps.id = ?
+    `, [step_id]);
+
+    if (!step) return res.status(404).json({ error: 'Step not found' });
+
+    const feedbackText = feedback || 'Deliverable was rejected and requires revision.';
+
+    await db.query(
+      'UPDATE project_steps SET status = "In Progress", reject_todos = ? WHERE id = ?',
+      [feedbackText, step_id]
+    );
+
+    await db.query(
+      'INSERT INTO step_activity (step_id, user_id, action_text) VALUES (?, ?, ?)',
+      [step_id, user_id || null, `Rejected deliverable with note: ${feedbackText}`]
+    );
+
+    if (step.assignee_id) {
+      await db.query(
+        'INSERT INTO notifications (user_id, message, type, link) VALUES (?, ?, ?, ?)',
+        [step.assignee_id, `Revisions requested for step "${step.title}": ${feedbackText}`, 'step_rejected', `/tasks`]
+      );
+    }
+
+    res.json({ message: 'Task rejected and sent for revision' });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }

@@ -15,8 +15,17 @@ export default function DeadlineWorkflow() {
 
   useEffect(() => {
     const params = new URLSearchParams(location.search);
-    if (params.get('tab') === 'approval') {
+    const tab = params.get('tab');
+    if (tab === 'approval') {
       setFilterTab('Tasks for Approval');
+    } else if (tab === 'appeals') {
+      setFilterTab('Appealed');
+    } else if (tab === 'accepted') {
+      setFilterTab('Accepted');
+    } else if (tab === 'all') {
+      setFilterTab('All');
+    } else {
+      setFilterTab('Pending Acceptance');
     }
   }, [location.search]);
 
@@ -138,15 +147,36 @@ export default function DeadlineWorkflow() {
   };
 
   const handleApproveTask = async (stepId, projectId) => {
-    if (!window.confirm('Are you sure you want to approve this task and mark it as completed?')) return;
+    if (!window.confirm('Are you sure you want to approve this deliverable and mark the task as completed?')) return;
     setProcessingId(stepId);
     try {
-      await axios.put(`/api/projects/${projectId}/steps/${stepId}`, { status: 'Completed' });
-      alert('Task approved successfully!');
+      await axios.post(`/api/deadlines/tasks/${stepId}/approve`, {
+        user_id: currentUser.id
+      });
+      alert('Task approved and completed successfully!');
       fetchAppeals();
     } catch (error) {
       console.error('Failed to approve task', error);
       alert('Failed to approve task.');
+    } finally {
+      setProcessingId(null);
+    }
+  };
+
+  const handleRejectTask = async (stepId, projectId) => {
+    const feedback = prompt('Enter revision instructions / reason for rejection (this will be sent to the team member):');
+    if (feedback === null) return;
+    setProcessingId(stepId);
+    try {
+      await axios.post(`/api/deadlines/tasks/${stepId}/reject`, {
+        user_id: currentUser.id,
+        feedback: feedback.trim() || 'Deliverable was rejected and requires revision.'
+      });
+      alert('Task returned to production team member for revision.');
+      fetchAppeals();
+    } catch (error) {
+      console.error('Failed to reject task', error);
+      alert('Failed to reject task.');
     } finally {
       setProcessingId(null);
     }
@@ -296,54 +326,65 @@ export default function DeadlineWorkflow() {
         </div>
       )}
 
-      {/* Filter Bar - Hidden in Tasks for Approval */}
-      {filterTab !== 'Tasks for Approval' && (
-        <div style={{ display: 'flex', gap: '0.5rem', overflowX: 'auto', paddingBottom: '0.25rem' }}>
-          <button 
-            onClick={() => { navigate('/deadlines'); setFilterTab('All'); }}
-            style={{ 
-              background: filterTab === 'All' ? '#0f172a' : '#ffffff', 
-              color: filterTab === 'All' ? '#ffffff' : '#64748b', 
-              border: '1px solid #cbd5e1', padding: '0.5rem 1.1rem', borderRadius: '10px', fontWeight: '600', fontSize: '0.85rem', cursor: 'pointer' 
-            }}
-          >
-            All Deadlines ({totalCount})
-          </button>
+      {/* Filter Tabs */}
+      <div style={{ display: 'flex', gap: '0.5rem', overflowX: 'auto', paddingBottom: '0.25rem' }}>
+        <button 
+          onClick={() => { navigate('/deadlines?tab=pending'); setFilterTab('Pending Acceptance'); }}
+          style={{ 
+            background: filterTab === 'Pending Acceptance' ? '#0f172a' : '#ffffff', 
+            color: filterTab === 'Pending Acceptance' ? '#ffffff' : '#64748b', 
+            border: '1px solid #cbd5e1', padding: '0.5rem 1.1rem', borderRadius: '10px', fontWeight: '600', fontSize: '0.85rem', cursor: 'pointer' 
+          }}
+        >
+          ⏳ Pending Acceptance ({pendingAcceptanceCount})
+        </button>
 
-          <button 
-            onClick={() => { navigate('/deadlines'); setFilterTab('Appealed'); }}
-            style={{ 
-              background: filterTab === 'Appealed' ? '#0f172a' : '#ffffff', 
-              color: filterTab === 'Appealed' ? '#ffffff' : '#64748b', 
-              border: '1px solid #cbd5e1', padding: '0.5rem 1.1rem', borderRadius: '10px', fontWeight: '600', fontSize: '0.85rem', cursor: 'pointer' 
-            }}
-          >
-            ⚠️ Extension Appeals ({extensionAppealsCount})
-          </button>
+        <button 
+          onClick={() => { navigate('/deadlines?tab=appeals'); setFilterTab('Appealed'); }}
+          style={{ 
+            background: filterTab === 'Appealed' ? '#0f172a' : '#ffffff', 
+            color: filterTab === 'Appealed' ? '#ffffff' : '#64748b', 
+            border: '1px solid #cbd5e1', padding: '0.5rem 1.1rem', borderRadius: '10px', fontWeight: '600', fontSize: '0.85rem', cursor: 'pointer' 
+          }}
+        >
+          ⚠️ Extension Appeals ({extensionAppealsCount})
+        </button>
 
-          <button 
-            onClick={() => { navigate('/deadlines'); setFilterTab('Pending Acceptance'); }}
-            style={{ 
-              background: filterTab === 'Pending Acceptance' ? '#0f172a' : '#ffffff', 
-              color: filterTab === 'Pending Acceptance' ? '#ffffff' : '#64748b', 
-              border: '1px solid #cbd5e1', padding: '0.5rem 1.1rem', borderRadius: '10px', fontWeight: '600', fontSize: '0.85rem', cursor: 'pointer' 
-            }}
-          >
-            ⏳ Pending Acceptance ({pendingAcceptanceCount})
-          </button>
+        <button 
+          onClick={() => { navigate('/deadlines?tab=accepted'); setFilterTab('Accepted'); }}
+          style={{ 
+            background: filterTab === 'Accepted' ? '#0f172a' : '#ffffff', 
+            color: filterTab === 'Accepted' ? '#ffffff' : '#64748b', 
+            border: '1px solid #cbd5e1', padding: '0.5rem 1.1rem', borderRadius: '10px', fontWeight: '600', fontSize: '0.85rem', cursor: 'pointer' 
+          }}
+        >
+          ✅ Confirmed ({confirmedCount})
+        </button>
 
+        <button 
+          onClick={() => { navigate('/deadlines?tab=all'); setFilterTab('All'); }}
+          style={{ 
+            background: filterTab === 'All' ? '#0f172a' : '#ffffff', 
+            color: filterTab === 'All' ? '#ffffff' : '#64748b', 
+            border: '1px solid #cbd5e1', padding: '0.5rem 1.1rem', borderRadius: '10px', fontWeight: '600', fontSize: '0.85rem', cursor: 'pointer' 
+          }}
+        >
+          All Deadlines ({totalCount})
+        </button>
+
+        {(currentUser.role === 'Admin' || currentUser.role === 'Product Manager' || currentUser.role === 'PM' || currentUser.role === 'Project Manager') && (
           <button 
-            onClick={() => { navigate('/deadlines'); setFilterTab('Accepted'); }}
+            onClick={() => { navigate('/deadlines?tab=approval'); setFilterTab('Tasks for Approval'); }}
             style={{ 
-              background: filterTab === 'Accepted' ? '#0f172a' : '#ffffff', 
-              color: filterTab === 'Accepted' ? '#ffffff' : '#64748b', 
+              background: filterTab === 'Tasks for Approval' ? '#0f172a' : '#ffffff', 
+              color: filterTab === 'Tasks for Approval' ? '#ffffff' : '#64748b', 
               border: '1px solid #cbd5e1', padding: '0.5rem 1.1rem', borderRadius: '10px', fontWeight: '600', fontSize: '0.85rem', cursor: 'pointer' 
             }}
           >
-            ✅ Confirmed ({confirmedCount})
+            📋 Tasks for Approval ({tasksForApprovalCount})
           </button>
-        </div>
-      )}
+        )}
+      </div>
 
       {/* Filters (Date + Search) */}
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: '1rem', background: '#ffffff', padding: '1rem', borderRadius: '12px', border: '1px solid #e2e8f0', marginTop: '1rem', alignItems: 'center' }}>
@@ -461,7 +502,12 @@ export default function DeadlineWorkflow() {
                     >
                       {item.step_title}
                     </h4>
-                    {(item.reassign_todos || item.reject_todos) && (
+                    {item.step_status === 'Pending Approval' && (
+                      <span style={{ background: '#fef3c7', color: '#b45309', fontSize: '0.75rem', padding: '2px 8px', borderRadius: '8px', fontWeight: '700', border: '1px solid #fde68a' }}>
+                        ⏳ Deliverable Submitted (Pending Approval)
+                      </span>
+                    )}
+                    {(item.reassign_todos || item.reject_todos) && item.step_status !== 'Pending Approval' && (
                       <span style={{ background: '#e11d48', color: 'white', fontSize: '0.7rem', padding: '2px 6px', borderRadius: '8px', fontWeight: '700', textTransform: 'uppercase' }}>
                         Reassigned
                       </span>
@@ -471,12 +517,12 @@ export default function DeadlineWorkflow() {
                         ⚠️ Extension Appealed
                       </span>
                     )}
-                    {isPending && (
+                    {isPending && item.step_status !== 'Pending Approval' && (
                       <span style={{ background: '#e0e7ff', color: '#3730a3', fontSize: '0.7rem', padding: '2px 6px', borderRadius: '8px', fontWeight: '700' }}>
                         ⏳ Pending Acceptance
                       </span>
                     )}
-                    {isAccepted && (
+                    {isAccepted && item.step_status !== 'Pending Approval' && (
                       <span style={{ background: '#d1fae5', color: '#047857', fontSize: '0.7rem', padding: '2px 6px', borderRadius: '8px', fontWeight: '700' }}>
                         ✅ Confirmed
                       </span>
@@ -491,6 +537,30 @@ export default function DeadlineWorkflow() {
                   <div style={{ fontSize: '0.85rem', color: '#64748b' }}>
                     Project: <strong onClick={() => navigate(`/projects/${item.project_id}`)} style={{ color: '#4338ca', cursor: 'pointer', textDecoration: 'underline' }}>{item.project_title}</strong> {item.client_name ? `(${item.client_name})` : ''}
                   </div>
+
+                  {/* Deliverable Box if submitted */}
+                  {(item.deliverable_url || item.deliverable_name) && (
+                    <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '8px', padding: '0.65rem 0.85rem', marginTop: '0.65rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '0.5rem' }}>
+                      <div>
+                        <span style={{ fontSize: '0.72rem', fontWeight: '700', color: '#64748b', textTransform: 'uppercase', display: 'block' }}>Submitted Deliverable:</span>
+                        <span style={{ fontSize: '0.88rem', fontWeight: '600', color: '#0f172a' }}>{item.deliverable_name || 'Production Deliverable File/Link'}</span>
+                      </div>
+                      <a 
+                        href={item.deliverable_url?.startsWith('http') ? item.deliverable_url : `${item.deliverable_url}`} 
+                        target="_blank" 
+                        rel="noopener noreferrer"
+                        style={{ background: '#4338ca', color: '#ffffff', padding: '0.35rem 0.75rem', borderRadius: '6px', fontSize: '0.8rem', fontWeight: '600', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '0.3rem' }}
+                      >
+                        <ExternalLink size={14} /> Open Deliverable
+                      </a>
+                    </div>
+                  )}
+
+                  {item.description && item.step_status === 'Pending Approval' && (
+                    <div style={{ background: '#f8fafc', border: '1px solid #f1f5f9', borderRadius: '8px', padding: '0.5rem 0.75rem', marginTop: '0.5rem', fontSize: '0.82rem', color: '#475569' }}>
+                      <strong>Task Description / Notes:</strong> {item.description}
+                    </div>
+                  )}
                 </div>
 
                 {/* Deadline Comparison Box - Hidden in Tasks for Approval */}
@@ -553,14 +623,25 @@ export default function DeadlineWorkflow() {
                 {/* Actions Footer */}
                 <div className="appeal-actions" style={{ flexWrap: 'wrap', gap: '0.4rem' }}>
                   {filterTab === 'Tasks for Approval' && (currentUser.role === 'Admin' || currentUser.role === 'Product Manager' || currentUser.role === 'PM' || currentUser.role === 'Project Manager') && (
-                    <button 
-                      type="button"
-                      disabled={processingId === item.step_id}
-                      onClick={() => handleApproveTask(item.step_id, item.project_id)}
-                      style={{ background: '#10b981', color: 'white', border: 'none', padding: '0.45rem 0.8rem', borderRadius: '8px', fontSize: '0.8rem', fontWeight: '700', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.3rem' }}
-                    >
-                      <CheckCircle2 size={15} /> Approve Task
-                    </button>
+                    <>
+                      <button 
+                        type="button"
+                        disabled={processingId === item.step_id}
+                        onClick={() => handleApproveTask(item.step_id, item.project_id)}
+                        style={{ background: '#10b981', color: 'white', border: 'none', padding: '0.45rem 0.85rem', borderRadius: '8px', fontSize: '0.82rem', fontWeight: '700', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.35rem' }}
+                      >
+                        <CheckCircle2 size={15} /> Approve Task
+                      </button>
+
+                      <button 
+                        type="button"
+                        disabled={processingId === item.step_id}
+                        onClick={() => handleRejectTask(item.step_id, item.project_id)}
+                        style={{ background: '#ef4444', color: 'white', border: 'none', padding: '0.45rem 0.85rem', borderRadius: '8px', fontSize: '0.82rem', fontWeight: '700', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.35rem' }}
+                      >
+                        <XCircle size={15} /> Request Revision
+                      </button>
+                    </>
                   )}
                   {isAppealed && (currentUser.role === 'Admin' || currentUser.role === 'Product Manager' || currentUser.role === 'PM' || currentUser.role === 'Project Manager') && (
                     <>

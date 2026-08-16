@@ -161,7 +161,14 @@ function AppContent() {
 
             {(!user || user.role === 'Admin' || (user.modules_access && user.modules_access.includes('DEADLINES'))) && (
               <>
-                <li><Link to="/deadlines" className={location.pathname.startsWith('/deadlines') ? 'active' : ''}><Clock size={20} /> Deadline Workflow</Link></li>
+                <li>
+                  <Link 
+                    to="/deadlines" 
+                    className={location.pathname === '/deadlines' && !location.search.includes('tab=approval') ? 'active' : ''}
+                  >
+                    <Clock size={20} /> Deadline Workflow
+                  </Link>
+                </li>
                 {location.pathname.startsWith('/deadlines') && (user?.role === 'Admin' || user?.role === 'Product Manager' || user?.role === 'PM' || user?.role === 'Project Manager') && (
                   <li className="submenu-item">
                     <Link to="/deadlines?tab=approval" className={`sidebar-link ${location.search.includes('tab=approval') ? 'active' : ''}`} style={{ paddingLeft: '3.2rem', fontSize: '0.9rem', opacity: 0.9 }}>
