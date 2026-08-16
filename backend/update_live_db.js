@@ -325,6 +325,8 @@ async function updateLiveDb() {
     await addColumnIfNotExists('project_steps', 'commission_released', 'BOOLEAN DEFAULT FALSE');
     await addColumnIfNotExists('project_steps', 'deliverable_name', 'VARCHAR(255) DEFAULT NULL');
     await addColumnIfNotExists('project_steps', 'deliverable_url', 'VARCHAR(1000) DEFAULT NULL');
+    await addColumnIfNotExists('project_steps', 'reassign_todos', 'BOOLEAN DEFAULT FALSE');
+    await addColumnIfNotExists('project_steps', 'reject_todos', 'BOOLEAN DEFAULT FALSE');
 
     try {
       await connection.query("ALTER TABLE project_steps MODIFY COLUMN status ENUM('Pending', 'In Progress', 'Completed', 'Pending Approval', 'Overdue') DEFAULT 'Pending'");
@@ -332,8 +334,10 @@ async function updateLiveDb() {
     } catch (e) {
       console.log('⚠️ Error updating status ENUM:', e.message);
     }
-    // 15. Projects Missing Columns
+    // 6. Fix for existing projects without standard dates (optional but helpful)
     await addColumnIfNotExists('projects', 'locked_deadline', 'DATE NULL');
+    await addColumnIfNotExists('projects', 'pm_id', 'INT NULL');
+    await addColumnIfNotExists('projects', 'production_id', 'INT NULL');
 
     // 16. Commissions Missing Columns
     await addColumnIfNotExists('commissions', 'step_id', 'INT NULL');
