@@ -507,11 +507,18 @@ export default function DeadlineWorkflow() {
                         ⏳ Deliverable Submitted (Pending Approval)
                       </span>
                     )}
-                    {(item.reassign_todos || item.reject_todos) && item.step_status !== 'Pending Approval' && (
-                      <span style={{ background: '#e11d48', color: 'white', fontSize: '0.7rem', padding: '2px 6px', borderRadius: '8px', fontWeight: '700', textTransform: 'uppercase' }}>
-                        Reassigned
-                      </span>
-                    )}
+                    {(() => {
+                      const hasTodos = (item.reject_todos && item.reject_todos !== '0' && item.reject_todos !== 0) || 
+                                       (item.reassign_todos && item.reassign_todos !== '0' && item.reassign_todos !== 0);
+                      if (hasTodos && item.step_status !== 'Pending Approval') {
+                        return (
+                          <span style={{ background: '#e11d48', color: 'white', fontSize: '0.7rem', padding: '2px 6px', borderRadius: '8px', fontWeight: '700', textTransform: 'uppercase' }}>
+                            Reassigned
+                          </span>
+                        );
+                      }
+                      return null;
+                    })()}
                     {isAppealed && (
                       <span style={{ background: '#fef3c7', color: '#b45309', fontSize: '0.7rem', padding: '2px 6px', borderRadius: '8px', fontWeight: '700' }}>
                         ⚠️ Extension Appealed

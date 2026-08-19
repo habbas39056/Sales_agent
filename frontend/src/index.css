@@ -119,7 +119,7 @@ a:hover {
 
 .main-content {
   flex: 1;
-  padding: 2rem 3rem;
+  padding: 1.25rem 1.5rem;
   height: 100vh;
   overflow-y: auto;
   background-color: var(--bg-color);

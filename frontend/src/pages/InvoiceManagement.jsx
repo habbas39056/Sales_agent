@@ -18,6 +18,7 @@ export default function InvoiceManagement() {
   const [statusFilter, setStatusFilter] = useState('All Statuses');
   const [salesPersonFilter, setSalesPersonFilter] = useState('All Sales Persons');
   const [salesPersons, setSalesPersons] = useState([]);
+  const [banks, setBanks] = useState([]);
   const [fromDate, setFromDate] = useState('');
   const [toDate, setToDate] = useState('');
   const [datePreset, setDatePreset] = useState('All Dates');
@@ -59,6 +60,7 @@ export default function InvoiceManagement() {
     amount: '',
     payment_date: new Date().toISOString().split('T')[0],
     payment_method: 'Bank Transfer',
+    bank: '',
     notes: ''
   });
 
@@ -75,18 +77,20 @@ export default function InvoiceManagement() {
         queryParams = `?user_id=${user.id}&role=${encodeURIComponent(user.role)}`;
       }
 
-      const [invRes, cliRes, projRes, prodRes, salesRes] = await Promise.all([
+      const [invRes, cliRes, projRes, prodRes, salesRes, bankRes] = await Promise.all([
         axios.get(`/api/invoices${queryParams}`),
         axios.get(`/api/clients${queryParams}`),
         axios.get('/api/projects'),
         axios.get('/api/products'),
-        axios.get('/api/users/specialists')
+        axios.get('/api/users/specialists'),
+        axios.get('/api/banks')
       ]);
       setInvoices(invRes.data);
       setClients(cliRes.data);
       setProjects(projRes.data);
       setProducts(prodRes.data);
       setSalesPersons(salesRes.data || []);
+      setBanks(bankRes.data || []);
     } catch (error) {
       console.error('Failed to fetch data:', error);
     }
@@ -110,6 +114,7 @@ export default function InvoiceManagement() {
       amount: previewInvoice.balance || previewInvoice.amount,
       payment_date: new Date().toISOString().split('T')[0],
       payment_method: 'Bank Transfer',
+      bank: banks.length > 0 ? banks[0].name : '',
       notes: ''
     });
     setIsPaymentModalOpen(true);
@@ -542,6 +547,17 @@ export default function InvoiceManagement() {
                   <option value="Other">Other</option>
                 </select>
               </div>
+              {paymentData.payment_method === 'Bank Transfer' && (
+                <div className="form-group">
+                  <label>Select Bank *</label>
+                  <select name="bank" value={paymentData.bank || ''} onChange={handlePaymentChange} required>
+                    <option value="">- Choose a Bank -</option>
+                    {banks.map(b => (
+                      <option key={b.id} value={b.name}>{b.name}</option>
+                    ))}
+                  </select>
+                </div>
+              )}
               <div className="form-group">
                 <label>Notes / Ref (Optional)</label>
                 <input type="text" name="notes" value={paymentData.notes} onChange={handlePaymentChange} />

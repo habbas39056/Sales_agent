@@ -126,12 +126,23 @@ router.get('/:id/details', async (req, res) => {
       [clientId]
     );
 
+    // 6. Fetch Notes
+    const [notes] = await db.query(
+      `SELECT n.*, u.role as created_by_role, u.name as created_by_name
+       FROM notes n
+       LEFT JOIN users u ON n.created_by = u.id
+       WHERE n.client_id = ?
+       ORDER BY n.created_at DESC`,
+      [clientId]
+    );
+
     res.json({
       client,
       projects,
       invoices,
       subscriptions,
-      files
+      files,
+      notes
     });
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -321,10 +332,13 @@ router.delete('/:id', async (req, res) => {
 // Create note
 router.post('/notes', async (req, res) => {
   const { client_id, content, created_by } = req.body;
+  if (!client_id || !content) {
+    return res.status(400).json({ error: 'Client ID and content are required' });
+  }
   try {
     const [result] = await db.query(
       'INSERT INTO notes (client_id, content, created_by) VALUES (?, ?, ?)',
-      [client_id, content, created_by]
+      [client_id, content, created_by || null]
     );
     res.status(201).json({ id: result.insertId, message: 'Note created successfully' });
   } catch (error) {
@@ -334,8 +348,20 @@ router.post('/notes', async (req, res) => {
 
 // Update note
 router.put('/notes/:id', async (req, res) => {
-  const { content } = req.body;
+  const { content, user_id, role } = req.body;
+  if (!content) {
+    return res.status(400).json({ error: 'Content is required' });
+  }
   try {
+    const [rows] = await db.query('SELECT n.*, u.role as created_by_role FROM notes n LEFT JOIN users u ON n.created_by = u.id WHERE n.id = ?', [req.params.id]);
+    if (rows.length === 0) return res.status(404).json({ error: 'Note not found' });
+    
+    const note = rows[0];
+    const isAdmin = ['Admin', 'Super Admin', 'Project Manager', 'PM', 'Product Manager'].includes(role);
+    if (!isAdmin && user_id && note.created_by != user_id) {
+      return res.status(403).json({ error: 'Clients cannot edit notes created by Admin' });
+    }
+
     await db.query('UPDATE notes SET content = ? WHERE id = ?', [content, req.params.id]);
     res.json({ message: 'Note updated successfully' });
   } catch (error) {
@@ -345,7 +371,17 @@ router.put('/notes/:id', async (req, res) => {
 
 // Delete note
 router.delete('/notes/:id', async (req, res) => {
+  const { user_id, role } = req.query;
   try {
+    const [rows] = await db.query('SELECT n.*, u.role as created_by_role FROM notes n LEFT JOIN users u ON n.created_by = u.id WHERE n.id = ?', [req.params.id]);
+    if (rows.length === 0) return res.status(404).json({ error: 'Note not found' });
+    
+    const note = rows[0];
+    const isAdmin = ['Admin', 'Super Admin', 'Project Manager', 'PM', 'Product Manager'].includes(role);
+    if (!isAdmin && user_id && note.created_by != user_id) {
+      return res.status(403).json({ error: 'Clients cannot delete admin notes' });
+    }
+
     await db.query('DELETE FROM notes WHERE id = ?', [req.params.id]);
     res.json({ message: 'Note deleted successfully' });
   } catch (error) {

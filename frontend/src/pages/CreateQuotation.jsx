@@ -3,6 +3,7 @@ import axios from 'axios';
 import { useNavigate, useParams } from 'react-router-dom';
 import { Plus, Trash2, ArrowLeft, Printer, Edit } from 'lucide-react';
 import Select from 'react-select';
+import TermsTemplateSelector from '../components/TermsTemplateSelector';
 import './QuotationsList.css'; // Reuse existing styles
 
 export default function CreateQuotation() {
@@ -461,31 +462,13 @@ export default function CreateQuotation() {
           </div>
 
           {/* TERMS & CONDITIONS FOR THIS SPECIFIC QUOTATION */}
-          <div style={{ marginTop: '2rem', backgroundColor: '#ffffff', padding: '1.5rem', borderRadius: '12px', border: '1px solid #e2e8f0' }}>
-            <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: '800', color: '#1e293b', textTransform: 'uppercase', marginBottom: '0.75rem' }}>
-              Terms & Conditions (Specific to this Quotation)
-            </label>
-            <textarea 
-              name="terms_and_conditions"
-              value={formData.terms_and_conditions || ''}
-              onChange={handleInputChange}
-              rows="4"
-              placeholder="Enter terms and conditions for this quotation..."
-              style={{
-                width: '100%',
-                padding: '0.75rem 1rem',
-                borderRadius: '8px',
-                border: '1px solid #cbd5e1',
-                fontSize: '0.9rem',
-                fontFamily: 'inherit',
-                color: '#334155',
-                resize: 'vertical',
-                outline: 'none',
-                backgroundColor: '#f8fafc',
-                boxSizing: 'border-box'
-              }}
-            />
-          </div>
+          <TermsTemplateSelector 
+            name="terms_and_conditions"
+            value={formData.terms_and_conditions || ''}
+            onChange={handleInputChange}
+            label="Terms & Conditions (Specific to this Quotation)"
+            placeholder="Enter or select terms and conditions for this quotation..."
+          />
 
           <div className="bottom-actions print-hide">
             <button type="button" className="btn-cancel-text" onClick={() => navigate('/quotations')}>Cancel</button>

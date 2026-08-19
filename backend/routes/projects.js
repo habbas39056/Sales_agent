@@ -140,6 +140,104 @@ router.get('/', async (req, res) => {
   }
 });
 
+// Get projects for Management Overview module (MUST be before /:id)
+router.get('/management/overview', async (req, res) => {
+  try {
+    const { user_id, role } = req.query;
+
+    let query = `
+      SELECT 
+        p.id,
+        p.title,
+        p.start_date,
+        p.locked_deadline,
+        p.status,
+        p.remarks,
+        p.created_at,
+        p.pm_id,
+        p.service_type,
+        c.id as client_id,
+        c.full_name as client_name,
+        c.business_name,
+        pm_user.name as pm_name,
+        (SELECT COUNT(*) FROM project_steps WHERE project_steps.project_id = p.id) as dyn_total_steps,
+        (SELECT COUNT(*) FROM project_steps WHERE project_steps.project_id = p.id AND project_steps.status = 'Completed') as dyn_completed_steps,
+        (
+          SELECT JSON_OBJECT(
+            'id', inv.id,
+            'invoice_number', inv.invoice_number,
+            'amount', inv.amount,
+            'balance', inv.balance,
+            'due_date', inv.due_date,
+            'status', inv.status
+          )
+          FROM invoices inv
+          WHERE inv.project_id = p.id OR (inv.project_id IS NULL AND inv.client_id = p.client_id)
+          ORDER BY (inv.project_id = p.id) DESC, inv.id DESC
+          LIMIT 1
+        ) as invoice_info
+      FROM projects p
+      LEFT JOIN clients c ON p.client_id = c.id
+      LEFT JOIN users pm_user ON p.pm_id = pm_user.id
+    `;
+    const params = [];
+
+    if (user_id && role && role !== 'Admin') {
+      query += ` WHERE (c.user_id = ? OR c.created_by = ? OR p.pm_id = ? OR p.production_id = ? OR p.id IN (SELECT project_id FROM project_members WHERE user_id = ?) OR p.id IN (SELECT project_id FROM project_steps WHERE assignee_id = ?))`;
+      params.push(user_id, user_id, user_id, user_id, user_id, user_id);
+    }
+
+    query += ` ORDER BY p.id DESC`;
+
+    const [rows] = await db.query(query, params);
+
+    const processed = rows.map(r => {
+      let inv = null;
+      if (r.invoice_info) {
+        try {
+          inv = typeof r.invoice_info === 'string' ? JSON.parse(r.invoice_info) : r.invoice_info;
+        } catch (e) {
+          inv = null;
+        }
+      }
+
+      // Auto-pick status from project and steps
+      let autoStatus = r.status || 'Assigned';
+      if (r.status === 'Completed' || (r.dyn_total_steps > 0 && r.dyn_completed_steps === r.dyn_total_steps)) {
+        autoStatus = 'Completed';
+      } else if (r.dyn_completed_steps > 0 && autoStatus === 'Assigned') {
+        autoStatus = 'In Progress';
+      }
+
+      return {
+        id: r.id,
+        title: r.title,
+        start_date: r.start_date || r.created_at,
+        business_name: r.business_name || r.client_name || 'N/A',
+        client_name: r.client_name,
+        client_id: r.client_id,
+        pm_name: r.pm_name,
+        total_steps: r.dyn_total_steps,
+        completed_steps: r.dyn_completed_steps,
+        invoice_id: inv ? inv.id : null,
+        invoice_number: inv ? inv.invoice_number : null,
+        invoice_amount: inv ? inv.amount : null,
+        balance: inv ? inv.balance : null,
+        invoice_due_date: inv ? inv.due_date : null,
+        invoice_status: inv ? inv.status : null,
+        project_due_date: r.locked_deadline,
+        status: autoStatus,
+        remarks: r.remarks || '',
+        created_at: r.created_at
+      };
+    });
+
+    res.json(processed);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // Get a single project
 router.get('/:id', async (req, res) => {
   try {
@@ -1122,6 +1220,48 @@ router.post('/steps/:step_id/activity', async (req, res) => {
       WHERE sa.id = ?
     `, [result.insertId]);
     res.json(newAct);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Update project remarks (editable by PM and Admin)
+router.patch('/:id/remarks', async (req, res) => {
+  const { remarks } = req.body;
+  try {
+    await db.query('UPDATE projects SET remarks = ? WHERE id = ?', [remarks || '', req.params.id]);
+    res.json({ message: 'Remarks updated successfully', remarks });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Update project status
+router.patch('/:id/status', async (req, res) => {
+  const { status } = req.body;
+  try {
+    try {
+      await db.query('UPDATE projects SET status = ? WHERE id = ?', [status, req.params.id]);
+    } catch (e) {
+      if (e.code === 'WARN_DATA_TRUNCATED' || e.errno === 1265) {
+        await db.query("ALTER TABLE projects MODIFY COLUMN status VARCHAR(100) DEFAULT 'Assigned'");
+        await db.query('UPDATE projects SET status = ? WHERE id = ?', [status, req.params.id]);
+      } else {
+        throw e;
+      }
+    }
+    res.json({ message: 'Status updated successfully', status });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Update project start date
+router.patch('/:id/start-date', async (req, res) => {
+  const { start_date } = req.body;
+  try {
+    await db.query('UPDATE projects SET start_date = ? WHERE id = ?', [start_date || null, req.params.id]);
+    res.json({ message: 'Start date updated successfully', start_date });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }

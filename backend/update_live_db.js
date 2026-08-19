@@ -325,8 +325,18 @@ async function updateLiveDb() {
     await addColumnIfNotExists('project_steps', 'commission_released', 'BOOLEAN DEFAULT FALSE');
     await addColumnIfNotExists('project_steps', 'deliverable_name', 'VARCHAR(255) DEFAULT NULL');
     await addColumnIfNotExists('project_steps', 'deliverable_url', 'VARCHAR(1000) DEFAULT NULL');
-    await addColumnIfNotExists('project_steps', 'reassign_todos', 'BOOLEAN DEFAULT FALSE');
-    await addColumnIfNotExists('project_steps', 'reject_todos', 'BOOLEAN DEFAULT FALSE');
+    await addColumnIfNotExists('project_steps', 'reassign_todos', 'LONGTEXT DEFAULT NULL');
+    await addColumnIfNotExists('project_steps', 'reject_todos', 'LONGTEXT DEFAULT NULL');
+
+    try {
+      await connection.query("ALTER TABLE project_steps MODIFY COLUMN reassign_todos LONGTEXT DEFAULT NULL");
+      await connection.query("ALTER TABLE project_steps MODIFY COLUMN reject_todos LONGTEXT DEFAULT NULL");
+      await connection.query("UPDATE project_steps SET reassign_todos = NULL WHERE reassign_todos = '0' OR reassign_todos = 0");
+      await connection.query("UPDATE project_steps SET reject_todos = NULL WHERE reject_todos = '0' OR reject_todos = 0");
+      console.log('✅ Updated reassign_todos and reject_todos column types and cleaned false/0 values.');
+    } catch (e) {
+      console.log('⚠️ Error modifying reassign_todos/reject_todos:', e.message);
+    }
 
     try {
       await connection.query("ALTER TABLE project_steps MODIFY COLUMN status ENUM('Pending', 'In Progress', 'Completed', 'Pending Approval', 'Overdue') DEFAULT 'Pending'");
@@ -390,7 +400,76 @@ async function updateLiveDb() {
         FOREIGN KEY (quotation_id) REFERENCES quotations(id) ON DELETE CASCADE
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
     `);
-    console.log('✅ Ensured quotations and quotation_items tables exist.');
+    // 18. Terms and Conditions Templates Table
+    await connection.query(`
+      CREATE TABLE IF NOT EXISTS terms_templates (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        title VARCHAR(255) NOT NULL,
+        category VARCHAR(100) NOT NULL DEFAULT 'General',
+        content TEXT NOT NULL,
+        is_default TINYINT(1) DEFAULT 0,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+    `);
+    console.log('✅ Ensured terms_templates table exists.');
+
+    // Seed standard templates if empty
+    const [existingTerms] = await connection.query('SELECT COUNT(*) as count FROM terms_templates');
+    if (existingTerms[0].count === 0) {
+      const defaultTemplates = [
+        ['Standard Services Terms', 'General', '1. PAYMENT TERMS: Payments are due within 15 days from the date of invoice issuance.\n2. REVISIONS & SCOPE: Additional feature requests beyond milestone deliverables will be billed separately.\n3. INTELLECTUAL PROPERTY: Final project deliverables released upon 100% full payment.\n4. CONFIDENTIALITY: Non-disclosure of proprietary business data and technology.\n5. CANCELLATION: Deposits and work completed prior to cancellation are non-refundable.', 1],
+        ['Social Media Marketing', 'Social Media', '1. Content schedule will be submitted 5 business days in advance for approval.\n2. Ad spend budget is paid directly to advertising platforms (Meta/Google).\n3. Monthly analytics reports delivered on the 1st of every month.\n4. 30 days written notice required for monthly campaign cancellations.', 0],
+        ['Web Development & Software', 'Web Development', '1. Scope of work strictly based on approved UI/UX mockups and PRD documentation.\n2. Includes 30 days complimentary bug-fixing post live deployment.\n3. Server hosting and third-party API subscription costs are billed to client.\n4. Source code ownership transferred upon final payment settlement.', 0]
+      ];
+      for (const [title, category, content, isDefault] of defaultTemplates) {
+        await connection.query('INSERT IGNORE INTO terms_templates (title, category, content, is_default) VALUES (?, ?, ?, ?)', [title, category, content, isDefault]);
+      }
+      console.log('✅ Seeded default terms and conditions templates.');
+    }
+
+    // 19. Projects Table Upgrades (start_date, remarks, status column)
+    await addColumnIfNotExists('projects', 'start_date', 'DATETIME NULL');
+    await addColumnIfNotExists('projects', 'remarks', 'TEXT NULL');
+    try {
+      await connection.query("ALTER TABLE projects MODIFY COLUMN status VARCHAR(100) DEFAULT 'Assigned'");
+      console.log('✅ Updated status column to VARCHAR(100) in projects table.');
+    } catch (e) {
+      console.log('⚠️ Error modifying status column in projects:', e.message);
+    }
+
+    // 20. Invoice Payments & Bank Info
+    await connection.query(`
+      CREATE TABLE IF NOT EXISTS invoice_payments (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        invoice_id INT NOT NULL,
+        amount DECIMAL(10, 2) NOT NULL,
+        payment_date DATE NOT NULL,
+        payment_method VARCHAR(50),
+        bank VARCHAR(100) DEFAULT NULL,
+        transaction_id VARCHAR(255) DEFAULT NULL,
+        notes TEXT,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (invoice_id) REFERENCES invoices(id) ON DELETE CASCADE
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+    `);
+    await addColumnIfNotExists('invoice_payments', 'bank', 'VARCHAR(100) DEFAULT NULL');
+    await addColumnIfNotExists('invoice_payments', 'transaction_id', 'VARCHAR(255) DEFAULT NULL');
+    console.log('✅ Ensured invoice_payments table and bank columns exist.');
+
+    // 21. Client Notes Table
+    await connection.query(`
+      CREATE TABLE IF NOT EXISTS client_notes (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        client_id INT NOT NULL,
+        note TEXT NOT NULL,
+        created_by INT NULL,
+        is_admin_note BOOLEAN DEFAULT FALSE,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (client_id) REFERENCES clients(id) ON DELETE CASCADE,
+        FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+    `);
+    console.log('✅ Ensured client_notes table exists.');
 
     console.log('\n🎉 Live database update completed successfully!');
   } catch (error) {

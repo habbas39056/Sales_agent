@@ -117,7 +117,11 @@ export default function ClientPortal() {
     e.preventDefault();
     try {
       if (editingNote) {
-        await axios.put(`/api/clients/notes/${editingNote.id}`, { content: noteContent });
+        await axios.put(`/api/clients/notes/${editingNote.id}`, { 
+          content: noteContent,
+          user_id: currentUser.id,
+          role: currentUser.role
+        });
       } else {
         await axios.post(`/api/clients/notes`, { 
           client_id: portalData.client.id, 
@@ -129,7 +133,10 @@ export default function ClientPortal() {
       setEditingNote(null);
       setNoteContent('');
       fetchPortalData();
-    } catch (error) { console.error('Failed to save note:', error); }
+    } catch (error) { 
+      console.error('Failed to save note:', error); 
+      alert(error.response?.data?.error || 'Failed to save note');
+    }
   };
 
   const handleStepReviewSubmit = async (e) => {
@@ -222,9 +229,13 @@ export default function ClientPortal() {
   const handleNoteDelete = async (id) => {
     if(window.confirm('Are you sure you want to delete this note?')) {
       try {
-        await axios.delete(`/api/clients/notes/${id}`);
+        const user = JSON.parse(localStorage.getItem('user') || '{}');
+        await axios.delete(`/api/clients/notes/${id}?user_id=${user.id}&role=${user.role}`);
         fetchPortalData();
-      } catch(e) { console.error(e); }
+      } catch(e) { 
+        console.error(e);
+        alert(e.response?.data?.error || 'Failed to delete note');
+      }
     }
   };
 
@@ -1228,14 +1239,20 @@ export default function ClientPortal() {
                 <div className="notes-list">
                   {textNotes && textNotes.length > 0 ? textNotes.map(note => {
                     const isOwner = note.created_by === currentUser.id;
+                    const isAdmin = ['Admin', 'Super Admin', 'Project Manager', 'PM', 'Product Manager'].includes(note.created_by_role);
                     return (
-                      <div key={note.id} className="note-card" style={{borderLeft: isOwner ? '4px solid var(--primary-color)' : '4px solid #cbd5e1'}}>
+                      <div key={note.id} className="note-card" style={{borderLeft: isAdmin ? '4px solid #4f46e5' : isOwner ? '4px solid var(--primary-color)' : '4px solid #cbd5e1', background: isAdmin ? '#fafafa' : '#ffffff'}}>
                         <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '0.5rem'}}>
-                          <div>
-                            <strong style={{fontSize: '1rem', color: isOwner ? 'var(--primary-color)' : 'var(--text-primary)'}}>
-                              {note.created_by_name} {isOwner ? '(You)' : '(Admin)'}
+                          <div style={{display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap'}}>
+                            <strong style={{fontSize: '1rem', color: isAdmin ? '#4f46e5' : isOwner ? 'var(--primary-color)' : 'var(--text-primary)'}}>
+                              {note.created_by_name || (isAdmin ? 'Admin' : 'Client')} {isOwner ? '(You)' : ''}
                             </strong>
-                            <span className="text-secondary" style={{fontSize: '0.8rem', marginLeft: '1rem'}}>{new Date(note.created_at).toLocaleString()}</span>
+                            {isAdmin && (
+                              <span style={{ background: '#e0e7ff', color: '#4338ca', fontSize: '0.72rem', padding: '2px 8px', borderRadius: '10px', fontWeight: '700' }}>
+                                🛡️ Admin Note
+                              </span>
+                            )}
+                            <span className="text-secondary" style={{fontSize: '0.8rem', marginLeft: '0.5rem'}}>{new Date(note.created_at).toLocaleString()}</span>
                           </div>
                           {isOwner && (
                             <div style={{display: 'flex', gap: '0.5rem'}}>
@@ -1244,7 +1261,7 @@ export default function ClientPortal() {
                             </div>
                           )}
                         </div>
-                        <p style={{margin: 0, whiteSpace: 'pre-wrap', lineHeight: '1.5'}}>{note.content}</p>
+                        <p style={{margin: 0, whiteSpace: 'pre-wrap', lineHeight: '1.5', color: '#334155'}}>{note.content}</p>
                       </div>
                     );
                   }) : <p className="text-secondary">No notes yet.</p>}

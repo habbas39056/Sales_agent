@@ -39,6 +39,7 @@ app.use('/api/deadlines', authMiddleware, require('./routes/deadlines'));
 app.use('/api/notifications', authMiddleware, require('./routes/notifications'));
 app.use('/api/client-reviews', authMiddleware, require('./routes/client_reviews'));
 app.use('/api/quotations', authMiddleware, require('./routes/quotations'));
+app.use('/api/terms-templates', authMiddleware, require('./routes/terms_templates'));
 
 // Serve static frontend files
 app.use(express.static(path.join(__dirname, '../frontend/dist')));

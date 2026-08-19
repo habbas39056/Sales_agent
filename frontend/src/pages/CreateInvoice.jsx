@@ -3,6 +3,7 @@ import axios from 'axios';
 import { useNavigate, useParams } from 'react-router-dom';
 import { Plus, Trash2, ArrowLeft, Printer, Edit } from 'lucide-react';
 import Select from 'react-select';
+import TermsTemplateSelector from '../components/TermsTemplateSelector';
 import './InvoiceManagement.css'; // Reuse existing styles
 
 export default function CreateInvoice() {
@@ -592,31 +593,13 @@ export default function CreateInvoice() {
           </div>
 
           {/* TERMS & CONDITIONS FOR THIS SPECIFIC INVOICE */}
-          <div style={{ marginTop: '2rem', backgroundColor: '#ffffff', padding: '1.5rem', borderRadius: '12px', border: '1px solid #e2e8f0' }}>
-            <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: '800', color: '#1e293b', textTransform: 'uppercase', marginBottom: '0.75rem' }}>
-              Terms & Conditions (Specific to this Invoice)
-            </label>
-            <textarea 
-              name="terms_and_conditions"
-              value={formData.terms_and_conditions || ''}
-              onChange={handleInputChange}
-              rows="4"
-              placeholder="Enter terms and conditions for this invoice..."
-              style={{
-                width: '100%',
-                padding: '0.75rem 1rem',
-                borderRadius: '8px',
-                border: '1px solid #cbd5e1',
-                fontSize: '0.9rem',
-                fontFamily: 'inherit',
-                color: '#334155',
-                resize: 'vertical',
-                outline: 'none',
-                backgroundColor: '#f8fafc',
-                boxSizing: 'border-box'
-              }}
-            />
-          </div>
+          <TermsTemplateSelector 
+            name="terms_and_conditions"
+            value={formData.terms_and_conditions || ''}
+            onChange={handleInputChange}
+            label="Terms & Conditions (Specific to this Invoice)"
+            placeholder="Enter or select terms and conditions for this invoice..."
+          />
 
           <div className="bottom-actions print-hide">
             <button type="button" className="btn-cancel-text" onClick={() => navigate('/invoices')}>Cancel</button>
@@ -796,21 +779,32 @@ export default function CreateInvoice() {
                         <th style={{ padding: '0.75rem 1rem', fontSize: '0.7rem', fontWeight: '800', color: '#94a3b8', textTransform: 'uppercase' }}>Bank</th>
                         <th style={{ padding: '0.75rem 1rem', fontSize: '0.7rem', fontWeight: '800', color: '#94a3b8', textTransform: 'uppercase' }}>Date</th>
                         <th style={{ padding: '0.75rem 1rem', fontSize: '0.7rem', fontWeight: '800', color: '#94a3b8', textTransform: 'uppercase' }}>Amount</th>
+                        <th style={{ padding: '0.75rem 1rem', fontSize: '0.7rem', fontWeight: '800', color: '#94a3b8', textTransform: 'uppercase', textAlign: 'center', width: '50px' }}>Action</th>
                       </tr>
                     </thead>
                     <tbody>
                       {payments.length === 0 ? (
                         <tr>
-                          <td colSpan="4" style={{ textAlign: 'center', padding: '2rem', color: '#94a3b8', fontStyle: 'italic', fontWeight: '600', fontSize: '0.9rem' }}>No payments recorded yet.</td>
+                          <td colSpan="6" style={{ textAlign: 'center', padding: '2rem', color: '#94a3b8', fontStyle: 'italic', fontWeight: '600', fontSize: '0.9rem' }}>No payments recorded yet.</td>
                         </tr>
                       ) : (
                         payments.map((pay, i) => (
                           <tr key={pay.id} style={{ borderTop: '1px solid #f1f5f9' }}>
-                            <td style={{ padding: '0.75rem 1rem', fontSize: '0.9rem', color: '#334155', fontWeight: '600' }}>{pay.id}</td>
+                            <td style={{ padding: '0.75rem 1rem', fontSize: '0.9rem', color: '#334155', fontWeight: '600' }}>{pay.transaction_id || pay.id}</td>
                             <td style={{ padding: '0.75rem 1rem', fontSize: '0.9rem', color: '#64748b' }}>{pay.payment_method}</td>
                             <td style={{ padding: '0.75rem 1rem', fontSize: '0.9rem', color: '#64748b' }}>{pay.payment_method === 'Bank Transfer' ? (pay.bank || 'Not Specified') : '-'}</td>
                             <td style={{ padding: '0.75rem 1rem', fontSize: '0.9rem', color: '#64748b' }}>{new Date(pay.payment_date).toLocaleDateString()}</td>
                             <td style={{ padding: '0.75rem 1rem', color: '#10b981', fontSize: '0.85rem', fontWeight: '800' }}>PKR {parseFloat(pay.amount).toFixed(2)}</td>
+                            <td style={{ padding: '0.75rem 1rem', textAlign: 'center' }}>
+                              <button 
+                                type="button" 
+                                onClick={() => handleDeletePayment(pay.id)}
+                                style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', padding: '4px', borderRadius: '4px' }}
+                                title="Delete Payment"
+                              >
+                                <Trash2 size={16} />
+                              </button>
+                            </td>
                           </tr>
                         ))
                       )}

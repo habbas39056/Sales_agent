@@ -156,7 +156,7 @@ router.post('/:id/payments', async (req, res) => {
   const invoiceId = req.params.id;
   const { amount, payment_date, payment_method, transaction_id, notes, bank } = req.body;
 
-  if (!amount || amount <= 0) {
+  if (!amount || parseFloat(amount) <= 0) {
     return res.status(400).json({ error: 'Valid amount is required' });
   }
 
@@ -170,14 +170,22 @@ router.post('/:id/payments', async (req, res) => {
       [invoiceId, amount, payment_date, payment_method, bank || null, transaction_id || null, notes]
     );
 
-    // Fetch current balance
-    const [[invoice]] = await connection.query('SELECT balance FROM invoices WHERE id = ? FOR UPDATE', [invoiceId]);
+    // Fetch invoice details
+    const [[invoice]] = await connection.query('SELECT amount, due_date, invoice_number FROM invoices WHERE id = ? FOR UPDATE', [invoiceId]);
     if (!invoice) throw new Error('Invoice not found');
 
-    const newBalance = Math.max(0, invoice.balance - amount);
+    const [[paymentsSum]] = await connection.query('SELECT COALESCE(SUM(amount), 0) as total_paid FROM invoice_payments WHERE invoice_id = ?', [invoiceId]);
+    const totalPaid = parseFloat(paymentsSum.total_paid || 0);
+    const invoiceAmount = parseFloat(invoice.amount || 0);
+    const newBalance = Math.max(0, invoiceAmount - totalPaid);
+
     let newStatus = 'Unpaid';
-    if (newBalance <= 0) {
+    if (newBalance <= 0 && invoiceAmount > 0) {
       newStatus = 'Paid';
+    } else if (invoice.due_date && new Date(invoice.due_date) < new Date() && newBalance > 0) {
+      newStatus = 'Overdue';
+    } else {
+      newStatus = 'Unpaid';
     }
 
     // Update invoice balance and status
@@ -211,7 +219,7 @@ router.post('/:id/payments', async (req, res) => {
     ]);
 
     await connection.commit();
-    res.json({ message: 'Payment recorded successfully', newBalance, newStatus });
+    res.json({ message: 'Payment recorded successfully', newBalance, newStatus, totalPaid });
   } catch (error) {
     await connection.rollback();
     res.status(500).json({ error: error.message });
@@ -236,16 +244,22 @@ router.delete('/:id/payments/:paymentId', async (req, res) => {
     // 2. Delete payment
     await connection.query('DELETE FROM invoice_payments WHERE id = ?', [paymentId]);
 
-    // 3. Update invoice balance
-    const [[invoice]] = await connection.query('SELECT balance, amount, invoice_number FROM invoices WHERE id = ? FOR UPDATE', [invoiceId]);
+    // 3. Update invoice balance and status from total remaining payments
+    const [[invoice]] = await connection.query('SELECT amount, due_date, invoice_number FROM invoices WHERE id = ? FOR UPDATE', [invoiceId]);
     if (!invoice) throw new Error('Invoice not found');
 
-    const newBalance = parseFloat(invoice.balance) + parseFloat(payment.amount);
+    const [[paymentsSum]] = await connection.query('SELECT COALESCE(SUM(amount), 0) as total_paid FROM invoice_payments WHERE invoice_id = ?', [invoiceId]);
+    const totalPaid = parseFloat(paymentsSum.total_paid || 0);
+    const invoiceAmount = parseFloat(invoice.amount || 0);
+    const newBalance = Math.max(0, invoiceAmount - totalPaid);
+
     let newStatus = 'Unpaid';
-    if (newBalance <= 0) {
+    if (newBalance <= 0 && invoiceAmount > 0) {
       newStatus = 'Paid';
-    } else if (newBalance < parseFloat(invoice.amount)) {
-      newStatus = 'Unpaid'; // Or 'Partial' if you support it
+    } else if (invoice.due_date && new Date(invoice.due_date) < new Date() && newBalance > 0) {
+      newStatus = 'Overdue';
+    } else {
+      newStatus = 'Unpaid';
     }
 
     await connection.query(
@@ -253,18 +267,18 @@ router.delete('/:id/payments/:paymentId', async (req, res) => {
       [newBalance, newStatus, invoiceId]
     );
 
-    // 4. Delete corresponding expense (Cashbook entry)
+    // 4. Delete corresponding expense (Cashbook receipt entry)
     const expenseDescPrefix = `Payment for Invoice #${invoice.invoice_number}%`;
     await connection.query(`
       DELETE FROM expenses 
       WHERE receipt_amount = ? 
-      AND date = ? 
-      AND description LIKE ? 
+      AND (reference = ? OR description LIKE ?) 
+      ORDER BY id DESC
       LIMIT 1
-    `, [payment.amount, payment.payment_date, expenseDescPrefix]);
+    `, [payment.amount, payment.transaction_id || '', expenseDescPrefix]);
 
     await connection.commit();
-    res.json({ message: 'Payment deleted successfully', newBalance, newStatus });
+    res.json({ message: 'Payment deleted successfully', newBalance, newStatus, totalPaid });
   } catch (error) {
     await connection.rollback();
     res.status(500).json({ error: error.message });

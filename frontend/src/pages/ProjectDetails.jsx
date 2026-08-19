@@ -621,8 +621,11 @@ export default function ProjectDetails() {
                           </div>
                         )}
 
-                        {(step.reassign_todos || step.reject_todos) && (() => {
-                          const todosList = step.reject_todos || step.reassign_todos;
+                        {(() => {
+                          const todosList = (step.reject_todos && step.reject_todos !== '0' && step.reject_todos !== 0) 
+                            ? step.reject_todos 
+                            : ((step.reassign_todos && step.reassign_todos !== '0' && step.reassign_todos !== 0) ? step.reassign_todos : null);
+                          if (!todosList) return null;
                           let parsedTodos = [];
                           try {
                             parsedTodos = typeof todosList === 'string' ? JSON.parse(todosList) : todosList;

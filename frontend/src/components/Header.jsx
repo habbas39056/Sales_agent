@@ -127,8 +127,11 @@ export default function Header() {
     title = 'Invoice Management';
     subtitle = 'Track and manage all invoices';
   } else if (location.pathname === '/projects') {
+    title = 'Project Creation';
+    subtitle = 'Create and configure new client projects & steps';
+  } else if (location.pathname === '/project-management') {
     title = 'Project Management';
-    subtitle = 'Track all active projects';
+    subtitle = 'Overview of all projects, linked invoices, delivery deadlines & PM remarks';
   } else if (location.pathname === '/tasks') {
     title = 'My Tasks 📝';
     subtitle = 'Manage your assigned project tasks, track deadlines, and update progress.';

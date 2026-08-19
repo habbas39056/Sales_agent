@@ -1,6 +1,6 @@
 import React from 'react';
 import { BrowserRouter as Router, Routes, Route, Link, useLocation, useNavigate, Navigate } from 'react-router-dom';
-import { LayoutDashboard, Users, FileText, PlusCircle, Calendar, Clock, CheckSquare, MessageSquare, RotateCcw, CreditCard, Banknote, LogOut, Shield, Settings as SettingsIcon, CheckCircle2 } from 'lucide-react';
+import { LayoutDashboard, Users, FileText, PlusCircle, Calendar, Clock, CheckSquare, MessageSquare, RotateCcw, CreditCard, Banknote, LogOut, Shield, Settings as SettingsIcon, CheckCircle2, FolderKanban } from 'lucide-react';
 import Dashboard from './pages/Dashboard';
 import Login from './pages/Login';
 import ClientsList from './pages/ClientsList';
@@ -11,6 +11,7 @@ import QuotationsList from './pages/QuotationsList';
 import CreateQuotation from './pages/CreateQuotation';
 import ProjectsList from './pages/ProjectsList';
 import ProjectDetails from './pages/ProjectDetails';
+import ProjectManagement from './pages/ProjectManagement';
 import AddStep from './pages/AddStep';
 import ClientPortal from './pages/ClientPortal';
 import PmPortal from './pages/PmPortal';
@@ -149,12 +150,19 @@ function AppContent() {
             {(!user || user.role === 'Admin' || (user.modules_access && user.modules_access.includes('PROJECTS'))) && (
               <>
                 <li><Link to="/projects" className={`sidebar-link ${location.pathname === '/projects' ? 'active' : ''}`}><PlusCircle size={20} /> Project Creation</Link></li>
-                {user && user.role !== 'Client' && (location.pathname.startsWith('/projects') || location.pathname.startsWith('/tasks')) && (
-                  <li className="submenu-item">
-                    <Link to="/tasks" className={`sidebar-link ${location.pathname === '/tasks' ? 'active' : ''}`} style={{ paddingLeft: '3.2rem', fontSize: '0.9rem', opacity: 0.9 }}>
-                      <CheckSquare size={16} /> My Tasks
-                    </Link>
-                  </li>
+                {user && user.role !== 'Client' && (location.pathname.startsWith('/projects') || location.pathname.startsWith('/tasks') || location.pathname.startsWith('/project-management')) && (
+                  <>
+                    <li className="submenu-item">
+                      <Link to="/tasks" className={`sidebar-link ${location.pathname === '/tasks' ? 'active' : ''}`} style={{ paddingLeft: '3.2rem', fontSize: '0.9rem', opacity: 0.9 }}>
+                        <CheckSquare size={16} /> My Tasks
+                      </Link>
+                    </li>
+                    <li className="submenu-item">
+                      <Link to="/project-management" className={`sidebar-link ${location.pathname === '/project-management' ? 'active' : ''}`} style={{ paddingLeft: '3.2rem', fontSize: '0.9rem', opacity: 0.9 }}>
+                        <FolderKanban size={16} /> Project Management
+                      </Link>
+                    </li>
+                  </>
                 )}
               </>
             )}
@@ -236,6 +244,7 @@ function AppContent() {
             <Route path="/quotations/edit/:id" element={<ProtectedRoute><CreateQuotation /></ProtectedRoute>} />
             <Route path="/projects" element={<ProtectedRoute><ProjectsList /></ProtectedRoute>} />
             <Route path="/projects/:id" element={<ProtectedRoute><ProjectDetails /></ProtectedRoute>} />
+            <Route path="/project-management" element={<ProtectedRoute><ProjectManagement /></ProtectedRoute>} />
             <Route path="/projects/:id/steps/new" element={<ProtectedRoute><AddStep /></ProtectedRoute>} />
             <Route path="/projects/:id/steps/:step_id/edit" element={<ProtectedRoute><AddStep /></ProtectedRoute>} />
             <Route path="/tasks" element={<ProtectedRoute><Tasks /></ProtectedRoute>} />

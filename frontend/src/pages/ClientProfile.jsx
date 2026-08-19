@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import axios from 'axios';
-import { User, Phone, Mail, MapPin, Building, ArrowLeft, Folder, FileText, CreditCard, Activity } from 'lucide-react';
+import { User, Phone, Mail, MapPin, Building, ArrowLeft, Folder, FileText, CreditCard, Activity, StickyNote, Plus, Trash2, Edit, X } from 'lucide-react';
 import './ClientProfile.css';
 
 export default function ClientProfile() {
@@ -9,6 +9,14 @@ export default function ClientProfile() {
   const [data, setData] = useState(null);
   const [activeTab, setActiveTab] = useState('projects');
   const [loading, setLoading] = useState(true);
+
+  // Note Modal & Creation State
+  const [isNoteModalOpen, setIsNoteModalOpen] = useState(false);
+  const [editingNote, setEditingNote] = useState(null);
+  const [noteContent, setNoteContent] = useState('');
+  const [submittingNote, setSubmittingNote] = useState(false);
+
+  const currentUser = JSON.parse(localStorage.getItem('user') || '{}');
 
   useEffect(() => {
     fetchClientDetails();
@@ -25,10 +33,67 @@ export default function ClientProfile() {
     }
   };
 
+  const handleOpenAddNote = () => {
+    setEditingNote(null);
+    setNoteContent('');
+    setIsNoteModalOpen(true);
+  };
+
+  const handleOpenEditNote = (note) => {
+    setEditingNote(note);
+    setNoteContent(note.content);
+    setIsNoteModalOpen(true);
+  };
+
+  const handleSaveNote = async (e) => {
+    e.preventDefault();
+    if (!noteContent.trim()) {
+      alert('Please enter note content.');
+      return;
+    }
+
+    setSubmittingNote(true);
+    try {
+      if (editingNote) {
+        await axios.put(`/api/clients/notes/${editingNote.id}`, {
+          content: noteContent.trim(),
+          user_id: currentUser.id,
+          role: currentUser.role
+        });
+      } else {
+        await axios.post('/api/clients/notes', {
+          client_id: id,
+          content: noteContent.trim(),
+          created_by: currentUser.id
+        });
+      }
+      setIsNoteModalOpen(false);
+      setEditingNote(null);
+      setNoteContent('');
+      await fetchClientDetails();
+    } catch (error) {
+      console.error('Failed to save note:', error);
+      alert(error.response?.data?.error || 'Failed to save note.');
+    } finally {
+      setSubmittingNote(false);
+    }
+  };
+
+  const handleDeleteNote = async (noteId) => {
+    if (!window.confirm('Are you sure you want to delete this note?')) return;
+    try {
+      await axios.delete(`/api/clients/notes/${noteId}?user_id=${currentUser.id}&role=${currentUser.role}`);
+      await fetchClientDetails();
+    } catch (error) {
+      console.error('Failed to delete note:', error);
+      alert(error.response?.data?.error || 'Failed to delete note.');
+    }
+  };
+
   if (loading) return <div className="loading">Loading client profile...</div>;
   if (!data) return <div className="loading">Client not found.</div>;
 
-  const { client, projects, invoices, subscriptions, files } = data;
+  const { client, projects, invoices, subscriptions, files, notes = [] } = data;
 
   return (
     <div className="client-profile-container">
@@ -60,6 +125,7 @@ export default function ClientProfile() {
         <button className={activeTab === 'invoices' ? 'active' : ''} onClick={() => setActiveTab('invoices')}><CreditCard size={18}/> Invoices ({invoices.length})</button>
         <button className={activeTab === 'subscriptions' ? 'active' : ''} onClick={() => setActiveTab('subscriptions')}><Folder size={18}/> Subscriptions ({subscriptions.length})</button>
         <button className={activeTab === 'files' ? 'active' : ''} onClick={() => setActiveTab('files')}><FileText size={18}/> Files ({files.length})</button>
+        <button className={activeTab === 'notes' ? 'active' : ''} onClick={() => setActiveTab('notes')}><StickyNote size={18}/> Notes ({notes.length})</button>
       </div>
 
       <div className="tab-content card">
@@ -168,7 +234,125 @@ export default function ClientProfile() {
             </table>
           </div>
         )}
+
+        {activeTab === 'notes' && (
+          <div>
+            <div className="notes-section-header">
+              <div>
+                <h3>Client Notes & Collaboration</h3>
+                <p style={{ margin: '0.25rem 0 0 0', fontSize: '0.85rem', color: '#64748b' }}>
+                  Notes created here are instantly visible to the client in their portal under "Files & Notes".
+                </p>
+              </div>
+              <button type="button" className="btn-add-note" onClick={handleOpenAddNote}>
+                <Plus size={16} /> Add Note for Client
+              </button>
+            </div>
+
+            {notes.length === 0 ? (
+              <div style={{ textAlign: 'center', padding: '3.5rem 1rem', background: '#f8fafc', borderRadius: '12px', border: '1px dashed #cbd5e1' }}>
+                <StickyNote size={40} color="#94a3b8" style={{ marginBottom: '0.75rem' }} />
+                <h4 style={{ margin: '0 0 0.4rem 0', color: '#1e293b' }}>No Notes Recorded Yet</h4>
+                <p style={{ margin: '0 0 1.25rem 0', fontSize: '0.9rem', color: '#64748b' }}>
+                  Keep instructions, reminders, or discussion notes for {client.full_name}.
+                </p>
+                <button type="button" className="btn-add-note" onClick={handleOpenAddNote}>
+                  <Plus size={16} /> Create First Note
+                </button>
+              </div>
+            ) : (
+              <div className="client-notes-grid">
+                {notes.map(note => {
+                  const isAuthorAdmin = ['Admin', 'Super Admin', 'Project Manager', 'PM', 'Product Manager'].includes(note.created_by_role);
+                  const isAuthorClient = note.created_by_role === 'Client';
+                  
+                  return (
+                    <div key={note.id} className="client-note-card">
+                      <div className="client-note-header">
+                        <div className="note-author-info">
+                          <span className="note-author-name">{note.created_by_name || 'Staff Member'}</span>
+                          <span className={`note-role-badge ${isAuthorAdmin ? 'admin' : isAuthorClient ? 'client' : 'staff'}`}>
+                            {isAuthorAdmin ? '🛡️ Admin' : isAuthorClient ? '👤 Client' : note.created_by_role || 'Staff'}
+                          </span>
+                          <span className="note-date">{new Date(note.created_at).toLocaleString()}</span>
+                        </div>
+                        <div className="note-card-actions">
+                          <button 
+                            type="button" 
+                            className="note-btn-action edit" 
+                            title="Edit Note"
+                            onClick={() => handleOpenEditNote(note)}
+                          >
+                            <Edit size={16} />
+                          </button>
+                          <button 
+                            type="button" 
+                            className="note-btn-action delete" 
+                            title="Delete Note"
+                            onClick={() => handleDeleteNote(note.id)}
+                          >
+                            <Trash2 size={16} />
+                          </button>
+                        </div>
+                      </div>
+                      <p className="note-content-body">{note.content}</p>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        )}
       </div>
+
+      {/* CREATE / EDIT NOTE MODAL */}
+      {isNoteModalOpen && (
+        <div className="client-note-modal-overlay" onClick={() => setIsNoteModalOpen(false)}>
+          <div className="client-note-modal" onClick={e => e.stopPropagation()}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+              <h3 style={{ margin: 0 }}>{editingNote ? 'Edit Client Note' : `Add Note for ${client.full_name}`}</h3>
+              <button 
+                type="button" 
+                onClick={() => setIsNoteModalOpen(false)}
+                style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#64748b' }}
+              >
+                <X size={20} />
+              </button>
+            </div>
+            
+            <p className="note-hint">
+              📌 Notes added here are published to the client's portal. Clients will be able to read this note, but cannot delete or edit Admin notes.
+            </p>
+
+            <form onSubmit={handleSaveNote}>
+              <textarea 
+                placeholder="Write your note or instructions for the client..."
+                value={noteContent}
+                onChange={e => setNoteContent(e.target.value)}
+                autoFocus
+                required
+              />
+
+              <div className="client-note-modal-actions">
+                <button 
+                  type="button" 
+                  onClick={() => setIsNoteModalOpen(false)}
+                  style={{ background: '#f1f5f9', border: '1px solid #cbd5e1', color: '#334155', padding: '0.6rem 1.2rem', borderRadius: '8px', fontWeight: '600', cursor: 'pointer' }}
+                >
+                  Cancel
+                </button>
+                <button 
+                  type="submit" 
+                  disabled={submittingNote}
+                  style={{ background: '#4f46e5', border: 'none', color: '#ffffff', padding: '0.6rem 1.4rem', borderRadius: '8px', fontWeight: '700', cursor: 'pointer' }}
+                >
+                  {submittingNote ? 'Saving...' : editingNote ? 'Update Note' : 'Save & Publish Note'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
