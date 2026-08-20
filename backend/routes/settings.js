@@ -4,6 +4,7 @@ const db = require('../db');
 const bcrypt = require('bcrypt');
 const multer = require('multer');
 const path = require('path');
+const { sendWhatsAppMessage } = require('../utils/whatsapp');
 
 // Get Agent Config QR code
 router.get('/agent/qr', async (req, res) => {
@@ -212,6 +213,29 @@ router.put('/password', async (req, res) => {
     await db.query('UPDATE users SET password_hash = ? WHERE id = ?', [newHash, userId]);
 
     res.json({ message: 'Password updated successfully' });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Test WhatsApp Connection
+router.post('/test-whatsapp', async (req, res) => {
+  try {
+    const { whatsapp_number } = req.body;
+    if (!whatsapp_number) {
+      return res.status(400).json({ error: 'Please enter and save a WhatsApp number in your profile first.' });
+    }
+
+    const success = await sendWhatsAppMessage(
+      whatsapp_number, 
+      "✅ *Test Successful!*\n\nHello from Adwise! Your WhatsApp integration is working perfectly."
+    );
+
+    if (success) {
+      res.json({ message: 'Test message sent successfully! Please check your WhatsApp.' });
+    } else {
+      res.status(500).json({ error: 'Failed to send test message. Please check server logs and ensure your Evolution API is connected.' });
+    }
   } catch (error) {
     res.status(500).json({ error: error.message });
   }

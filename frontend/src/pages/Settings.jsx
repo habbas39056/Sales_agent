@@ -28,6 +28,7 @@ export default function Settings() {
   
   // Agent Config State
   const [qrCodeData, setQrCodeData] = useState(null);
+  const [testingWhatsApp, setTestingWhatsApp] = useState(false);
   const [fetchingQr, setFetchingQr] = useState(false);
 
   // Project Categories State
@@ -185,6 +186,21 @@ export default function Settings() {
       showAlert('error', err.response?.data?.error || 'Failed to update profile');
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleTestWhatsApp = async () => {
+    if (!profile.whatsapp_number) {
+      return showAlert('error', 'Please enter your WhatsApp number and save the profile first.');
+    }
+    setTestingWhatsApp(true);
+    try {
+      const res = await axios.post('/api/settings/test-whatsapp', { whatsapp_number: profile.whatsapp_number });
+      showAlert('success', res.data.message);
+    } catch (err) {
+      showAlert('error', err.response?.data?.error || 'Failed to send test message');
+    } finally {
+      setTestingWhatsApp(false);
     }
   };
 
@@ -460,9 +476,18 @@ export default function Settings() {
                 </div>
               </div>
 
-              <div className="settings-actions">
+              <div className="settings-actions" style={{ display: 'flex', gap: '1rem' }}>
                 <button type="submit" className="save-btn" disabled={saving}>
                   <Save size={18} /> {saving ? 'Saving...' : 'Update Profile'}
+                </button>
+                <button 
+                  type="button" 
+                  className="save-btn" 
+                  style={{ backgroundColor: '#25D366' }} 
+                  onClick={handleTestWhatsApp} 
+                  disabled={testingWhatsApp}
+                >
+                  <MessageSquare size={18} /> {testingWhatsApp ? 'Testing...' : 'Test WhatsApp'}
                 </button>
               </div>
             </div>
