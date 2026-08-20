@@ -776,6 +776,12 @@ router.post('/:id/steps/:step_id/forgive-late', async (req, res) => {
         if (project && step && step.assignee_id) {
           const msg = `Your late delivery for step "${step.title}" in project "${project.title}" has been forgiven. Your commission has been processed and released!`;
           notifyUserWhatsApp(step.assignee_id, msg);
+          
+          // Portal notification for Assignee
+          await db.query('INSERT INTO notifications (user_id, message, type, link) VALUES (?, ?, ?, ?)', [step.assignee_id, msg, 'commission', `/pm/project/${req.params.id}`]);
+          
+          // Portal notification for Admins/PMs
+          notifyManagers(req.params.id, `Late delivery forgiven and commission released for step "${step.title}" in project "${project.title}"`, 'commission', `/pm/project/${req.params.id}`);
         }
       } catch (e) {
         console.error('Failed to send whatsapp msg:', e);
@@ -1088,6 +1094,12 @@ router.post('/:id/steps/:step_id/approve-commission', async (req, res) => {
         if (project) {
           const msg = `Commission processed for step "${step.title}" in project "${project.title}". Amount: 0.00 (Late delivery penalty applied)`;
           notifyUserWhatsApp(step.assignee_id, msg);
+          
+          // Portal notification for Assignee
+          await db.query('INSERT INTO notifications (user_id, message, type, link) VALUES (?, ?, ?, ?)', [step.assignee_id, msg, 'commission', `/pm/project/${req.params.id}`]);
+          
+          // Portal notification for Admins/PMs
+          notifyManagers(req.params.id, `Commission penalized (late delivery) for step "${step.title}" in project "${project.title}"`, 'commission', `/pm/project/${req.params.id}`);
         }
       } catch (e) {
         console.error('Failed to send whatsapp msg:', e);
@@ -1109,6 +1121,12 @@ router.post('/:id/steps/:step_id/approve-commission', async (req, res) => {
       if (project) {
         const msg = `Your commission for step "${step.title}" in project "${project.title}" has been released! Amount: ${final_amount.toFixed(2)}`;
         notifyUserWhatsApp(step.assignee_id, msg);
+        
+        // Portal notification for Assignee
+        await db.query('INSERT INTO notifications (user_id, message, type, link) VALUES (?, ?, ?, ?)', [step.assignee_id, msg, 'commission', `/pm/project/${req.params.id}`]);
+        
+        // Portal notification for Admins/PMs
+        notifyManagers(req.params.id, `Commission of ${final_amount.toFixed(2)} released for step "${step.title}" in project "${project.title}"`, 'commission', `/pm/project/${req.params.id}`);
       }
     } catch (e) {
       console.error('Failed to send whatsapp msg:', e);
