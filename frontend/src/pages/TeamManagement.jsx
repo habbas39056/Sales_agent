@@ -15,6 +15,7 @@ export default function TeamManagement() {
     email: '',
     password: '',
     role: 'Sales',
+    whatsapp_number: '',
     commission_percentage: 0,
     monthly_goal: 0,
     modules_access: []
@@ -106,6 +107,7 @@ export default function TeamManagement() {
       email: '',
       password: '',
       role: 'Employee',
+      whatsapp_number: '',
       commission_percentage: 0,
       monthly_goal: 0,
       modules_access: []
@@ -120,6 +122,7 @@ export default function TeamManagement() {
       email: member.email || '',
       password: '', // Leave blank for edit, only update if provided
       role: member.role || 'Employee',
+      whatsapp_number: member.whatsapp_number || '',
       commission_percentage: member.commission_percentage || 0,
       monthly_goal: member.monthly_goal !== undefined && member.monthly_goal !== null ? member.monthly_goal : 0,
       modules_access: member.modules_access || []
@@ -351,6 +354,17 @@ export default function TeamManagement() {
                     value={formData.username} 
                     onChange={handleInputChange} 
                     required 
+                  />
+                </div>
+
+                <div className="form-group">
+                  <label>WHATSAPP NUMBER</label>
+                  <input 
+                    type="text" 
+                    name="whatsapp_number" 
+                    value={formData.whatsapp_number} 
+                    onChange={handleInputChange} 
+                    placeholder="+1234567890" 
                   />
                 </div>
 

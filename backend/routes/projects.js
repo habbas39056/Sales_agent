@@ -3,6 +3,7 @@ const router = express.Router();
 const db = require('../db');
 const multer = require('multer');
 const path = require('path');
+const { notifyUserWhatsApp, notifyClientWhatsApp } = require('../utils/whatsapp');
 
 // Configure multer for file uploads
 const storage = multer.diskStorage({
@@ -32,6 +33,8 @@ async function notifyManagers(projectId, message, type, link) {
       'INSERT INTO notifications (user_id, message, type, link) VALUES (?, ?, ?, ?)',
       [uid, message, type, link]
     );
+    // WhatsApp notification
+    await notifyUserWhatsApp(uid, `*Notification from Adwise ERP* 🚀\n\n${message}\n\n_Check the portal for more details._`);
   }
 }
 
@@ -55,6 +58,8 @@ async function notifyInternalTeam(projectId, message, type, link, triggerUserId)
       'INSERT INTO notifications (user_id, message, type, link) VALUES (?, ?, ?, ?)',
       [uid, message, type, link]
     );
+    // WhatsApp notification
+    await notifyUserWhatsApp(uid, `*Team Notification* 📢\n\n${message}\n\n_Log in to the portal to view._`);
   }
 }
 
@@ -68,6 +73,8 @@ async function notifyClient(projectId, message, type, link) {
         [client.user_id, message, type, link]
       );
     }
+    // Client WhatsApp notification
+    await notifyClientWhatsApp(project.client_id, `*Adwise Update* ✨\n\n${message}\n\n_Thank you for working with us!_`);
   }
 }
 
@@ -335,12 +342,14 @@ router.post('/', async (req, res) => {
           'INSERT INTO notifications (user_id, message, type, link) VALUES (?, ?, ?, ?)',
           [uid, `You have been assigned to a new project: ${title}`, 'project_assigned', projectLink]
         );
+        await notifyUserWhatsApp(uid, `*Task Assigned!* 📋\n\nYou have been assigned to a new project: *${title}*.\n\n_Check the portal for more details._`);
       }
     } else if (primaryPmId) {
       await db.query(
         'INSERT INTO notifications (user_id, message, type, link) VALUES (?, ?, ?, ?)',
         [primaryPmId, `You have been assigned as PM to a new project: ${title}`, 'project_assigned', projectLink]
       );
+      await notifyUserWhatsApp(primaryPmId, `*PM Assignment* 👑\n\nYou have been assigned as PM to a new project: *${title}*.\n\n_Check the portal for more details._`);
     }
     
     // Notify the client
@@ -504,6 +513,7 @@ router.post('/:id/steps', upload.array('attachments', 5), async (req, res) => {
         'INSERT INTO notifications (user_id, message, type, link) VALUES (?, ?, ?, ?)',
         [assignee_id, `You have been assigned a new step: ${title}`, 'step_assigned', `/projects/${req.params.id}`]
       );
+      await notifyUserWhatsApp(assignee_id, `*Task Assigned!* 📋\n\nYou have been assigned to a new step: *${title}* in project #${req.params.id}.\n\n_Check the portal to begin._`);
     }
     
     // Notify client if action is required

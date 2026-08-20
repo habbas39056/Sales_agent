@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const db = require('../db');
+const { notifyClientWhatsApp } = require('../utils/whatsapp');
 
 // Get all invoices with linked client and project info (filtered for non-admins)
 router.get('/', async (req, res) => {
@@ -105,6 +106,18 @@ router.post('/', async (req, res) => {
     }
 
     await connection.commit();
+
+    try {
+      const [[client]] = await connection.query('SELECT user_id FROM clients WHERE id = ?', [client_id]);
+      if (client && client.user_id) {
+        await connection.query(
+          'INSERT INTO notifications (user_id, message, type, link) VALUES (?, ?, ?, ?)',
+          [client.user_id, `New invoice ${finalInvoiceNumber} created for amount ${totalAmount}`, 'invoice_created', '']
+        );
+      }
+      await notifyClientWhatsApp(client_id, `*Invoice Created* 🧾\n\nInvoice *${finalInvoiceNumber}* for amount *${totalAmount}* has been generated.\n\n_Please check your portal for details._`);
+    } catch(err) { console.error(err); }
+
     res.status(201).json({ id: invoiceId, message: 'Invoice created successfully' });
   } catch (error) {
     await connection.rollback();
@@ -219,6 +232,20 @@ router.post('/:id/payments', async (req, res) => {
     ]);
 
     await connection.commit();
+
+    try {
+      const [[client]] = await connection.query('SELECT user_id, id as client_id FROM clients WHERE id = (SELECT client_id FROM invoices WHERE id = ?)', [invoiceId]);
+      if (client && client.user_id) {
+        await connection.query(
+          'INSERT INTO notifications (user_id, message, type, link) VALUES (?, ?, ?, ?)',
+          [client.user_id, `Payment of ${amount} received for invoice ${invoiceDetails.invoice_number}`, 'payment_received', '']
+        );
+      }
+      if (client && client.client_id) {
+        await notifyClientWhatsApp(client.client_id, `*Payment Received* 💸\n\nWe received a payment of *${amount}* for invoice *${invoiceDetails.invoice_number}*.\n\n_Thank you for your prompt payment!_`);
+      }
+    } catch(err) { console.error(err); }
+
     res.json({ message: 'Payment recorded successfully', newBalance, newStatus, totalPaid });
   } catch (error) {
     await connection.rollback();

@@ -5,6 +5,37 @@ const bcrypt = require('bcrypt');
 const multer = require('multer');
 const path = require('path');
 
+// Get Agent Config QR code
+router.get('/agent/qr', async (req, res) => {
+  try {
+    const instanceName = "Adwise ERP";
+    // Using the Global API Key provided by the user
+    const apiKey = "429683C4C977415CAAFCCE10F7D57E11";
+    const evolutionUrl = "https://evolution-evolution-api.o1nqjj.easypanel.host";
+    
+    // We dynamically require node-fetch or use global fetch depending on node version
+    const fetchFn = typeof fetch !== 'undefined' ? fetch : (...args) => import('node-fetch').then(({default: fetch}) => fetch(...args));
+    
+    const response = await fetchFn(`${evolutionUrl}/instance/connect/${encodeURIComponent(instanceName)}`, {
+      method: 'GET',
+      headers: {
+        'apikey': apiKey
+      }
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      return res.status(response.status).json({ error: 'Failed to fetch QR code from Evolution API', details: errorText });
+    }
+
+    const data = await response.json();
+    res.json(data);
+  } catch (error) {
+    console.error('Error fetching Agent QR:', error.message);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // Configure multer for profile avatar upload
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {

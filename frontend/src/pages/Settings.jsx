@@ -15,7 +15,8 @@ import {
   Tag,
   Camera,
   FileText,
-  LayoutDashboard
+  LayoutDashboard,
+  MessageSquare
 } from 'lucide-react';
 import './Settings.css';
 
@@ -24,6 +25,10 @@ export default function Settings() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [alert, setAlert] = useState({ type: '', message: '' });
+  
+  // Agent Config State
+  const [qrCodeData, setQrCodeData] = useState(null);
+  const [fetchingQr, setFetchingQr] = useState(false);
 
   // Project Categories State
   const [categories, setCategories] = useState([]);
@@ -36,6 +41,7 @@ export default function Settings() {
     email: '',
     role: '',
     profile_image_url: '',
+    whatsapp_number: '',
     commission_percentage: '0.00'
   });
 
@@ -51,7 +57,8 @@ export default function Settings() {
     dashboard_default_date: 'This Year',
     dashboard_default_category: 'All Categories',
     dashboard_start_date: '',
-    dashboard_end_date: ''
+    dashboard_end_date: '',
+    whatsapp_notifications_enabled: 'true'
   });
 
   useEffect(() => {
@@ -70,6 +77,7 @@ export default function Settings() {
           email: profileRes.data.email || '',
           role: profileRes.data.role || '',
           profile_image_url: profileRes.data.profile_image_url || '',
+          whatsapp_number: profileRes.data.whatsapp_number || '',
           commission_percentage: profileRes.data.commission_percentage || '0.00'
         });
       }
@@ -85,7 +93,8 @@ export default function Settings() {
           dashboard_default_date: settingsRes.data.dashboard_default_date || 'This Year',
           dashboard_default_category: settingsRes.data.dashboard_default_category || 'All Categories',
           dashboard_start_date: settingsRes.data.dashboard_start_date || '',
-          dashboard_end_date: settingsRes.data.dashboard_end_date || ''
+          dashboard_end_date: settingsRes.data.dashboard_end_date || '',
+          whatsapp_notifications_enabled: settingsRes.data.whatsapp_notifications_enabled || 'true'
         });
       }
     } catch (err) {
@@ -216,6 +225,23 @@ export default function Settings() {
     }
   };
 
+  const fetchAgentQR = async () => {
+    setFetchingQr(true);
+    try {
+      const res = await axios.get('/api/settings/agent/qr');
+      if (res.data && res.data.base64) {
+        setQrCodeData(res.data.base64);
+        showAlert('success', 'QR Code generated successfully!');
+      } else {
+        showAlert('error', 'Instance might already be connected or QR not available.');
+      }
+    } catch (err) {
+      showAlert('error', err.response?.data?.error || 'Failed to fetch QR code');
+    } finally {
+      setFetchingQr(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="settings-container" style={{ textAlign: 'center', padding: '5rem 0' }}>
@@ -254,6 +280,12 @@ export default function Settings() {
           onClick={() => setActiveTab('dashboard')}
         >
           <LayoutDashboard size={18} /> Dashboard
+        </button>
+        <button 
+          className={`tab-btn ${activeTab === 'agent' ? 'active' : ''}`} 
+          onClick={() => setActiveTab('agent')}
+        >
+          <MessageSquare size={18} /> Agent Config
         </button>
       </div>
 
@@ -414,6 +446,18 @@ export default function Settings() {
                     required 
                   />
                 </div>
+
+                <div className="form-group">
+                  <label className="form-label">WhatsApp Number (with country code)</label>
+                  <input 
+                    type="text" 
+                    className="form-input" 
+                    value={profile.whatsapp_number} 
+                    onChange={(e) => setProfile(prev => ({ ...prev, whatsapp_number: e.target.value }))} 
+                    placeholder="e.g. +1234567890" 
+                  />
+                  <p style={{ fontSize: '0.75rem', color: '#64748b', marginTop: '0.2rem' }}>Must include country code (e.g. +1 for US/CA)</p>
+                </div>
               </div>
 
               <div className="settings-actions">
@@ -567,6 +611,54 @@ export default function Settings() {
             </div>
           </div>
         </form>
+      )}
+
+      {/* SECTION 4: AGENT CONFIG */}
+      {activeTab === 'agent' && (
+        <div className="settings-card">
+          <div className="card-title-section">
+            <MessageSquare size={24} style={{ color: 'var(--primary-color)' }} />
+            <div>
+              <h3 className="card-title">Agent Configuration</h3>
+              <p className="card-description">Scan the QR code below to connect the Adwise ERP instance with Evolution API.</p>
+            </div>
+          </div>
+
+          <div style={{ textAlign: 'center', margin: '2rem 0' }}>
+            {qrCodeData ? (
+              <div>
+                <img 
+                  src={qrCodeData} 
+                  alt="WhatsApp QR Code" 
+                  style={{ width: '250px', height: '250px', border: '1px solid #e2e8f0', borderRadius: '12px', padding: '1rem', backgroundColor: '#fff', boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)' }} 
+                />
+                <p style={{ marginTop: '1rem', color: '#64748b', fontSize: '0.9rem' }}>
+                  Open WhatsApp on your phone and scan the QR code to connect.
+                </p>
+              </div>
+            ) : (
+              <div style={{ padding: '2rem', border: '2px dashed #cbd5e1', borderRadius: '12px', backgroundColor: '#f8fafc' }}>
+                <MessageSquare size={48} style={{ color: '#94a3b8', marginBottom: '1rem' }} />
+                <p style={{ color: '#475569', marginBottom: '1rem' }}>No QR Code loaded yet.</p>
+              </div>
+            )}
+
+            <div style={{ marginTop: '2rem' }}>
+              <button 
+                onClick={fetchAgentQR} 
+                className="save-btn" 
+                disabled={fetchingQr}
+                style={{ padding: '0.75rem 2rem', fontSize: '1rem' }}
+              >
+                {fetchingQr ? (
+                  <><RefreshCw size={18} className="spin-icon" style={{ animation: 'spin 1s linear infinite' }} /> Fetching QR...</>
+                ) : (
+                  <><RefreshCw size={18} /> Generate / Refresh QR Code</>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
