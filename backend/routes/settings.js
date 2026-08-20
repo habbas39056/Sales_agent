@@ -130,7 +130,7 @@ router.get('/profile', async (req, res) => {
       return res.status(401).json({ error: 'Unauthorized user' });
     }
     const [rows] = await db.query(
-      'SELECT id, name, username, email, role, profile_image_url, commission_percentage, created_at FROM users WHERE id = ?',
+      'SELECT id, name, username, email, role, profile_image_url, whatsapp_number, commission_percentage, created_at FROM users WHERE id = ?',
       [userId]
     );
     if (rows.length === 0) {
@@ -146,7 +146,7 @@ router.get('/profile', async (req, res) => {
 router.put('/profile', async (req, res) => {
   try {
     const userId = req.user?.id || req.query.user_id;
-    const { name, username, email, profile_image_url } = req.body;
+    const { name, username, email, profile_image_url, whatsapp_number } = req.body;
 
     if (!userId) {
       return res.status(401).json({ error: 'Unauthorized user' });
@@ -163,12 +163,12 @@ router.put('/profile', async (req, res) => {
     }
 
     await db.query(
-      'UPDATE users SET name = ?, username = ?, email = ?, profile_image_url = ? WHERE id = ?',
-      [name, username || null, email, profile_image_url || null, userId]
+      'UPDATE users SET name = ?, username = ?, email = ?, profile_image_url = ?, whatsapp_number = ? WHERE id = ?',
+      [name, username || null, email, profile_image_url || null, whatsapp_number || null, userId]
     );
 
     const [updated] = await db.query(
-      'SELECT id, name, username, email, role, profile_image_url, commission_percentage, created_at FROM users WHERE id = ?',
+      'SELECT id, name, username, email, role, profile_image_url, whatsapp_number, commission_percentage, created_at FROM users WHERE id = ?',
       [userId]
     );
 

@@ -768,6 +768,20 @@ router.post('/:id/steps/:step_id/forgive-late', async (req, res) => {
     }
 
     await connection.commit();
+    
+    if (forgive) {
+      try {
+        const [[project]] = await db.query('SELECT title FROM projects WHERE id = ?', [req.params.id]);
+        const [[step]] = await db.query('SELECT title, assignee_id FROM project_steps WHERE id = ?', [req.params.step_id]);
+        if (project && step && step.assignee_id) {
+          const msg = `Your late delivery for step "${step.title}" in project "${project.title}" has been forgiven. Your commission has been processed and released!`;
+          notifyUserWhatsApp(step.assignee_id, msg);
+        }
+      } catch (e) {
+        console.error('Failed to send whatsapp msg:', e);
+      }
+    }
+
     res.json({ message: forgive ? 'Late delivery forgiven. Commission processed.' : 'Late delivery penalty reinstated.' });
   } catch (error) {
     await connection.rollback();
@@ -1068,6 +1082,17 @@ router.post('/:id/steps/:step_id/approve-commission', async (req, res) => {
       // Update step to commission released but 0 payout.
       await connection.query('UPDATE project_steps SET commission_released = TRUE WHERE id = ?', [step.id]);
       await connection.commit();
+      
+      try {
+        const [[project]] = await db.query('SELECT title FROM projects WHERE id = ?', [req.params.id]);
+        if (project) {
+          const msg = `Commission processed for step "${step.title}" in project "${project.title}". Amount: 0.00 (Late delivery penalty applied)`;
+          notifyUserWhatsApp(step.assignee_id, msg);
+        }
+      } catch (e) {
+        console.error('Failed to send whatsapp msg:', e);
+      }
+      
       return res.json({ message: 'Step was late and not forgiven. 0 commission released, penalty applied.' });
     }
     
@@ -1078,6 +1103,17 @@ router.post('/:id/steps/:step_id/approve-commission', async (req, res) => {
 
     await connection.query('UPDATE project_steps SET commission_released = TRUE WHERE id = ?', [step.id]);
     await connection.commit();
+    
+    try {
+      const [[project]] = await db.query('SELECT title FROM projects WHERE id = ?', [req.params.id]);
+      if (project) {
+        const msg = `Your commission for step "${step.title}" in project "${project.title}" has been released! Amount: ${final_amount.toFixed(2)}`;
+        notifyUserWhatsApp(step.assignee_id, msg);
+      }
+    } catch (e) {
+      console.error('Failed to send whatsapp msg:', e);
+    }
+    
     res.json({ message: 'Step commission released' });
   } catch (error) {
     await connection.rollback();
