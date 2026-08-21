@@ -1049,11 +1049,25 @@ router.post('/:id/steps/:step_id/approve-commission', async (req, res) => {
     if (step.invoice_item_ids) {
       let itemIds = [];
       try { itemIds = typeof step.invoice_item_ids === 'string' ? JSON.parse(step.invoice_item_ids) : step.invoice_item_ids; } catch(e) {}
+      if (typeof itemIds === 'number') itemIds = [itemIds];
       if (!Array.isArray(itemIds) && itemIds !== null && itemIds !== undefined) itemIds = [itemIds];
       
       if (Array.isArray(itemIds) && itemIds.length > 0) {
         const [items] = await connection.query('SELECT SUM(total) as items_total FROM invoice_items WHERE id IN (?)', [itemIds]);
-        items_total = items[0].items_total || 0;
+        items_total = parseFloat(items[0]?.items_total || 0);
+      }
+    }
+
+    // Fallback: If items_total is still 0, check project's invoice
+    if (items_total <= 0 && req.params.id) {
+      const [projInvs] = await connection.query(
+        'SELECT amount FROM invoices WHERE project_id = ? AND status != "Void" ORDER BY id DESC LIMIT 1',
+        [req.params.id]
+      );
+      if (projInvs.length > 0 && parseFloat(projInvs[0].amount) > 0) {
+        const [[stepCount]] = await connection.query('SELECT COUNT(*) as total_steps FROM project_steps WHERE project_id = ?', [req.params.id]);
+        const totalSteps = Math.max(1, stepCount?.total_steps || 1);
+        items_total = parseFloat(projInvs[0].amount) / totalSteps;
       }
     }
 

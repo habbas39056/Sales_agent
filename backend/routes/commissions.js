@@ -2,6 +2,52 @@ const express = require('express');
 const router = express.Router();
 const db = require('../db');
 
+// Helper to determine step items value with intelligent fallbacks
+async function getStepItemsTotal(step, dbClient) {
+  let items_total = 0;
+  
+  // 1. If step has specific invoice_item_ids
+  if (step.invoice_item_ids) {
+    let itemIds = [];
+    try {
+      itemIds = typeof step.invoice_item_ids === 'string' ? JSON.parse(step.invoice_item_ids) : step.invoice_item_ids;
+    } catch(e) {}
+    if (typeof itemIds === 'number') itemIds = [itemIds];
+    if (!Array.isArray(itemIds) && itemIds !== null && itemIds !== undefined) itemIds = [itemIds];
+    
+    if (Array.isArray(itemIds) && itemIds.length > 0) {
+      const [items] = await dbClient.query('SELECT SUM(total) as t FROM invoice_items WHERE id IN (?)', [itemIds]);
+      items_total = parseFloat(items[0]?.t || 0);
+    }
+  }
+
+  // 2. Fallback: If items_total is still 0, look up the project's linked invoice
+  if (items_total <= 0 && step.project_id) {
+    const [projInvoices] = await dbClient.query(
+      'SELECT id, amount FROM invoices WHERE project_id = ? AND status != "Void" ORDER BY id DESC LIMIT 1', 
+      [step.project_id]
+    );
+    
+    if (projInvoices.length > 0 && parseFloat(projInvoices[0].amount) > 0) {
+      const [[stepCount]] = await dbClient.query('SELECT COUNT(*) as total_steps FROM project_steps WHERE project_id = ?', [step.project_id]);
+      const totalSteps = Math.max(1, stepCount?.total_steps || 1);
+      items_total = parseFloat(projInvoices[0].amount) / totalSteps;
+    } else {
+      const [projItems] = await dbClient.query(
+        'SELECT SUM(ii.total) as t FROM invoice_items ii JOIN invoices i ON ii.invoice_id = i.id WHERE i.project_id = ? AND i.status != "Void"',
+        [step.project_id]
+      );
+      if (projItems.length > 0 && parseFloat(projItems[0]?.t || 0) > 0) {
+        const [[stepCount]] = await dbClient.query('SELECT COUNT(*) as total_steps FROM project_steps WHERE project_id = ?', [step.project_id]);
+        const totalSteps = Math.max(1, stepCount?.total_steps || 1);
+        items_total = parseFloat(projItems[0].t) / totalSteps;
+      }
+    }
+  }
+
+  return items_total;
+}
+
 // Get all forfeited commissions (late steps that resulted in 0 commission)
 router.get('/forfeited', async (req, res) => {
   try {
@@ -42,15 +88,7 @@ router.get('/forfeited', async (req, res) => {
 
     const results = [];
     for (const step of forfeitedSteps) {
-      let items_total = 0;
-      if (step.invoice_item_ids) {
-        let itemIds = [];
-        try { itemIds = typeof step.invoice_item_ids === 'string' ? JSON.parse(step.invoice_item_ids) : step.invoice_item_ids; } catch(e){}
-        if (Array.isArray(itemIds) && itemIds.length > 0) {
-          const [items] = await db.query('SELECT SUM(total) as t FROM invoice_items WHERE id IN (?)', [itemIds]);
-          items_total = items[0].t || 0;
-        }
-      }
+      const items_total = await getStepItemsTotal(step, db);
 
       if (items_total > 0) {
         const comm_pct = parseFloat(step.commission_percentage) || 0;
@@ -86,7 +124,7 @@ router.get('/breakdown', async (req, res) => {
         p.id as project_id,
         p.title as project_title,
         ps.id as step_id,
-        ps.title as step_title,
+        COALESCE(ps.title, CONCAT('Milestone Step #', c.step_id)) as step_title,
         c.base_amount as potential_commission,
         c.final_amount as earned_commission,
         0 as pending_commission,
@@ -104,7 +142,7 @@ router.get('/breakdown', async (req, res) => {
     `;
     const releasedParams = [];
 
-    // 2. Fetch Pending Project Step Commissions
+    // 2. Fetch Pending Project Step Commissions (Unreleased steps assigned to specialists)
     let pendingQuery = `
       SELECT 
         NULL as commission_id,
@@ -119,7 +157,7 @@ router.get('/breakdown', async (req, res) => {
         0 as potential_commission,
         0 as earned_commission,
         0 as pending_commission,
-        ps.completed_at as date,
+        COALESCE(ps.completed_at, ps.created_at) as date,
         'Pending' as status,
         ps.invoice_item_ids,
         NULL as invoice_number,
@@ -206,28 +244,22 @@ router.get('/breakdown', async (req, res) => {
 
     // Append Released Project Steps
     if (!status || status === 'all' || status === 'Paid') {
-      allCommissions = allCommissions.concat(releasedRows);
+      for (const relRow of releasedRows) {
+        allCommissions.push(relRow);
+      }
     }
 
-    // Process pending project steps
+    // Process pending project steps with smart value calculation
     if (!status || status === 'all' || status === 'Pending') {
       for (const row of pendingRows) {
-        if (row.invoice_item_ids) {
-          let itemIds = [];
-          try { itemIds = typeof row.invoice_item_ids === 'string' ? JSON.parse(row.invoice_item_ids) : row.invoice_item_ids; } catch(e){}
-          if (!Array.isArray(itemIds) && itemIds !== null && itemIds !== undefined) itemIds = [itemIds];
-          
-          if (Array.isArray(itemIds) && itemIds.length > 0) {
-            const [items] = await db.query('SELECT SUM(total) as t FROM invoice_items WHERE id IN (?)', [itemIds]);
-            const items_total = items[0].t || 0;
-            const comm_pct = parseFloat(row.commission_percentage) || 0;
-            row.potential_commission = items_total * (comm_pct / 100);
-            row.pending_commission = row.potential_commission;
-            
-            if (row.potential_commission > 0) {
-              allCommissions.push(row);
-            }
-          }
+        const items_total = await getStepItemsTotal(row, db);
+        const comm_pct = parseFloat(row.commission_percentage) || 0;
+        
+        if (items_total > 0 && comm_pct > 0) {
+          row.potential_commission = Number(((items_total * comm_pct) / 100).toFixed(2));
+          row.pending_commission = row.potential_commission;
+          row.earned_commission = 0;
+          allCommissions.push(row);
         }
       }
     }
@@ -269,11 +301,12 @@ router.get('/breakdown', async (req, res) => {
       if (row.invoice_item_ids) {
         let itemIds = [];
         try { itemIds = typeof row.invoice_item_ids === 'string' ? JSON.parse(row.invoice_item_ids) : row.invoice_item_ids; } catch(e){}
+        if (typeof itemIds === 'number') itemIds = [itemIds];
         if (!Array.isArray(itemIds) && itemIds !== null && itemIds !== undefined) itemIds = [itemIds];
         
         if (Array.isArray(itemIds) && itemIds.length > 0) {
           const [invoices] = await db.query(`
-            SELECT DISTINCT i.invoice_number, i.amount, i.balance 
+            SELECT DISTINCT i.invoice_number 
             FROM invoice_items it
             JOIN invoices i ON it.invoice_id = i.id
             WHERE it.id IN (?)
@@ -281,6 +314,13 @@ router.get('/breakdown', async (req, res) => {
           
           const newInvs = invoices.map(inv => inv.invoice_number);
           row.invoice_numbers = [...row.invoice_numbers, ...newInvs];
+        }
+      }
+
+      if (row.invoice_numbers.length === 0 && row.project_id) {
+        const [projInvs] = await db.query('SELECT invoice_number FROM invoices WHERE project_id = ?', [row.project_id]);
+        if (projInvs.length > 0) {
+          row.invoice_numbers = projInvs.map(i => i.invoice_number);
         }
       }
     }
@@ -331,6 +371,7 @@ router.get('/', async (req, res) => {
       let total_paid_out = 0;
       let pending_payout = 0;
       let total_invoices = 0;
+      const commPct = parseFloat(u.commission_percentage || 0);
 
       // 1. Direct Invoice Sales Commission
       let invSql = `SELECT amount, balance, commission_amount, status FROM invoices WHERE agent_id = ? AND status != 'Void'`;
@@ -351,7 +392,6 @@ router.get('/', async (req, res) => {
         const invTotal = parseFloat(inv.amount || 0);
         const invBalance = parseFloat(inv.balance || 0);
         const invPaid = Math.max(0, invTotal - invBalance);
-        const commPct = parseFloat(u.commission_percentage || 0);
 
         let potential = parseFloat(inv.commission_amount || 0);
         if (potential <= 0 && commPct > 0 && invTotal > 0) {
@@ -367,11 +407,29 @@ router.get('/', async (req, res) => {
         pending_payout += pending;
       }
 
-      // 2. Project Steps Commission (for production / specialists)
-      const [releasedProjectComms] = await db.query(`SELECT COALESCE(SUM(final_amount), 0) as total FROM commissions WHERE user_id = ?`, [u.id]);
+      // 2. Project Steps Commission (Released)
+      const [releasedProjectComms] = await db.query(
+        `SELECT COALESCE(SUM(final_amount), 0) as total FROM commissions WHERE user_id = ?`, 
+        [u.id]
+      );
       const projReleased = parseFloat(releasedProjectComms[0]?.total || 0);
       total_paid_out += projReleased;
       total_earned += projReleased;
+
+      // 3. Project Steps Commission (Pending / In-Progress Steps)
+      const [pendingSteps] = await db.query(
+        `SELECT id, project_id, invoice_item_ids FROM project_steps WHERE assignee_id = ? AND commission_released = FALSE`,
+        [u.id]
+      );
+
+      for (const pStep of pendingSteps) {
+        const stepVal = await getStepItemsTotal(pStep, db);
+        if (stepVal > 0 && commPct > 0) {
+          const stepComm = (stepVal * commPct) / 100;
+          pending_payout += stepComm;
+          total_earned += stepComm;
+        }
+      }
 
       results.push({
         id: u.id,
