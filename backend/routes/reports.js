@@ -1865,6 +1865,10 @@ const handleInvoicingAgingReports = async (req, res) => {
     }
 };
 
+router.get('/invoicing-aging', handleInvoicingAgingReports);
+router.get('/invoices-aging', handleInvoicingAgingReports);
+router.get('/invoicing', handleInvoicingAgingReports);
+
 // GET /api/reports/cash-flow & /api/reports/cashflow
 // Enterprise Cash Flow & Business Health Intelligence Suite
 const handleCashFlowReports = async (req, res) => {
@@ -2064,6 +2068,9 @@ const handleCashFlowReports = async (req, res) => {
         res.status(500).json({ error: 'Failed to fetch cash flow reports' });
     }
 };
+
+router.get('/cash-flow', handleCashFlowReports);
+router.get('/cashflow', handleCashFlowReports);
 
 // GET /api/reports/revenue-concentration & /api/reports/concentration
 // Enterprise Revenue Concentration & Client Risk Exposure Intelligence Suite
