@@ -276,9 +276,11 @@ router.get('/breakdown', async (req, res) => {
       }
     }
 
-    // Enrich remaining project step rows with invoice numbers
+    // Enrich commission rows with invoice numbers and products details
     for (const row of allCommissions) {
       row.invoice_numbers = row.invoice_numbers || [];
+      row.products = row.products || [];
+
       if (row.invoice_item_ids) {
         let itemIds = [];
         try { itemIds = typeof row.invoice_item_ids === 'string' ? JSON.parse(row.invoice_item_ids) : row.invoice_item_ids; } catch(e){}
@@ -295,11 +297,19 @@ router.get('/breakdown', async (req, res) => {
           
           const newInvs = invoices.map(inv => inv.invoice_number);
           row.invoice_numbers = [...row.invoice_numbers, ...newInvs];
+
+          // Fetch exact products for this step
+          const [invoiceItems] = await db.query(`
+            SELECT description, total 
+            FROM invoice_items 
+            WHERE id IN (?)
+          `, [itemIds]);
+          row.products = invoiceItems;
         }
       }
 
       if (row.invoice_numbers.length === 0 && row.project_id) {
-        const [projInvs] = await db.query('SELECT invoice_number FROM invoices WHERE project_id = ?', [row.project_id]);
+        const [projInvs] = await db.query('SELECT id, invoice_number FROM invoices WHERE project_id = ?', [row.project_id]);
         if (projInvs.length > 0) {
           row.invoice_numbers = projInvs.map(i => i.invoice_number);
         }
