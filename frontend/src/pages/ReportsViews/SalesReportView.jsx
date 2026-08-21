@@ -676,7 +676,7 @@ export default function SalesReportView() {
                     <span className="top-rank-badge">#{idx + 1}</span>
                     <div className="top-client-names">
                       <h4 className="client-name">{client.name}</h4>
-                      {client.business && <span className="client-business">{client.business}</span>}
+                      <span className="client-business">{client.business || 'Individual Account'}</span>
                     </div>
                   </div>
                   <div className="top-client-stats">

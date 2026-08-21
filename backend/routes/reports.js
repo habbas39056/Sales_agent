@@ -128,23 +128,26 @@ router.get('/sales', async (req, res) => {
             statusMap[st].paid_amount += paid;
             statusMap[st].balance += bal;
 
-            // Client Contribution
-            const cName = inv.client_name || inv.business_name || `Client #${inv.client_id || 'N/A'}`;
-            if (!clientMap[cName]) {
-                clientMap[cName] = {
+            // Client Contribution (Grouped strictly by unique client_id to prevent same-name client merging)
+            const cKey = inv.client_id ? `client_${inv.client_id}` : `name_${inv.client_name || inv.business_name || 'unassigned'}`;
+            const cName = inv.client_name || 'Individual Client';
+            const bName = inv.business_name || '';
+
+            if (!clientMap[cKey]) {
+                clientMap[cKey] = {
                     client_id: inv.client_id,
                     name: cName,
-                    business: inv.business_name || '',
+                    business: bName,
                     invoices_count: 0,
                     total_sales: 0,
                     total_paid: 0,
                     total_balance: 0
                 };
             }
-            clientMap[cName].invoices_count += 1;
-            clientMap[cName].total_sales += amt;
-            clientMap[cName].total_paid += paid;
-            clientMap[cName].total_balance += bal;
+            clientMap[cKey].invoices_count += 1;
+            clientMap[cKey].total_sales += amt;
+            clientMap[cKey].total_paid += paid;
+            clientMap[cKey].total_balance += bal;
 
             // Monthly Trend Aggregation
             const dateStr = inv.issue_date || inv.created_at;
