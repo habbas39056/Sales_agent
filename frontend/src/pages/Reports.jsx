@@ -100,11 +100,12 @@ export default function Reports() {
   };
 
   const getChartData = () => {
-    if (salesReports.length === 0) return [];
+    const list = Array.isArray(salesReports) ? salesReports : (salesReports?.invoices || salesReports?.monthly || []);
+    if (!Array.isArray(list) || list.length === 0) return [];
 
     // Filter by date
-    const filtered = salesReports.filter(inv => {
-      if (!inv.issue_date) return false;
+    const filtered = list.filter(inv => {
+      if (!inv || !inv.issue_date) return false;
       const d = new Date(inv.issue_date);
       if (isNaN(d.getTime())) return false;
 
@@ -116,7 +117,7 @@ export default function Reports() {
     // Aggregate by Month-Year (e.g., 'Jan 2026')
     const aggregated = {};
     filtered.forEach(inv => {
-      if (!inv.issue_date) return;
+      if (!inv || !inv.issue_date) return;
 
       const d = new Date(inv.issue_date);
       if (isNaN(d.getTime())) return; // Skip invalid dates
@@ -150,8 +151,11 @@ export default function Reports() {
   // Calculate totals for the current filter
   const getFilteredTotals = () => {
     let invoiced = 0, paid = 0, balance = 0;
-    const filtered = salesReports.filter(inv => {
-      if (!inv.issue_date) return false;
+    const list = Array.isArray(salesReports) ? salesReports : (salesReports?.invoices || []);
+    if (!Array.isArray(list) || list.length === 0) return { invoiced: 0, paid: 0, balance: 0 };
+    
+    const filtered = list.filter(inv => {
+      if (!inv || !inv.issue_date) return false;
       const d = new Date(inv.issue_date);
       if (isNaN(d.getTime())) return false;
 
@@ -177,7 +181,7 @@ export default function Reports() {
     setLoading(true);
     setError('');
     try {
-      if (activeTab === 'sales' || activeTab === 'clients' || ['expenses', 'products', 'projects-health', 'accounting', 'invoices-aging', 'cash-flow', 'revenue-concentration'].includes(activeTab)) {
+      if (['sales', 'clients', 'expenses', 'products', 'services', 'projects', 'project-management', 'projects-health', 'accounting', 'invoices-aging', 'invoicing', 'cash-flow', 'cashflow', 'revenue-concentration', 'concentration', 'profit', 'income-vs-expense'].includes(activeTab)) {
         setLoading(false);
         return;
       }
@@ -188,10 +192,10 @@ export default function Reports() {
 
       if (activeTab === 'clients') {
         const res = await axios.get(`${API_URL}/reports/clients`);
-        setClientReports(res.data);
+        setClientReports(Array.isArray(res.data) ? res.data : []);
       } else if (activeTab === 'team') {
         const res = await axios.get(`${API_URL}/reports/team`);
-        setTeamReports(res.data);
+        setTeamReports(Array.isArray(res.data) ? res.data : []);
       } else if (activeTab === 'profit') {
         let url = `${API_URL}/reports/profit`;
         const params = new URLSearchParams();
@@ -202,7 +206,8 @@ export default function Reports() {
         setProfitReport(res.data);
       } else {
         const res = await axios.get(`${API_URL}/reports/sales`);
-        setSalesReports(res.data);
+        const reportsData = Array.isArray(res.data) ? res.data : (res.data?.invoices || []);
+        setSalesReports(reportsData);
       }
     } catch (err) {
       console.error('Error fetching reports:', err);
