@@ -2,11 +2,11 @@ const express = require('express');
 const router = express.Router();
 const db = require('../db');
 
-// Helper to determine step items value with intelligent fallbacks
+// Helper to determine step items value strictly based on selected invoice items
 async function getStepItemsTotal(step, dbClient) {
   let items_total = 0;
   
-  // 1. If step has specific invoice_item_ids
+  // Commission only generates if product/invoice item is explicitly selected on the step
   if (step.invoice_item_ids) {
     let itemIds = [];
     try {
@@ -16,35 +16,16 @@ async function getStepItemsTotal(step, dbClient) {
     if (!Array.isArray(itemIds) && itemIds !== null && itemIds !== undefined) itemIds = [itemIds];
     
     if (Array.isArray(itemIds) && itemIds.length > 0) {
-      const [items] = await dbClient.query('SELECT SUM(total) as t FROM invoice_items WHERE id IN (?)', [itemIds]);
+      // Exclude items categorized as 'OTHER'
+      const [items] = await dbClient.query(
+        "SELECT SUM(total) as t FROM invoice_items WHERE id IN (?) AND (category != 'OTHER' OR category IS NULL)", 
+        [itemIds]
+      );
       items_total = parseFloat(items[0]?.t || 0);
     }
   }
 
-  // 2. Fallback: If items_total is still 0, look up the project's linked invoice
-  if (items_total <= 0 && step.project_id) {
-    const [projInvoices] = await dbClient.query(
-      'SELECT id, amount FROM invoices WHERE project_id = ? AND status != "Void" ORDER BY id DESC LIMIT 1', 
-      [step.project_id]
-    );
-    
-    if (projInvoices.length > 0 && parseFloat(projInvoices[0].amount) > 0) {
-      const [[stepCount]] = await dbClient.query('SELECT COUNT(*) as total_steps FROM project_steps WHERE project_id = ?', [step.project_id]);
-      const totalSteps = Math.max(1, stepCount?.total_steps || 1);
-      items_total = parseFloat(projInvoices[0].amount) / totalSteps;
-    } else {
-      const [projItems] = await dbClient.query(
-        'SELECT SUM(ii.total) as t FROM invoice_items ii JOIN invoices i ON ii.invoice_id = i.id WHERE i.project_id = ? AND i.status != "Void"',
-        [step.project_id]
-      );
-      if (projItems.length > 0 && parseFloat(projItems[0]?.t || 0) > 0) {
-        const [[stepCount]] = await dbClient.query('SELECT COUNT(*) as total_steps FROM project_steps WHERE project_id = ?', [step.project_id]);
-        const totalSteps = Math.max(1, stepCount?.total_steps || 1);
-        items_total = parseFloat(projItems[0].t) / totalSteps;
-      }
-    }
-  }
-
+  // If no product is selected for this task, commission is strictly 0
   return items_total;
 }
 
