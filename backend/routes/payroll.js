@@ -421,14 +421,14 @@ router.post('/:id/pay', async (req, res) => {
     if (expenseId) {
       await connection.query(
         `UPDATE expenses 
-         SET date = ?, client = ?, description = ?, mode = ?, bank = ?, payment_amount = ? 
+         SET date = ?, client = ?, description = ?, mode = ?, bank = ?, payment_amount = ?, category = 'Payroll' 
          WHERE id = ?`,
         [payDate, payroll.employee_name, desc, payMethod, bank, netSalary, expenseId]
       );
     } else {
       const [expResult] = await connection.query(
-        `INSERT INTO expenses (date, client, description, mode, bank, reference, receipt_amount, payment_amount)
-         VALUES (?, ?, ?, ?, ?, ?, 0.00, ?)`,
+        `INSERT INTO expenses (date, client, description, mode, bank, reference, receipt_amount, payment_amount, category)
+         VALUES (?, ?, ?, ?, ?, ?, 0.00, ?, 'Payroll')`,
         [payDate, payroll.employee_name, desc, payMethod, bank, `PAYROLL-${payroll.id}`, netSalary]
       );
       expenseId = expResult.insertId;

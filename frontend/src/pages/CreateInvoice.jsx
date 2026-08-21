@@ -145,11 +145,8 @@ export default function CreateInvoice() {
     if (!selectedAgent || !selectedAgent.commission_percentage) return 0;
     
     const commPct = parseFloat(selectedAgent.commission_percentage) || 0;
-    const serviceTotal = formData.items
-      .filter(item => item.category === 'SERVICE')
-      .reduce((sum, item) => sum + (item.quantity * item.unit_price), 0);
-      
-    return (serviceTotal * commPct) / 100;
+    const totalAmount = Math.max(0, calculateTotal());
+    return Number(((totalAmount * commPct) / 100).toFixed(2));
   };
 
   const handleSubmit = async (e) => {

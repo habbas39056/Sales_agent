@@ -89,10 +89,12 @@ export default function Expenses() {
 
   const fetchClients = async () => {
     try {
-      const res = await axios.get('/api/reports/clients');
-      setClients(res.data);
+      const res = await axios.get('/api/clients');
+      const data = Array.isArray(res.data) ? res.data : (res.data?.clients || []);
+      setClients(data);
     } catch (err) {
       console.error('Failed to fetch clients', err);
+      setClients([]);
     }
   };
 
@@ -350,9 +352,9 @@ export default function Expenses() {
 
   const currentExpenses = filteredExpenses.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
 
-  const clientOptions = clients.map(c => ({
-    value: c.full_name,
-    label: `${c.full_name} ${c.business_name ? `(${c.business_name})` : ''}`.trim()
+  const clientOptions = (Array.isArray(clients) ? clients : []).map(c => ({
+    value: c.full_name || c.name || '',
+    label: `${c.full_name || c.name || ''} ${c.business_name ? `(${c.business_name})` : ''}`.trim()
   }));
 
   return (

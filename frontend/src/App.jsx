@@ -1,6 +1,6 @@
 import React from 'react';
 import { BrowserRouter as Router, Routes, Route, Link, useLocation, useNavigate, Navigate } from 'react-router-dom';
-import { LayoutDashboard, Users, FileText, PlusCircle, Calendar, Clock, CheckSquare, MessageSquare, RotateCcw, CreditCard, Banknote, LogOut, Shield, Settings as SettingsIcon, CheckCircle2, FolderKanban } from 'lucide-react';
+import { LayoutDashboard, Users, FileText, PlusCircle, Calendar, Clock, CheckSquare, MessageSquare, RotateCcw, CreditCard, Banknote, LogOut, Shield, Settings as SettingsIcon, CheckCircle2, FolderKanban, TrendingUp, FileSpreadsheet, Package, CheckCircle, Activity, PieChart } from 'lucide-react';
 import Dashboard from './pages/Dashboard';
 import Login from './pages/Login';
 import ClientsList from './pages/ClientsList';
@@ -200,7 +200,68 @@ function AppContent() {
             )}
             
             {(!user || user.role === 'Admin' || (user.modules_access && user.modules_access.includes('REPORTS'))) && (
-              <li><Link to="/reports" className={location.pathname.startsWith('/reports') ? 'active' : ''}><FileText size={20} /> System Reports</Link></li>
+              <>
+                <li><Link to="/reports" className={location.pathname.startsWith('/reports') ? 'active' : ''}><FileText size={20} /> System Reports</Link></li>
+                {location.pathname.startsWith('/reports') && (
+                  <>
+                    <li className="submenu-item">
+                      <Link to="/reports?tab=sales" className={`sidebar-link ${location.search.includes('tab=sales') || location.search === '' ? 'active' : ''}`} style={{ paddingLeft: '3.2rem', fontSize: '0.85rem', opacity: 0.9 }}>
+                        <Banknote size={16} /> Sales
+                      </Link>
+                    </li>
+                    <li className="submenu-item">
+                      <Link to="/reports?tab=clients" className={`sidebar-link ${location.search.includes('tab=clients') ? 'active' : ''}`} style={{ paddingLeft: '3.2rem', fontSize: '0.85rem', opacity: 0.9 }}>
+                        <Users size={16} /> Client Reports
+                      </Link>
+                    </li>
+                    <li className="submenu-item">
+                      <Link to="/reports?tab=team" className={`sidebar-link ${location.search.includes('tab=team') ? 'active' : ''}`} style={{ paddingLeft: '3.2rem', fontSize: '0.85rem', opacity: 0.9 }}>
+                        <Shield size={16} /> Employee / Team
+                      </Link>
+                    </li>
+                    <li className="submenu-item">
+                      <Link to="/reports?tab=expenses" className={`sidebar-link ${location.search.includes('tab=expenses') ? 'active' : ''}`} style={{ paddingLeft: '3.2rem', fontSize: '0.85rem', opacity: 0.9 }}>
+                        <CreditCard size={16} /> Expense Reports
+                      </Link>
+                    </li>
+                    <li className="submenu-item">
+                      <Link to="/reports?tab=profit" className={`sidebar-link ${location.search.includes('tab=profit') ? 'active' : ''}`} style={{ paddingLeft: '3.2rem', fontSize: '0.85rem', opacity: 0.9 }}>
+                        <TrendingUp size={16} /> Expenses vs Income
+                      </Link>
+                    </li>
+                    <li className="submenu-item">
+                      <Link to="/reports?tab=accounting" className={`sidebar-link ${location.search.includes('tab=accounting') ? 'active' : ''}`} style={{ paddingLeft: '3.2rem', fontSize: '0.85rem', opacity: 0.9 }}>
+                        <FileSpreadsheet size={16} /> Finance & Accounting
+                      </Link>
+                    </li>
+                    <li className="submenu-item">
+                      <Link to="/reports?tab=products" className={`sidebar-link ${location.search.includes('tab=products') ? 'active' : ''}`} style={{ paddingLeft: '3.2rem', fontSize: '0.85rem', opacity: 0.9 }}>
+                        <Package size={16} /> Service / Product
+                      </Link>
+                    </li>
+                    <li className="submenu-item">
+                      <Link to="/reports?tab=projects" className={`sidebar-link ${location.search.includes('tab=projects') || location.search.includes('tab=project-management') ? 'active' : ''}`} style={{ paddingLeft: '3.2rem', fontSize: '0.85rem', opacity: 0.9 }}>
+                        <CheckCircle size={16} /> Project Management
+                      </Link>
+                    </li>
+                    <li className="submenu-item">
+                      <Link to="/reports?tab=invoices-aging" className={`sidebar-link ${location.search.includes('tab=invoices-aging') ? 'active' : ''}`} style={{ paddingLeft: '3.2rem', fontSize: '0.85rem', opacity: 0.9 }}>
+                        <Clock size={16} /> Invoicing Aging
+                      </Link>
+                    </li>
+                    <li className="submenu-item">
+                      <Link to="/reports?tab=cash-flow" className={`sidebar-link ${location.search.includes('tab=cash-flow') ? 'active' : ''}`} style={{ paddingLeft: '3.2rem', fontSize: '0.85rem', opacity: 0.9 }}>
+                        <Activity size={16} /> Cash Flow
+                      </Link>
+                    </li>
+                    <li className="submenu-item">
+                      <Link to="/reports?tab=revenue-concentration" className={`sidebar-link ${location.search.includes('tab=revenue-concentration') ? 'active' : ''}`} style={{ paddingLeft: '3.2rem', fontSize: '0.85rem', opacity: 0.9 }}>
+                        <PieChart size={16} /> Revenue Concentration
+                      </Link>
+                    </li>
+                  </>
+                )}
+              </>
             )}
 
             {(!user || user.role === 'Admin' || (user.modules_access && user.modules_access.includes('SETTINGS'))) && (

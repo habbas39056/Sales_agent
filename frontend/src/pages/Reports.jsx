@@ -2,18 +2,35 @@ import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
-import { Download, Users, Shield, Loader, FileText, CheckCircle, Clock, X, Filter, Banknote, TrendingUp, CreditCard, Search, FileSpreadsheet } from 'lucide-react';
+import { Download, Users, Shield, Loader, FileText, CheckCircle, Clock, X, Filter, Banknote, TrendingUp, CreditCard, Search, FileSpreadsheet, PieChart, Activity, DollarSign, Package, BarChart2 } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import Pagination from '../components/Pagination';
+import NewReports from './ReportsViews/NewReports';
+import SalesReportView from './ReportsViews/SalesReportView';
+import ClientReportView from './ReportsViews/ClientReportView';
+import TeamReportView from './ReportsViews/TeamReportView';
+import ExpenseReportView from './ReportsViews/ExpenseReportView';
+import IncomeVsExpenseReportView from './ReportsViews/IncomeVsExpenseReportView';
+import AccountingReportView from './ReportsViews/AccountingReportView';
+import ProductReportView from './ReportsViews/ProductReportView';
+import ProjectReportView from './ReportsViews/ProjectReportView';
+import InvoiceAgingReportView from './ReportsViews/InvoiceAgingReportView';
+import CashFlowReportView from './ReportsViews/CashFlowReportView';
+import RevenueConcentrationReportView from './ReportsViews/RevenueConcentrationReportView';
 import './Reports.css';
 
 const API_URL = import.meta.env.VITE_API_URL || '/api';
 
 export default function Reports() {
   const navigate = useNavigate();
-  const [activeTab, setActiveTab] = useState('sales'); // 'sales', 'clients' or 'team'
+  const [searchParams, setSearchParams] = useSearchParams();
+  const activeTab = searchParams.get('tab') || 'sales';
+
+  const setActiveTab = (tab) => {
+    setSearchParams({ tab });
+  };
   const [dashboardStats, setDashboardStats] = useState({ total_invoiced: 0, total_paid: 0, total_balance: 0 });
   const [salesReports, setSalesReports] = useState([]);
   const [salesStartDate, setSalesStartDate] = useState('');
@@ -37,6 +54,8 @@ export default function Reports() {
   const [selectedTeamMember, setSelectedTeamMember] = useState(null);
   const [teamDetails, setTeamDetails] = useState([]);
   const [isTeamModalOpen, setIsTeamModalOpen] = useState(false);
+  const [teamDetailsLoading, setTeamDetailsLoading] = useState(false);
+
   // Profit Analysis State
   const [profitReport, setProfitReport] = useState({ summary: { total_revenue: 0, total_expenses: 0, net_profit: 0, profit_margin: 0 }, monthlyTrend: [] });
   const [profitStartDate, setProfitStartDate] = useState('');
@@ -82,13 +101,13 @@ export default function Reports() {
 
   const getChartData = () => {
     if (salesReports.length === 0) return [];
-    
+
     // Filter by date
     const filtered = salesReports.filter(inv => {
       if (!inv.issue_date) return false;
       const d = new Date(inv.issue_date);
       if (isNaN(d.getTime())) return false;
-      
+
       if (salesStartDate && new Date(salesStartDate) > d) return false;
       if (salesEndDate && new Date(salesEndDate) < d) return false;
       return true;
@@ -98,12 +117,12 @@ export default function Reports() {
     const aggregated = {};
     filtered.forEach(inv => {
       if (!inv.issue_date) return;
-      
+
       const d = new Date(inv.issue_date);
       if (isNaN(d.getTime())) return; // Skip invalid dates
-      
+
       const key = `${d.toLocaleString('default', { month: 'short' })} ${d.getFullYear()}`;
-      
+
       if (!aggregated[key]) {
         aggregated[key] = {
           name: key,
@@ -113,16 +132,16 @@ export default function Reports() {
           Balance: 0
         };
       }
-      
+
       const amount = parseFloat(inv.amount || 0);
       const balance = parseFloat(inv.balance || 0);
       const paid = amount - balance;
-      
+
       aggregated[key].Invoiced += amount;
       aggregated[key].Paid += paid;
       aggregated[key].Balance += balance;
     });
-    
+
     return Object.values(aggregated).sort((a, b) => a.timestamp - b.timestamp);
   };
 
@@ -135,7 +154,7 @@ export default function Reports() {
       if (!inv.issue_date) return false;
       const d = new Date(inv.issue_date);
       if (isNaN(d.getTime())) return false;
-      
+
       if (salesStartDate && new Date(salesStartDate) > d) return false;
       if (salesEndDate && new Date(salesEndDate) < d) return false;
       return true;
@@ -154,14 +173,15 @@ export default function Reports() {
 
   const filteredTotals = getFilteredTotals();
 
-  useEffect(() => {
-    fetchReports();
-  }, [activeTab, profitStartDate, profitEndDate]);
-
   const fetchReports = async () => {
     setLoading(true);
     setError('');
     try {
+      if (activeTab === 'sales' || activeTab === 'clients' || ['expenses', 'products', 'projects-health', 'accounting', 'invoices-aging', 'cash-flow', 'revenue-concentration'].includes(activeTab)) {
+        setLoading(false);
+        return;
+      }
+
       // Always fetch dashboard stats on tab change (or could do it once)
       const dashRes = await axios.get(`${API_URL}/reports/dashboard`);
       setDashboardStats(dashRes.data);
@@ -191,6 +211,10 @@ export default function Reports() {
       setLoading(false);
     }
   };
+
+  useEffect(() => {
+    fetchReports();
+  }, [activeTab, profitStartDate, profitEndDate]);
 
   const openClientDetails = async (client) => {
     setSelectedClient(client);
@@ -233,12 +257,12 @@ export default function Reports() {
 
   const downloadClientPDF = () => {
     const doc = new jsPDF();
-    
+
     // Title
     doc.setFontSize(20);
     doc.setTextColor(40, 40, 40);
     doc.text('Client Reports (360 View)', 14, 22);
-    
+
     // Subtitle
     doc.setFontSize(10);
     doc.setTextColor(100, 100, 100);
@@ -273,11 +297,11 @@ export default function Reports() {
 
   const downloadTeamPDF = () => {
     const doc = new jsPDF();
-    
+
     doc.setFontSize(20);
     doc.setTextColor(40, 40, 40);
     doc.text('Team Member Reports', 14, 22);
-    
+
     doc.setFontSize(10);
     doc.setTextColor(100, 100, 100);
     doc.text(`Generated on: ${new Date().toLocaleDateString()}`, 14, 30);
@@ -315,11 +339,11 @@ export default function Reports() {
     doc.setFontSize(20);
     doc.setTextColor(40, 40, 40);
     doc.text('Profit & Financial Analytics Report', 14, 22);
-    
+
     doc.setFontSize(10);
     doc.setTextColor(100, 100, 100);
     doc.text(`Generated on: ${new Date().toLocaleDateString()}`, 14, 30);
-    
+
     const summary = profitReport.summary || {};
     doc.setFontSize(10);
     doc.setTextColor(30, 41, 59);
@@ -412,153 +436,81 @@ export default function Reports() {
 
   return (
     <div className="reports-container">
-      <div className="reports-dashboard-cards">
-        <div className="dashboard-stat-card">
-          <div className="stat-icon-wrapper blue">
-            <FileText size={24} />
-          </div>
-          <div className="stat-content">
-            <p className="stat-label">Total Invoiced</p>
-            <h3 className="stat-value">PKR {parseFloat(dashboardStats.total_invoiced || 0).toFixed(2)}</h3>
-          </div>
-        </div>
-        
-        <div className="dashboard-stat-card">
-          <div className="stat-icon-wrapper green">
-            <TrendingUp size={24} />
-          </div>
-          <div className="stat-content">
-            <p className="stat-label">Total Paid</p>
-            <h3 className="stat-value text-success">PKR {parseFloat(dashboardStats.total_paid || 0).toFixed(2)}</h3>
-          </div>
-        </div>
-
-        <div className="dashboard-stat-card">
-          <div className="stat-icon-wrapper orange">
-            <CreditCard size={24} />
-          </div>
-          <div className="stat-content">
-            <p className="stat-label">Balance Outstanding</p>
-            <h3 className="stat-value text-danger">PKR {parseFloat(dashboardStats.total_balance || 0).toFixed(2)}</h3>
-          </div>
-        </div>
-      </div>
-
-      <div className="reports-tabs">
-        <button 
-          className={`tab-btn ${activeTab === 'sales' ? 'active' : ''}`}
-          onClick={() => setActiveTab('sales')}
-        >
-          <Banknote size={18} /> Sales Overview
-        </button>
-        <button 
-          className={`tab-btn ${activeTab === 'clients' ? 'active' : ''}`}
-          onClick={() => setActiveTab('clients')}
-        >
-          <Users size={18} /> Client Reports
-        </button>
-        <button 
-          className={`tab-btn ${activeTab === 'team' ? 'active' : ''}`}
-          onClick={() => setActiveTab('team')}
-        >
-          <Shield size={18} /> Team Reports
-        </button>
-        <button 
-          className={`tab-btn ${activeTab === 'profit' ? 'active' : ''}`}
-          onClick={() => setActiveTab('profit')}
-        >
-          <TrendingUp size={18} /> Profit Analysis
-        </button>
-      </div>
-
-      <div className="reports-content">
-        {error && <div className="error-message">{error}</div>}
-        
-        {loading ? (
-          <div className="loading-state">
-            <Loader className="spinner" size={40} />
-            <p>Loading reports data...</p>
-          </div>
-        ) : activeTab === 'sales' ? (
-          <div className="report-panel fade-in">
-            <div className="panel-header" style={{flexDirection: 'column', alignItems: 'flex-start', gap: '1rem'}}>
-              <h2>Sales & Revenue Trends</h2>
-              <div className="sales-filters">
-                <div className="date-inputs">
-                  <div className="filter-group">
-                    <label>Start Date:</label>
-                    <input type="date" value={salesStartDate} onChange={(e) => setSalesStartDate(e.target.value)} />
-                  </div>
-                  <div className="filter-group">
-                    <label>End Date:</label>
-                    <input type="date" value={salesEndDate} onChange={(e) => setSalesEndDate(e.target.value)} />
-                  </div>
-                </div>
-                <div className="quick-filters">
-                  <button className="btn-secondary" onClick={() => setQuickFilter(30)}>Last 30 Days</button>
-                  <button className="btn-secondary" onClick={() => setQuickFilter(365)}>This Year</button>
-                  <button className="btn-secondary" onClick={() => setQuickFilter('all')}>All Time</button>
-                  <button className="download-btn btn-excel" onClick={downloadSalesExcel} style={{ background: '#10b981', color: '#fff', border: 'none', padding: '0.45rem 1rem', borderRadius: '8px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.4rem', fontWeight: 600 }}>
-                    <FileSpreadsheet size={16} /> Export Excel
-                  </button>
-                </div>
+      {activeTab === 'sales' ? (
+        <SalesReportView />
+      ) : activeTab === 'clients' ? (
+        <ClientReportView />
+      ) : activeTab === 'team' ? (
+        <TeamReportView />
+      ) : activeTab === 'expenses' ? (
+        <ExpenseReportView />
+      ) : (activeTab === 'profit' || activeTab === 'income-vs-expense') ? (
+        <IncomeVsExpenseReportView />
+      ) : activeTab === 'accounting' ? (
+        <AccountingReportView />
+      ) : (activeTab === 'products' || activeTab === 'services') ? (
+        <ProductReportView />
+      ) : (activeTab === 'projects' || activeTab === 'project-management' || activeTab === 'projects-health') ? (
+        <ProjectReportView />
+      ) : (activeTab === 'invoices-aging' || activeTab === 'invoicing' || activeTab === 'invoice-aging') ? (
+        <InvoiceAgingReportView />
+      ) : (activeTab === 'cash-flow' || activeTab === 'cashflow') ? (
+        <CashFlowReportView />
+      ) : (activeTab === 'revenue-concentration' || activeTab === 'concentration') ? (
+        <RevenueConcentrationReportView />
+      ) : (
+        <>
+          <div className="reports-dashboard-cards">
+            <div className="dashboard-stat-card">
+              <div className="stat-icon-wrapper blue">
+                <FileText size={24} />
+              </div>
+              <div className="stat-content">
+                <p className="stat-label">Total Invoiced</p>
+                <h3 className="stat-value">PKR {parseFloat(dashboardStats.total_invoiced || 0).toFixed(2)}</h3>
               </div>
             </div>
-            
-            <div className="chart-container" style={{ width: '100%', height: '400px', marginTop: '2rem', position: 'relative' }}>
-              <div className="chart-overlay-summary">
-                <div className="summary-row">
-                  <span className="summary-label">Invoiced:</span>
-                  <span className="summary-val text-blue">PKR {filteredTotals.invoiced.toFixed(2)}</span>
-                </div>
-                <div className="summary-row">
-                  <span className="summary-label">Paid:</span>
-                  <span className="summary-val text-success">PKR {filteredTotals.paid.toFixed(2)}</span>
-                </div>
-                <div className="summary-row">
-                  <span className="summary-label">Balance:</span>
-                  <span className="summary-val text-danger">PKR {filteredTotals.balance.toFixed(2)}</span>
-                </div>
-              </div>
 
-              {chartData.length === 0 ? (
-                <div className="empty-state">No sales data found for this period.</div>
-              ) : (
-                <ResponsiveContainer width="100%" height="100%">
-                  <AreaChart data={chartData} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
-                    <defs>
-                      <linearGradient id="colorInvoiced" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.8}/>
-                        <stop offset="95%" stopColor="#3b82f6" stopOpacity={0}/>
-                      </linearGradient>
-                      <linearGradient id="colorPaid" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%" stopColor="#10b981" stopOpacity={0.8}/>
-                        <stop offset="95%" stopColor="#10b981" stopOpacity={0}/>
-                      </linearGradient>
-                      <linearGradient id="colorBalance" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%" stopColor="#f59e0b" stopOpacity={0.8}/>
-                        <stop offset="95%" stopColor="#f59e0b" stopOpacity={0}/>
-                      </linearGradient>
-                    </defs>
-                    <XAxis dataKey="name" />
-                    <YAxis tickFormatter={(val) => `PKR ${val}`} />
-                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e5e7eb" />
-                    <Tooltip formatter={(value) => `PKR ${parseFloat(value).toFixed(2)}`} />
-                    <Legend />
-                    <Area type="monotone" dataKey="Invoiced" stroke="#3b82f6" fillOpacity={1} fill="url(#colorInvoiced)" />
-                    <Area type="monotone" dataKey="Paid" stroke="#10b981" fillOpacity={1} fill="url(#colorPaid)" />
-                    <Area type="monotone" dataKey="Balance" stroke="#f59e0b" fillOpacity={1} fill="url(#colorBalance)" />
-                  </AreaChart>
-                </ResponsiveContainer>
-              )}
+            <div className="dashboard-stat-card">
+              <div className="stat-icon-wrapper green">
+                <TrendingUp size={24} />
+              </div>
+              <div className="stat-content">
+                <p className="stat-label">Total Paid</p>
+                <h3 className="stat-value text-success">PKR {parseFloat(dashboardStats.total_paid || 0).toFixed(2)}</h3>
+              </div>
+            </div>
+
+            <div className="dashboard-stat-card">
+              <div className="stat-icon-wrapper orange">
+                <CreditCard size={24} />
+              </div>
+              <div className="stat-content">
+                <p className="stat-label">Balance Outstanding</p>
+                <h3 className="stat-value text-danger">PKR {parseFloat(dashboardStats.total_balance || 0).toFixed(2)}</h3>
+              </div>
             </div>
           </div>
-        ) : activeTab === 'clients' ? (() => {
+
+          <div className="reports-content-area">
+            {/* Render new reports if activeTab matches one of the new tabs */}
+            {['expenses', 'products', 'projects-health', 'accounting', 'invoices-aging', 'cash-flow', 'revenue-concentration'].includes(activeTab) && (
+              <NewReports activeTab={activeTab} />
+            )}
+
+            {error && <div className="error-message">{error}</div>}
+
+            {loading ? (
+              <div className="loading-state">
+                <Loader className="spinner" size={40} />
+                <p>Loading reports data...</p>
+              </div>
+            ) : activeTab === 'clients' ? (() => {
           const filteredClientReports = clientReports.filter(client => {
             if (!clientSearchTerm.trim()) return true;
             const term = clientSearchTerm.trim().toLowerCase();
             return (client.full_name && client.full_name.toLowerCase().includes(term)) ||
-                   (client.business_name && client.business_name.toLowerCase().includes(term));
+              (client.business_name && client.business_name.toLowerCase().includes(term));
           });
 
           const currentClientReports = filteredClientReports.slice(
@@ -573,9 +525,9 @@ export default function Reports() {
                 <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', flexWrap: 'wrap' }}>
                   <div className="search-box-ref" style={{ margin: 0, minWidth: '220px' }}>
                     <Search size={16} />
-                    <input 
-                      type="text" 
-                      placeholder="Search by client name..." 
+                    <input
+                      type="text"
+                      placeholder="Search by client name..."
                       value={clientSearchTerm}
                       onChange={(e) => {
                         setClientSearchTerm(e.target.value);
@@ -591,7 +543,7 @@ export default function Reports() {
                   </button>
                 </div>
               </div>
-              
+
               <div className="table-responsive">
                 <table className="modern-table">
                   <thead>
@@ -628,7 +580,7 @@ export default function Reports() {
                 </table>
               </div>
 
-              <Pagination 
+              <Pagination
                 currentPage={clientCurrentPage}
                 totalItems={filteredClientReports.length}
                 itemsPerPage={clientItemsPerPage}
@@ -649,7 +601,7 @@ export default function Reports() {
                 </button>
               </div>
             </div>
-            
+
             <div className="table-responsive">
               <table className="modern-table">
                 <thead>
@@ -711,22 +663,22 @@ export default function Reports() {
                 <div className="date-inputs">
                   <div className="input-group">
                     <label>From:</label>
-                    <input 
-                      type="date" 
-                      value={profitStartDate} 
-                      onChange={(e) => { setProfitStartDate(e.target.value); setProfitQuickPreset(''); }} 
+                    <input
+                      type="date"
+                      value={profitStartDate}
+                      onChange={(e) => { setProfitStartDate(e.target.value); setProfitQuickPreset(''); }}
                     />
                   </div>
                   <div className="input-group">
                     <label>To:</label>
-                    <input 
-                      type="date" 
-                      value={profitEndDate} 
-                      onChange={(e) => { setProfitEndDate(e.target.value); setProfitQuickPreset(''); }} 
+                    <input
+                      type="date"
+                      value={profitEndDate}
+                      onChange={(e) => { setProfitEndDate(e.target.value); setProfitQuickPreset(''); }}
                     />
                   </div>
                   {(profitStartDate || profitEndDate) && (
-                    <button 
+                    <button
                       className="btn-clear-date"
                       onClick={() => { setProfitStartDate(''); setProfitEndDate(''); setProfitQuickPreset('all'); }}
                     >
@@ -736,25 +688,25 @@ export default function Reports() {
                 </div>
 
                 <div className="quick-filters">
-                  <button 
+                  <button
                     className={`btn-quick ${profitQuickPreset === 'all' ? 'active' : ''}`}
                     onClick={() => setProfitQuickFilter('all')}
                   >
                     All Time
                   </button>
-                  <button 
+                  <button
                     className={`btn-quick ${profitQuickPreset === 'this_month' ? 'active' : ''}`}
                     onClick={() => setProfitQuickFilter('this_month')}
                   >
                     This Month
                   </button>
-                  <button 
+                  <button
                     className={`btn-quick ${profitQuickPreset === 'last_month' ? 'active' : ''}`}
                     onClick={() => setProfitQuickFilter('last_month')}
                   >
                     Last Month
                   </button>
-                  <button 
+                  <button
                     className={`btn-quick ${profitQuickPreset === 'this_year' ? 'active' : ''}`}
                     onClick={() => setProfitQuickFilter('this_year')}
                   >
@@ -821,21 +773,21 @@ export default function Reports() {
                   <AreaChart data={profitReport.monthlyTrend} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
                     <defs>
                       <linearGradient id="colorRevenue" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%" stopColor="#10b981" stopOpacity={0.8}/>
-                        <stop offset="95%" stopColor="#10b981" stopOpacity={0}/>
+                        <stop offset="5%" stopColor="#10b981" stopOpacity={0.8} />
+                        <stop offset="95%" stopColor="#10b981" stopOpacity={0} />
                       </linearGradient>
                       <linearGradient id="colorExpense" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%" stopColor="#ef4444" stopOpacity={0.8}/>
-                        <stop offset="95%" stopColor="#ef4444" stopOpacity={0}/>
+                        <stop offset="5%" stopColor="#ef4444" stopOpacity={0.8} />
+                        <stop offset="95%" stopColor="#ef4444" stopOpacity={0} />
                       </linearGradient>
                       <linearGradient id="colorProfit" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%" stopColor="#4f46e5" stopOpacity={0.8}/>
-                        <stop offset="95%" stopColor="#4f46e5" stopOpacity={0}/>
+                        <stop offset="5%" stopColor="#4f46e5" stopOpacity={0.8} />
+                        <stop offset="95%" stopColor="#4f46e5" stopOpacity={0} />
                       </linearGradient>
                     </defs>
                     <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
                     <XAxis dataKey="month" tick={{ fontSize: 12 }} />
-                    <YAxis tick={{ fontSize: 12 }} tickFormatter={(val) => `${val >= 1000 ? (val/1000) + 'k' : val}`} />
+                    <YAxis tick={{ fontSize: 12 }} tickFormatter={(val) => `${val >= 1000 ? (val / 1000) + 'k' : val}`} />
                     <Tooltip formatter={(val) => [`PKR ${Number(val).toLocaleString()}`, '']} />
                     <Legend />
                     <Area type="monotone" dataKey="revenue" name="Revenue" stroke="#10b981" fillOpacity={1} fill="url(#colorRevenue)" />
@@ -899,7 +851,7 @@ export default function Reports() {
                 <X size={24} />
               </button>
             </div>
-            
+
             <div className="modal-filters">
               <div className="filter-group">
                 <Filter size={18} />
@@ -941,13 +893,13 @@ export default function Reports() {
                       </tr>
                     ) : (
                       filteredDetails.map(item => {
-                        const progress = item.total_steps > 0 
-                          ? Math.round((item.completed_steps / item.total_steps) * 100) 
+                        const progress = item.total_steps > 0
+                          ? Math.round((item.completed_steps / item.total_steps) * 100)
                           : 0;
                         const amount = parseFloat(item.amount);
                         const balance = parseFloat(item.balance);
                         const paid = amount - balance;
-                        
+
                         return (
                           <tr key={item.invoice_id} onClick={() => navigate(`/invoices/edit/${item.invoice_id}`)} className="clickable-row">
                             <td className="fw-600">{item.invoice_number}</td>
@@ -1022,7 +974,7 @@ export default function Reports() {
                         const invAmount = parseFloat(item.invoice_amount || 0);
                         const commAmount = parseFloat(item.commission_amount || 0);
                         return (
-                          <tr key={index} className="clickable-row" onClick={() => { if(item.project_id) navigate(`/projects/${item.project_id}`)}}>
+                          <tr key={index} className="clickable-row" onClick={() => { if (item.project_id) navigate(`/projects/${item.project_id}`) }}>
                             <td className="fw-600">{item.project_title || '-'}</td>
                             <td>{item.client_name || item.business_name || '-'}</td>
                             <td>
@@ -1052,6 +1004,8 @@ export default function Reports() {
             )}
           </div>
         </div>
+      )}
+        </>
       )}
     </div>
   );

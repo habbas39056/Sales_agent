@@ -1,0 +1,230 @@
+/* =========================================================
+   INVOICING & INVOICE AGING INTELLIGENCE STYLESHEET
+   ========================================================= */
+
+.invoice-aging-reports-view {
+  display: flex;
+  flex-direction: column;
+  gap: 1.75rem;
+  padding-bottom: 3rem;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  color: #0f172a;
+}
+
+/* 1. Header Panel */
+.invoicing-header-panel {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  flex-wrap: wrap;
+  gap: 1.25rem;
+  background: #ffffff;
+  padding: 1.75rem 2rem;
+  border-radius: 16px;
+  border: 1px solid #e2e8f0;
+  box-shadow: 0 4px 20px -2px rgba(0, 0, 0, 0.03);
+}
+
+.invoicing-header-panel .header-info h1 {
+  font-size: 1.75rem;
+  font-weight: 800;
+  color: #0f172a;
+  margin: 0.35rem 0 0.5rem 0;
+  letter-spacing: -0.02em;
+}
+
+.invoicing-header-panel .header-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  background: #eff6ff;
+  color: #2563eb;
+  padding: 0.35rem 0.75rem;
+  border-radius: 9999px;
+  font-size: 0.8rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+.invoicing-header-panel .header-subtext {
+  color: #64748b;
+  font-size: 0.925rem;
+  max-width: 780px;
+  line-height: 1.5;
+  margin: 0;
+}
+
+/* 2. KPI Grid (6 Cards) */
+.invoicing-kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+  gap: 1.15rem;
+}
+
+.inv-kpi-card {
+  background: #ffffff;
+  padding: 1.35rem 1.4rem;
+  border-radius: 14px;
+  border: 1px solid #e2e8f0;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  box-shadow: 0 2px 8px -2px rgba(0, 0, 0, 0.02);
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.inv-kpi-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 20px -4px rgba(0, 0, 0, 0.06);
+}
+
+.inv-kpi-card .card-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.65rem;
+}
+
+.inv-kpi-card .card-title {
+  font-size: 0.775rem;
+  font-weight: 700;
+  color: #64748b;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.inv-kpi-card .card-icon {
+  width: 34px;
+  height: 34px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.inv-kpi-card .card-value {
+  font-size: 1.5rem;
+  font-weight: 800;
+  margin: 0 0 0.5rem 0;
+  letter-spacing: -0.02em;
+}
+
+/* 3. Aging Runway */
+.aging-runway-container {
+  background: #ffffff;
+  padding: 1.5rem;
+  border-radius: 16px;
+  border: 1px solid #e2e8f0;
+  box-shadow: 0 2px 10px -2px rgba(0, 0, 0, 0.02);
+}
+
+.aging-runway-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1.25rem;
+}
+
+.aging-runway-header h4 {
+  font-size: 1rem;
+  font-weight: 800;
+  color: #0f172a;
+  margin: 0;
+}
+
+.aging-total-pill {
+  font-size: 0.8rem;
+  font-weight: 700;
+  background: #eff6ff;
+  color: #2563eb;
+  padding: 0.3rem 0.75rem;
+  border-radius: 9999px;
+}
+
+.aging-buckets-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 1rem;
+}
+
+.bucket-card {
+  background: #f8fafc;
+  padding: 1.25rem 1rem;
+  border-radius: 12px;
+  border: 1px solid #e2e8f0;
+  display: flex;
+  flex-direction: column;
+}
+
+.bucket-name {
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: #64748b;
+  text-transform: uppercase;
+}
+
+.bucket-val {
+  font-size: 1.35rem;
+  font-weight: 800;
+  color: #0f172a;
+  margin: 0.4rem 0 0.25rem 0;
+}
+
+.bucket-sub {
+  font-size: 0.725rem;
+  color: #94a3b8;
+  font-weight: 600;
+}
+
+.bucket-current { border-top: 4px solid #10b981; }
+.bucket-1-30 { border-top: 4px solid #f59e0b; }
+.bucket-31-60 { border-top: 4px solid #f97316; }
+.bucket-61-90 { border-top: 4px solid #ef4444; }
+.bucket-90-plus { border-top: 4px solid #991b1b; }
+
+/* Status & Aging Pills in Table */
+.status-pill {
+  display: inline-block;
+  padding: 0.2rem 0.55rem;
+  border-radius: 6px;
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+.status-paid { background: #ecfdf5; color: #059669; }
+.status-partially-paid { background: #fffbeb; color: #d97706; }
+.status-unpaid { background: #eff6ff; color: #2563eb; }
+.status-overdue { background: #fef2f2; color: #dc2626; }
+
+.aging-pill {
+  display: inline-block;
+  padding: 0.2rem 0.55rem;
+  border-radius: 6px;
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+.aging-current,
+.aging-settled { background: #ecfdf5; color: #059669; }
+.aging-1-30-days { background: #fffbeb; color: #d97706; }
+.aging-31-60-days { background: #fff7ed; color: #ea580c; }
+.aging-61-90-days { background: #fef2f2; color: #dc2626; }
+.aging-90-days { background: #450a0a; color: #fca5a5; }
+
+.btn-whatsapp-action {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.3rem 0.65rem;
+  border-radius: 6px;
+  background: #ecfdf5;
+  border: 1px solid #a7f3d0;
+  color: #065f46;
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-decoration: none;
+  transition: all 0.15s ease;
+}
+
+.btn-whatsapp-action:hover {
+  background: #d1fae5;
+}

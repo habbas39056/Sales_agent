@@ -7,8 +7,6 @@ router.get('/forfeited', async (req, res) => {
   try {
     const { user_id, role } = req.query;
     
-    // We only care about projects that are at least 'Commission Released'
-    // where a step was late, and forgive_late_commission is false.
     let query = `
       SELECT 
         ps.id as step_id,
@@ -42,7 +40,6 @@ router.get('/forfeited', async (req, res) => {
 
     const [forfeitedSteps] = await db.query(query, params);
 
-    // Now we need to calculate the potential commission for each step
     const results = [];
     for (const step of forfeitedSteps) {
       let items_total = 0;
@@ -78,7 +75,7 @@ router.get('/breakdown', async (req, res) => {
   try {
     const { user_id, role, target_role, start_date, end_date, agent_id, status } = req.query;
     
-    // 1. Fetch Released Commissions
+    // 1. Fetch Released Project Step Commissions
     let releasedQuery = `
       SELECT 
         c.id as commission_id,
@@ -92,18 +89,22 @@ router.get('/breakdown', async (req, res) => {
         ps.title as step_title,
         c.base_amount as potential_commission,
         c.final_amount as earned_commission,
+        0 as pending_commission,
         c.released_at as date,
         'Paid' as status,
-        ps.invoice_item_ids
+        ps.invoice_item_ids,
+        NULL as invoice_number,
+        0 as invoice_total_amount,
+        0 as invoice_paid_amount
       FROM commissions c
       JOIN users u ON c.user_id = u.id
       JOIN projects p ON c.project_id = p.id
       LEFT JOIN project_steps ps ON c.step_id = ps.id
-      WHERE u.role NOT IN ('Sales', 'Sales Rep')
+      WHERE 1=1
     `;
     const releasedParams = [];
 
-    // 2. Fetch Pending Commissions (from completed steps not yet released)
+    // 2. Fetch Pending Project Step Commissions
     let pendingQuery = `
       SELECT 
         NULL as commission_id,
@@ -115,50 +116,23 @@ router.get('/breakdown', async (req, res) => {
         p.title as project_title,
         ps.id as step_id,
         ps.title as step_title,
-        0 as potential_commission, -- Calculated below
-        0 as earned_commission, -- Calculated below
-        NULL as date,
+        0 as potential_commission,
+        0 as earned_commission,
+        0 as pending_commission,
+        ps.completed_at as date,
         'Pending' as status,
-        ps.invoice_item_ids
+        ps.invoice_item_ids,
+        NULL as invoice_number,
+        0 as invoice_total_amount,
+        0 as invoice_paid_amount
       FROM project_steps ps
       JOIN users u ON ps.assignee_id = u.id
       JOIN projects p ON ps.project_id = p.id
-      WHERE ps.commission_released = FALSE AND u.role NOT IN ('Sales', 'Sales Rep')
+      WHERE ps.commission_released = FALSE
     `;
     const pendingParams = [];
 
-    // Apply common filters
-    if (user_id && role && role !== 'Admin') {
-      releasedQuery += ` AND u.id = ?`;
-      releasedParams.push(user_id);
-      pendingQuery += ` AND u.id = ?`;
-      pendingParams.push(user_id);
-    }
-    if (target_role && target_role !== 'all') {
-      releasedQuery += ` AND u.role = ?`;
-      releasedParams.push(target_role);
-      pendingQuery += ` AND u.role = ?`;
-      pendingParams.push(target_role);
-    }
-    if (agent_id && agent_id !== 'all') {
-      releasedQuery += ` AND u.id = ?`;
-      releasedParams.push(agent_id);
-      pendingQuery += ` AND u.id = ?`;
-      pendingParams.push(agent_id);
-    }
-    if (start_date) {
-      releasedQuery += ` AND DATE(c.released_at) >= ?`;
-      releasedParams.push(start_date);
-    }
-    if (end_date) {
-      releasedQuery += ` AND DATE(c.released_at) <= ?`;
-      releasedParams.push(end_date);
-    }
-
-    const [releasedRows] = await db.query(releasedQuery, releasedParams);
-    const [pendingRows] = await db.query(pendingQuery, pendingParams);
-
-    // 3. Fetch Invoice Commissions (Sales)
+    // 3. Fetch Direct Invoice Sales Commissions
     let invoiceQuery = `
       SELECT 
         NULL as commission_id,
@@ -167,57 +141,75 @@ router.get('/breakdown', async (req, res) => {
         u.role as agent_role,
         u.commission_percentage,
         p.id as project_id,
-        p.title as project_title,
+        COALESCE(p.title, CONCAT('Client Invoice #', i.invoice_number)) as project_title,
         NULL as step_id,
-        'Invoice Commission' as step_title,
-        i.commission_amount as potential_commission,
+        'Invoice Sales Commission' as step_title,
+        i.commission_amount,
         i.amount as invoice_total_amount,
         (i.amount - i.balance) as invoice_paid_amount,
         i.created_at as date,
-        IF(i.balance <= 0, 'Paid', 'Pending') as status,
+        IF(i.balance <= 0, 'Paid', IF(i.balance < i.amount, 'Partially Paid', 'Pending')) as status,
         NULL as invoice_item_ids,
-        i.invoice_number
+        i.invoice_number,
+        c.full_name as client_name
       FROM invoices i
       JOIN users u ON i.agent_id = u.id
+      LEFT JOIN clients c ON i.client_id = c.id
       LEFT JOIN projects p ON i.project_id = p.id
-      WHERE i.commission_amount > 0
+      WHERE i.status != 'Void'
     `;
     const invoiceParams = [];
 
+    // Apply common filters
     if (user_id && role && role !== 'Admin') {
+      releasedQuery += ` AND u.id = ?`;
+      releasedParams.push(user_id);
+      pendingQuery += ` AND u.id = ?`;
+      pendingParams.push(user_id);
       invoiceQuery += ` AND u.id = ?`;
       invoiceParams.push(user_id);
     }
     if (target_role && target_role !== 'all') {
+      releasedQuery += ` AND u.role = ?`;
+      releasedParams.push(target_role);
+      pendingQuery += ` AND u.role = ?`;
+      pendingParams.push(target_role);
       invoiceQuery += ` AND u.role = ?`;
       invoiceParams.push(target_role);
     }
     if (agent_id && agent_id !== 'all') {
+      releasedQuery += ` AND u.id = ?`;
+      releasedParams.push(agent_id);
+      pendingQuery += ` AND u.id = ?`;
+      pendingParams.push(agent_id);
       invoiceQuery += ` AND u.id = ?`;
       invoiceParams.push(agent_id);
     }
     if (start_date) {
+      releasedQuery += ` AND DATE(c.released_at) >= ?`;
+      releasedParams.push(start_date);
       invoiceQuery += ` AND DATE(i.created_at) >= ?`;
       invoiceParams.push(start_date);
     }
     if (end_date) {
+      releasedQuery += ` AND DATE(c.released_at) <= ?`;
+      releasedParams.push(end_date);
       invoiceQuery += ` AND DATE(i.created_at) <= ?`;
       invoiceParams.push(end_date);
     }
-    if (status && status !== 'all') {
-      if (status === 'Paid') invoiceQuery += ` AND i.balance <= 0`;
-      if (status === 'Pending') invoiceQuery += ` AND i.balance > 0`;
-    }
 
+    const [releasedRows] = await db.query(releasedQuery, releasedParams);
+    const [pendingRows] = await db.query(pendingQuery, pendingParams);
     const [invoiceRows] = await db.query(invoiceQuery, invoiceParams);
 
     let allCommissions = [];
 
+    // Append Released Project Steps
     if (!status || status === 'all' || status === 'Paid') {
       allCommissions = allCommissions.concat(releasedRows);
     }
 
-    // Process pending to calculate potential amount
+    // Process pending project steps
     if (!status || status === 'all' || status === 'Pending') {
       for (const row of pendingRows) {
         if (row.invoice_item_ids) {
@@ -230,8 +222,8 @@ router.get('/breakdown', async (req, res) => {
             const items_total = items[0].t || 0;
             const comm_pct = parseFloat(row.commission_percentage) || 0;
             row.potential_commission = items_total * (comm_pct / 100);
+            row.pending_commission = row.potential_commission;
             
-            // Only include if potential_commission > 0
             if (row.potential_commission > 0) {
               allCommissions.push(row);
             }
@@ -240,28 +232,40 @@ router.get('/breakdown', async (req, res) => {
       }
     }
 
-    // Append invoiceRows which are pre-processed
-    for (const row of invoiceRows) {
-      allCommissions.push(row);
-    }
-
-    // Now enrich with invoice numbers and partial amounts
-    for (const row of allCommissions) {
-      row.invoice_numbers = row.invoice_numbers || [];
-      if (!row.invoice_total_amount) row.invoice_total_amount = 0;
-      if (!row.invoice_paid_amount) row.invoice_paid_amount = 0;
-
-      // If it came from the invoices query, it already has invoice_number
-      if (row.invoice_number) {
-        row.invoice_numbers.push(row.invoice_number);
-        let fraction = 0;
-        let inv_amount = parseFloat(row.invoice_total_amount) || 0;
-        let inv_paid = parseFloat(row.invoice_paid_amount) || 0;
-        if (inv_amount > 0) fraction = inv_paid / inv_amount;
-        row.earned_commission = (parseFloat(row.potential_commission) || 0) * fraction;
-        row.pending_commission = (parseFloat(row.potential_commission) || 0) - row.earned_commission;
+    // Process Direct Invoice Sales Commissions
+    for (const invRow of invoiceRows) {
+      const invTotal = parseFloat(invRow.invoice_total_amount) || 0;
+      const invPaid = parseFloat(invRow.invoice_paid_amount) || 0;
+      const commPct = parseFloat(invRow.commission_percentage) || 0;
+      
+      let potential = parseFloat(invRow.commission_amount) || 0;
+      if (potential <= 0 && commPct > 0 && invTotal > 0) {
+        potential = (invTotal * commPct) / 100;
       }
 
+      let fraction = 0;
+      if (invTotal > 0) {
+        fraction = Math.min(1, Math.max(0, invPaid / invTotal));
+      }
+
+      const earned = potential * fraction;
+      const pending = potential - earned;
+
+      invRow.potential_commission = Number(potential.toFixed(2));
+      invRow.earned_commission = Number(earned.toFixed(2));
+      invRow.pending_commission = Number(pending.toFixed(2));
+      invRow.invoice_numbers = [invRow.invoice_number];
+
+      if (!status || status === 'all' || 
+          (status === 'Paid' && invRow.status === 'Paid') || 
+          (status === 'Pending' && invRow.status !== 'Paid')) {
+        allCommissions.push(invRow);
+      }
+    }
+
+    // Enrich remaining project step rows with invoice numbers
+    for (const row of allCommissions) {
+      row.invoice_numbers = row.invoice_numbers || [];
       if (row.invoice_item_ids) {
         let itemIds = [];
         try { itemIds = typeof row.invoice_item_ids === 'string' ? JSON.parse(row.invoice_item_ids) : row.invoice_item_ids; } catch(e){}
@@ -277,39 +281,9 @@ router.get('/breakdown', async (req, res) => {
           
           const newInvs = invoices.map(inv => inv.invoice_number);
           row.invoice_numbers = [...row.invoice_numbers, ...newInvs];
-
-          // Fetch exact products for this step
-          const [invoiceItems] = await db.query(`
-            SELECT description, total 
-            FROM invoice_items 
-            WHERE id IN (?)
-          `, [itemIds]);
-          row.products = invoiceItems;
-
-          // Calculate fraction based on aggregated invoices for this step
-          let totalInvAmount = 0;
-          let totalInvPaid = 0;
-          invoices.forEach(inv => {
-            totalInvAmount += parseFloat(inv.amount || 0);
-            totalInvPaid += (parseFloat(inv.amount || 0) - parseFloat(inv.balance || 0));
-          });
-
-          row.invoice_total_amount = totalInvAmount;
-          row.invoice_paid_amount = totalInvPaid;
-
-          if (row.status === 'Pending') {
-            // Production commission is earned upon task completion/approval, not invoice payment
-            row.earned_commission = 0; 
-            row.pending_commission = parseFloat(row.potential_commission) || 0;
-          } else {
-            // For Paid status, earned_commission is already set from c.final_amount
-            row.pending_commission = 0;
-          }
         }
       }
     }
-
-
 
     // Sort by date DESC, then earned_commission DESC
     allCommissions.sort((a, b) => {
@@ -321,6 +295,7 @@ router.get('/breakdown', async (req, res) => {
 
     res.json(allCommissions);
   } catch (error) {
+    console.error('Error fetching commissions breakdown:', error);
     res.status(500).json({ error: error.message });
   }
 });
@@ -328,118 +303,94 @@ router.get('/breakdown', async (req, res) => {
 // Get all agents and their aggregate commission data
 router.get('/', async (req, res) => {
   try {
-    const { user_id, role, target_role, start_date, end_date, agent_id, status } = req.query;
+    const { user_id, role, target_role, start_date, end_date, agent_id } = req.query;
     
-    let query = `
-      SELECT 
-        u.id, 
-        u.name, 
-        u.email, 
-        u.role,
-        u.commission_percentage,
-        COUNT(c.id) as total_invoices,
-        COALESCE(SUM(c.base_amount), 0) as total_earned_project,
-        COALESCE(SUM(c.final_amount), 0) as total_paid_out_project
-      FROM users u
-      LEFT JOIN commissions c ON u.id = c.user_id AND u.role NOT IN ('Sales', 'Sales Rep')
-    `;
-    
-    const conditions = ["u.role != 'Client'"];
-    const params = [];
-    
+    let userQuery = `SELECT id, name, email, role, commission_percentage FROM users WHERE role != 'Client'`;
+    const userParams = [];
+
     if (user_id && role && role !== 'Admin') {
-      conditions.push('u.id = ?');
-      params.push(user_id);
+      userQuery += ` AND id = ?`;
+      userParams.push(user_id);
     }
-
     if (target_role && target_role !== 'all') {
-      conditions.push('u.role = ?');
-      params.push(target_role);
+      userQuery += ` AND role = ?`;
+      userParams.push(target_role);
     }
-
     if (agent_id && agent_id !== 'all') {
-      conditions.push('u.id = ?');
-      params.push(agent_id);
+      userQuery += ` AND id = ?`;
+      userParams.push(agent_id);
     }
 
-    if (start_date) {
-      conditions.push('(c.released_at >= ? OR c.released_at IS NULL)');
-      params.push(start_date);
-    }
+    userQuery += ` ORDER BY name ASC`;
+    const [users] = await db.query(userQuery, userParams);
 
-    if (end_date) {
-      conditions.push('(c.released_at <= ? OR c.released_at IS NULL)');
-      params.push(end_date);
-    }
+    const results = [];
 
-    if (status && status !== 'all') {
-      conditions.push('(c.status = ? OR c.status IS NULL)');
-      params.push(status);
-    }
-
-    if (conditions.length > 0) {
-      query += ` WHERE ` + conditions.join(' AND ');
-    }
-    
-    query += `
-      GROUP BY u.id
-      ORDER BY total_earned_project DESC, u.name ASC
-    `;
-    const [rows] = await db.query(query, params);
-
-    // Calculate pending payout for each user and add invoice commissions
-    for (const row of rows) {
+    for (const u of users) {
+      let total_earned = 0;
+      let total_paid_out = 0;
       let pending_payout = 0;
-      let total_earned = parseFloat(row.total_earned_project) || 0;
-      let total_paid_out = parseFloat(row.total_paid_out_project) || 0;
-      row.total_invoices = 0; // Will be set by invoice logic for Sales
-      
-      if (row.role !== 'Sales' && row.role !== 'Sales Rep') {
-        const [pendingSteps] = await db.query('SELECT invoice_item_ids FROM project_steps WHERE assignee_id = ? AND commission_released = FALSE', [row.id]);
-      
-      for (const step of pendingSteps) {
-        if (step.invoice_item_ids) {
-          let itemIds = [];
-          try { itemIds = typeof step.invoice_item_ids === 'string' ? JSON.parse(step.invoice_item_ids) : step.invoice_item_ids; } catch(e){}
-          if (!Array.isArray(itemIds) && itemIds !== null && itemIds !== undefined) itemIds = [itemIds];
-          
-          if (Array.isArray(itemIds) && itemIds.length > 0) {
-            const [items] = await db.query('SELECT SUM(total) as t FROM invoice_items WHERE id IN (?)', [itemIds]);
-            const items_total = items[0].t || 0;
-            const comm_pct = parseFloat(row.commission_percentage) || 0;
-            pending_payout += items_total * (comm_pct / 100);
-          }
-        }
+      let total_invoices = 0;
+
+      // 1. Direct Invoice Sales Commission
+      let invSql = `SELECT amount, balance, commission_amount, status FROM invoices WHERE agent_id = ? AND status != 'Void'`;
+      const invParams = [u.id];
+      if (start_date) {
+        invSql += ` AND DATE(created_at) >= ?`;
+        invParams.push(start_date);
       }
+      if (end_date) {
+        invSql += ` AND DATE(created_at) <= ?`;
+        invParams.push(end_date);
       }
 
-      // Add invoice commissions (Sales)
-      const [invoiceCommissions] = await db.query('SELECT amount, balance, commission_amount, status FROM invoices WHERE agent_id = ? AND commission_amount > 0', [row.id]);
-      for (const inv of invoiceCommissions) {
-        let earned = parseFloat(inv.commission_amount) || 0;
-        total_earned += earned;
-        
-        let fraction = 0;
-        let inv_amount = parseFloat(inv.amount) || 0;
-        let inv_balance = parseFloat(inv.balance) || 0;
-        if (inv_amount > 0) {
-            fraction = (inv_amount - inv_balance) / inv_amount;
-        }
-        
-        let paidOutForInvoice = earned * fraction;
-        total_paid_out += paidOutForInvoice;
-        pending_payout += (earned - paidOutForInvoice);
+      const [invoices] = await db.query(invSql, invParams);
+      total_invoices = invoices.length;
 
-        row.total_invoices += 1;
+      for (const inv of invoices) {
+        const invTotal = parseFloat(inv.amount || 0);
+        const invBalance = parseFloat(inv.balance || 0);
+        const invPaid = Math.max(0, invTotal - invBalance);
+        const commPct = parseFloat(u.commission_percentage || 0);
+
+        let potential = parseFloat(inv.commission_amount || 0);
+        if (potential <= 0 && commPct > 0 && invTotal > 0) {
+          potential = (invTotal * commPct) / 100;
+        }
+
+        let fraction = invTotal > 0 ? Math.min(1, Math.max(0, invPaid / invTotal)) : 0;
+        let earned = potential * fraction;
+        let pending = potential - earned;
+
+        total_earned += potential;
+        total_paid_out += earned;
+        pending_payout += pending;
       }
-      
-      row.total_earned = total_earned;
-      row.total_paid_out = total_paid_out;
-      row.pending_payout = pending_payout;
+
+      // 2. Project Steps Commission (for production / specialists)
+      const [releasedProjectComms] = await db.query(`SELECT COALESCE(SUM(final_amount), 0) as total FROM commissions WHERE user_id = ?`, [u.id]);
+      const projReleased = parseFloat(releasedProjectComms[0]?.total || 0);
+      total_paid_out += projReleased;
+      total_earned += projReleased;
+
+      results.push({
+        id: u.id,
+        name: u.name,
+        email: u.email,
+        role: u.role,
+        commission_percentage: u.commission_percentage || 0,
+        total_invoices,
+        total_earned: Number(total_earned.toFixed(2)),
+        total_paid_out: Number(total_paid_out.toFixed(2)),
+        pending_payout: Number(pending_payout.toFixed(2))
+      });
     }
 
-    res.json(rows);
+    results.sort((a, b) => b.total_earned - a.total_earned);
+
+    res.json(results);
   } catch (error) {
+    console.error('Error fetching commission aggregates:', error);
     res.status(500).json({ error: error.message });
   }
 });

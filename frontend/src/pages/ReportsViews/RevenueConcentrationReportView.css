@@ -1,0 +1,182 @@
+/* =========================================================
+   REVENUE CONCENTRATION & CLIENT RISK STYLESHEET
+   ========================================================= */
+
+.concentration-reports-view {
+  display: flex;
+  flex-direction: column;
+  gap: 1.75rem;
+  padding-bottom: 3rem;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  color: #0f172a;
+}
+
+/* 1. Header Panel */
+.concentration-header-panel {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  flex-wrap: wrap;
+  gap: 1.25rem;
+  background: #ffffff;
+  padding: 1.75rem 2rem;
+  border-radius: 16px;
+  border: 1px solid #e2e8f0;
+  box-shadow: 0 4px 20px -2px rgba(0, 0, 0, 0.03);
+}
+
+.concentration-header-panel .header-info h1 {
+  font-size: 1.75rem;
+  font-weight: 800;
+  color: #0f172a;
+  margin: 0.35rem 0 0.5rem 0;
+  letter-spacing: -0.02em;
+}
+
+.concentration-header-panel .header-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  background: #eff6ff;
+  color: #2563eb;
+  padding: 0.35rem 0.75rem;
+  border-radius: 9999px;
+  font-size: 0.8rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+.concentration-header-panel .header-subtext {
+  color: #64748b;
+  font-size: 0.925rem;
+  max-width: 780px;
+  line-height: 1.5;
+  margin: 0;
+}
+
+/* 2. KPI Grid (6 Cards) */
+.concentration-kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+  gap: 1.15rem;
+}
+
+.conc-kpi-card {
+  background: #ffffff;
+  padding: 1.35rem 1.4rem;
+  border-radius: 14px;
+  border: 1px solid #e2e8f0;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  box-shadow: 0 2px 8px -2px rgba(0, 0, 0, 0.02);
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.conc-kpi-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 20px -4px rgba(0, 0, 0, 0.06);
+}
+
+.conc-kpi-card .card-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.65rem;
+}
+
+.conc-kpi-card .card-title {
+  font-size: 0.775rem;
+  font-weight: 700;
+  color: #64748b;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.conc-kpi-card .card-icon {
+  width: 34px;
+  height: 34px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.conc-kpi-card .card-value {
+  font-size: 1.5rem;
+  font-weight: 800;
+  margin: 0 0 0.5rem 0;
+  letter-spacing: -0.02em;
+}
+
+/* 3. Executive Risk Advisory Banner */
+.risk-advisory-banner {
+  border-radius: 14px;
+  padding: 1.25rem 1.5rem;
+  display: flex;
+  align-items: flex-start;
+  gap: 1.15rem;
+  box-shadow: 0 4px 15px -3px rgba(0, 0, 0, 0.04);
+}
+
+.risk-level-red {
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  color: #991b1b;
+}
+
+.risk-level-orange {
+  background: #fffbeb;
+  border: 1px solid #fde68a;
+  color: #92400e;
+}
+
+.risk-level-green {
+  background: #ecfdf5;
+  border: 1px solid #a7f3d0;
+  color: #065f46;
+}
+
+.risk-advisory-icon {
+  margin-top: 0.15rem;
+  flex-shrink: 0;
+}
+
+.risk-advisory-content h4 {
+  font-size: 1.05rem;
+  font-weight: 800;
+  margin: 0 0 0.35rem 0;
+}
+
+.risk-advisory-content p {
+  font-size: 0.875rem;
+  margin: 0;
+  line-height: 1.5;
+}
+
+/* Pills in Tables */
+.share-pill {
+  display: inline-block;
+  padding: 0.2rem 0.55rem;
+  border-radius: 6px;
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+.share-high { background: #fef2f2; color: #dc2626; }
+.share-mid { background: #eff6ff; color: #2563eb; }
+.share-low { background: #ecfdf5; color: #059669; }
+
+.risk-tier-pill {
+  display: inline-block;
+  padding: 0.2rem 0.55rem;
+  border-radius: 6px;
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+
+.risk-critical-dependency----30--,
+.risk-critical-dependency { background: #fef2f2; color: #dc2626; border: 1px solid #fca5a5; }
+.risk-high-exposure----15-- { background: #fff7ed; color: #ea580c; }
+.risk-moderate--8--15-- { background: #fffbeb; color: #d97706; }
+.risk-low-risk { background: #ecfdf5; color: #059669; }
