@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Search, ChevronDown, ShoppingCart, Users, Package, Banknote, MoreHorizontal } from 'lucide-react';
+import { Search, ChevronDown, ShoppingCart, Users, Package, Banknote, MoreHorizontal, AlertTriangle, Clock, ArrowRight } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
@@ -10,6 +10,7 @@ export default function Dashboard() {
   const [projects, setProjects] = useState([]);
   const [invoices, setInvoices] = useState([]);
   const [teamMembers, setTeamMembers] = useState([]);
+  const [payablesAlert, setPayablesAlert] = useState({ due_today_count: 0, due_today_amount: 0, overdue_count: 0, overdue_amount: 0 });
   const [selectedGoalUser, setSelectedGoalUser] = useState('all');
   const [selectedGoalMonth, setSelectedGoalMonth] = useState('current');
   const [loading, setLoading] = useState(true);
@@ -49,7 +50,8 @@ export default function Dashboard() {
           axios.get(`/api/clients${queryParams}`),
           axios.get(`/api/projects${queryParams}`),
           axios.get(`/api/invoices${queryParams}`),
-          axios.get('/api/settings')
+          axios.get('/api/settings'),
+          axios.get('/api/future-payables').catch(() => ({ data: { summary: {} } }))
         ];
         if (user?.role === 'Admin') {
           requests.push(axios.get('/api/users'));
@@ -59,6 +61,9 @@ export default function Dashboard() {
         setClients(results[0].data);
         setProjects(results[1].data);
         setInvoices(results[2].data);
+        if (results[4]?.data?.summary) {
+          setPayablesAlert(results[4].data.summary);
+        }
         
         const settingsRes = results[3];
         if (settingsRes && settingsRes.data) {
@@ -76,8 +81,8 @@ export default function Dashboard() {
           }
         }
 
-        if (results[4]) {
-          setTeamMembers(results[4].data || []);
+        if (results[5]) {
+          setTeamMembers(results[5].data || []);
         }
       } catch (error) {
         console.error('Failed to fetch dashboard data:', error);
@@ -335,6 +340,76 @@ export default function Dashboard() {
             {performanceFilter === 'Custom' && <strong> [Custom Dates Active]</strong>}
           </span>
           <span style={{fontSize: '0.8rem', opacity: 0.8}}>(Configure in Settings)</span>
+        </div>
+      )}
+
+      {/* Urgent Future Payables Alert Banner */}
+      {(payablesAlert.due_today_count > 0 || payablesAlert.overdue_count > 0) && (
+        <div style={{
+          background: 'linear-gradient(135deg, #fff7ed, #fef2f2)',
+          border: '1px solid #fed7aa',
+          borderRadius: '12px',
+          padding: '1rem 1.25rem',
+          marginBottom: '1.5rem',
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          flexWrap: 'wrap',
+          gap: '1rem',
+          boxShadow: '0 4px 12px rgba(234, 88, 12, 0.08)'
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+            <div style={{
+              background: payablesAlert.overdue_count > 0 ? '#ef4444' : '#f59e0b',
+              color: '#ffffff',
+              width: '38px',
+              height: '38px',
+              borderRadius: '10px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              flexShrink: 0
+            }}>
+              <AlertTriangle size={20} />
+            </div>
+            <div>
+              <div style={{ fontWeight: '800', color: '#9a3412', fontSize: '0.95rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                <span>Scheduled Obligations Alert</span>
+                {payablesAlert.overdue_count > 0 && (
+                  <span style={{ background: '#dc2626', color: '#ffffff', fontSize: '0.7rem', padding: '0.1rem 0.5rem', borderRadius: '9999px', fontWeight: '800' }}>
+                    {payablesAlert.overdue_count} OVERDUE
+                  </span>
+                )}
+                {payablesAlert.due_today_count > 0 && (
+                  <span style={{ background: '#d97706', color: '#ffffff', fontSize: '0.7rem', padding: '0.1rem 0.5rem', borderRadius: '9999px', fontWeight: '800' }}>
+                    {payablesAlert.due_today_count} DUE TODAY
+                  </span>
+                )}
+              </div>
+              <div style={{ fontSize: '0.82rem', color: '#c2410c', marginTop: '0.15rem' }}>
+                Total Pending Due: <strong>PKR {Number(payablesAlert.due_today_amount + payablesAlert.overdue_amount).toLocaleString(undefined, { minimumFractionDigits: 2 })}</strong>
+              </div>
+            </div>
+          </div>
+
+          <Link 
+            to="/expenses?tab=future-payables" 
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '0.4rem',
+              background: '#0f172a',
+              color: '#ffffff',
+              padding: '0.55rem 1rem',
+              borderRadius: '8px',
+              fontSize: '0.82rem',
+              fontWeight: '700',
+              textDecoration: 'none',
+              transition: 'all 0.2s ease'
+            }}
+          >
+            Review & Settle Payables <ArrowRight size={15} />
+          </Link>
         </div>
       )}
 

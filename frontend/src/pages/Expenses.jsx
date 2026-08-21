@@ -1,14 +1,20 @@
 import React, { useState, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import axios from 'axios';
-import { Plus, Download, Briefcase, CreditCard, Banknote, X, Building2, FileText, AlertCircle, Search } from 'lucide-react';
+import { Plus, Download, Briefcase, CreditCard, Banknote, X, Building2, FileText, AlertCircle, Search, Clock, Calendar } from 'lucide-react';
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import Select from 'react-select';
 import Pagination from '../components/Pagination';
+import FuturePayablesView from './FuturePayablesView';
 import './Expenses.css';
 import './Modal.css';
 
 export default function Expenses() {
+  const [searchParams, setSearchParams] = useSearchParams();
+  const activeTab = searchParams.get('tab') === 'future-payables' ? 'future-payables' : 'ledger';
+  const [payablesSummary, setPayablesSummary] = useState({ due_today_count: 0, overdue_count: 0 });
+
   const [expenses, setExpenses] = useState([]);
   const [clients, setClients] = useState([]);
   const [banks, setBanks] = useState([]);
@@ -52,7 +58,19 @@ export default function Expenses() {
     fetchBanks();
     fetchInvoices();
     fetchCategories();
+    fetchPayablesSummary();
   }, []);
+
+  const fetchPayablesSummary = async () => {
+    try {
+      const res = await axios.get('/api/future-payables');
+      if (res.data && res.data.summary) {
+        setPayablesSummary(res.data.summary);
+      }
+    } catch (err) {
+      console.error('Failed to fetch payables summary', err);
+    }
+  };
 
   const fetchCategories = async () => {
     try {
@@ -159,18 +177,6 @@ export default function Expenses() {
       amount: exp.receipt_amount > 0 ? exp.receipt_amount : exp.payment_amount
     });
     setIsModalOpen(true);
-  };
-
-  const handleWipeData = async () => {
-    if (window.confirm("Are you sure you want to wipe all expense data? This cannot be undone.")) {
-      try {
-        await axios.delete('/api/expenses/wipe');
-        fetchExpenses();
-      } catch (err) {
-        console.error('Error wiping data', err);
-        alert('Failed to wipe data');
-      }
-    }
   };
 
   const handleCreateBank = async (e) => {
@@ -359,36 +365,66 @@ export default function Expenses() {
 
   return (
     <div className="expenses-container modern-ui">
-      <div className="expenses-controls" style={{ justifyContent: 'flex-end', marginBottom: '1.5rem' }}>
-        <div className="controls-right">
-          <button className="btn-outline" onClick={() => setIsManageCategoriesModalOpen(true)}>
-            <Briefcase size={16} /> Manage Expense
-          </button>
-          <button className="btn-outline" onClick={() => setIsManageBanksModalOpen(true)}>
-            <Building2 size={16} /> Manage Banks
-          </button>
-          <button className="btn-outline" onClick={generatePDF}>
-            <Download size={16} /> Download PDF
-          </button>
-          <button className="btn-primary" onClick={() => {
-            setEditingId(null);
-            setFormData({
-              date: new Date().toISOString().split('T')[0],
-              client: '',
-              description: '',
-              category: '',
-              mode: 'Cash',
-              bank: '',
-              reference: '',
-              type: 'payment',
-              amount: ''
-            });
-            setIsModalOpen(true);
-          }} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.5rem 1rem', borderRadius: '6px' }}>
-            <Plus size={16} /> Add Entry
-          </button>
-        </div>
+      {/* Sub-Module Navigation Header */}
+      <div className="expenses-tab-nav">
+        <button 
+          className={`expenses-tab-btn ${activeTab === 'ledger' ? 'active' : ''}`}
+          onClick={() => setSearchParams({ tab: 'ledger' })}
+        >
+          <CreditCard size={18} /> Cash & Bank Ledger
+        </button>
+        <button 
+          className={`expenses-tab-btn ${activeTab === 'future-payables' ? 'active' : ''}`}
+          onClick={() => setSearchParams({ tab: 'future-payables' })}
+        >
+          <Clock size={18} /> Future Payables & Scheduled Bills
+          {(payablesSummary.due_today_count > 0 || payablesSummary.overdue_count > 0) && (
+            <span className="expenses-tab-badge alert">
+              {payablesSummary.due_today_count + payablesSummary.overdue_count} Due
+            </span>
+          )}
+        </button>
       </div>
+
+      {activeTab === 'future-payables' ? (
+        <FuturePayablesView 
+          banks={banks} 
+          categories={categories} 
+          onManageCategories={() => setIsManageCategoriesModalOpen(true)}
+          onManageBanks={() => setIsManageBanksModalOpen(true)}
+        />
+      ) : (
+        <>
+          <div className="expenses-controls" style={{ justifyContent: 'flex-end', marginBottom: '1.5rem' }}>
+            <div className="controls-right">
+              <button className="btn-outline" onClick={() => setIsManageCategoriesModalOpen(true)}>
+                <Briefcase size={16} /> Manage Expense
+              </button>
+              <button className="btn-outline" onClick={() => setIsManageBanksModalOpen(true)}>
+                <Building2 size={16} /> Manage Banks
+              </button>
+              <button className="btn-outline" onClick={generatePDF}>
+                <Download size={16} /> Download PDF
+              </button>
+              <button className="btn-primary" onClick={() => {
+                setEditingId(null);
+                setFormData({
+                  date: new Date().toISOString().split('T')[0],
+                  client: '',
+                  description: '',
+                  category: '',
+                  mode: 'Cash',
+                  bank: '',
+                  reference: '',
+                  type: 'payment',
+                  amount: ''
+                });
+                setIsModalOpen(true);
+              }} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.5rem 1rem', borderRadius: '6px' }}>
+                <Plus size={16} /> Add Entry
+              </button>
+            </div>
+          </div>
 
       {/* Summary Cards */}
       <div className="expense-summary-cards" style={{ display: 'flex', flexWrap: 'wrap', gap: '1.5rem', marginBottom: '2rem' }}>
@@ -649,6 +685,8 @@ export default function Expenses() {
           />
         )}
       </div>
+      </>
+      )}
 
       {/* Add Entry Modal */}
       {isModalOpen && (
@@ -728,34 +766,49 @@ export default function Expenses() {
                   }}
                 />
                 
-                {formData.client && clients.find(c => c.full_name === formData.client) && (
-                  <div style={{ 
-                    marginTop: '0.75rem', 
-                    padding: '0.75rem', 
-                    backgroundColor: '#f8fafc', 
-                    borderRadius: '6px', 
-                    border: '1px solid #e2e8f0',
-                    display: 'flex',
-                    justifyContent: 'space-between',
-                    fontSize: '0.85rem'
-                  }}>
-                    <div>
-                      <span style={{ color: '#64748b' }}>Total Invoiced:</span>
-                      <strong style={{ marginLeft: '0.5rem', color: '#334155' }}>
-                        PKR {Number(clients.find(c => c.full_name === formData.client).total_invoiced_amount || 0).toFixed(2)}
-                      </strong>
+                {(() => {
+                  if (!formData.client) return null;
+                  const selectedClient = clients.find(c => (c.full_name === formData.client || c.name === formData.client));
+                  if (!selectedClient) return null;
+
+                  const clientInvoices = (invoices || []).filter(inv => Number(inv.client_id) === Number(selectedClient.id) && inv.status !== 'Void');
+                  const liveInvoiced = clientInvoices.length > 0
+                    ? clientInvoices.reduce((sum, i) => sum + parseFloat(i.amount || 0), 0)
+                    : Number(selectedClient.total_invoiced_amount || 0);
+
+                  const liveBalance = clientInvoices.length > 0
+                    ? clientInvoices.reduce((sum, i) => sum + parseFloat(i.balance || 0), 0)
+                    : Number(selectedClient.total_balance || 0);
+
+                  return (
+                    <div style={{ 
+                      marginTop: '0.75rem', 
+                      padding: '0.75rem', 
+                      backgroundColor: '#f8fafc', 
+                      borderRadius: '6px', 
+                      border: '1px solid #e2e8f0',
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      fontSize: '0.85rem'
+                    }}>
+                      <div>
+                        <span style={{ color: '#64748b' }}>Total Invoiced:</span>
+                        <strong style={{ marginLeft: '0.5rem', color: '#334155' }}>
+                          PKR {liveInvoiced.toFixed(2)}
+                        </strong>
+                      </div>
+                      <div>
+                        <span style={{ color: '#64748b' }}>Remaining Balance:</span>
+                        <strong style={{ 
+                          marginLeft: '0.5rem', 
+                          color: liveBalance > 0 ? '#ef4444' : '#10b981' 
+                        }}>
+                          PKR {liveBalance.toFixed(2)}
+                        </strong>
+                      </div>
                     </div>
-                    <div>
-                      <span style={{ color: '#64748b' }}>Remaining Balance:</span>
-                      <strong style={{ 
-                        marginLeft: '0.5rem', 
-                        color: Number(clients.find(c => c.full_name === formData.client).total_balance) > 0 ? 'var(--danger)' : 'var(--success)' 
-                      }}>
-                        PKR {Number(clients.find(c => c.full_name === formData.client).total_balance || 0).toFixed(2)}
-                      </strong>
-                    </div>
-                  </div>
-                )}
+                  );
+                })()}
               </div>
 
               <div className="form-group">

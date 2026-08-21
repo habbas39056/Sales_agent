@@ -507,21 +507,51 @@ router.post('/:id/steps', upload.array('attachments', 5), async (req, res) => {
       ]
     );
 
-    // Notify assignee
-    if (assignee_id) {
-      await db.query(
-        'INSERT INTO notifications (user_id, message, type, link) VALUES (?, ?, ?, ?)',
-        [assignee_id, `You have been assigned a new step: ${title}`, 'step_assigned', `/projects/${req.params.id}`]
-      );
-      await notifyUserWhatsApp(assignee_id, `*Task Assigned!* 📋\n\nYou have been assigned to a new step: *${title}* in project #${req.params.id}.\n\n_Check the portal to begin._`);
-    }
-    
-    // Notify client if action is required
-    if (req_client_form || req_payment) {
-      await notifyClient(req.params.id, `Action required for project step: ${title}`, 'client_action_required', `/client-portal?id=${req.params.id}`);
-    }
-
+    // Send instant success response so UI never hangs or times out
     res.json({ id: result.insertId });
+
+    // Asynchronously dispatch notifications in background
+    (async () => {
+      try {
+        const [[project]] = await db.query('SELECT title, pm_id FROM projects WHERE id = ?', [req.params.id]);
+        const projectTitle = project?.title || `Project #${req.params.id}`;
+        let assigneeName = 'Team';
+
+        if (assignee_id) {
+          const [[assigneeUser]] = await db.query('SELECT name, whatsapp_number FROM users WHERE id = ?', [assignee_id]);
+          assigneeName = assigneeUser?.name || 'Team Member';
+
+          // 1. Notify Assignee on Portal & WhatsApp
+          await db.query(
+            'INSERT INTO notifications (user_id, message, type, link) VALUES (?, ?, ?, ?)',
+            [assignee_id, `⚡ [Step Assigned] You have been assigned: "${title}" in ${projectTitle}`, 'step_assigned', `/projects/${req.params.id}`]
+          );
+          notifyUserWhatsApp(assignee_id, `*Task Assigned!* 📋\n\nYou have been assigned to a new step: *${title}* in *${projectTitle}*.\n\n_Check the portal to begin._`, {
+            step_title: title,
+            project_title: projectTitle,
+            deadline: deadline || 'As scheduled'
+          }).catch(err => console.error('WhatsApp notify error:', err.message));
+        }
+
+        // 2. Notify Admins and PMs on Portal
+        const [adminsAndPms] = await db.query("SELECT id FROM users WHERE role IN ('Admin', 'Product Manager')");
+        for (const mgr of adminsAndPms) {
+          if (parseInt(mgr.id) !== parseInt(assignee_id)) {
+            await db.query(
+              'INSERT INTO notifications (user_id, message, type, link) VALUES (?, ?, ?, ?)',
+              [mgr.id, `📋 [Step Added] "${title}" assigned to ${assigneeName} in ${projectTitle}`, 'step_assigned', `/projects/${req.params.id}`]
+            );
+          }
+        }
+        
+        // Notify client if action is required
+        if (req_client_form || req_payment) {
+          notifyClient(req.params.id, `Action required for project step: ${title}`, 'client_action_required', `/client-portal?id=${req.params.id}`).catch(console.error);
+        }
+      } catch (notifErr) {
+        console.error('[Step Notification Dispatch Error]:', notifErr.message);
+      }
+    })();
   } catch (error) {
     res.status(500).json({ error: error.message });
   }

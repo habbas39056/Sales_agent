@@ -2,11 +2,30 @@ const express = require('express');
 const router = express.Router();
 const db = require('../db');
 
-// Get all banks
+// Get all banks with live calculated ledger balance
 router.get('/', async (req, res) => {
   try {
     const [banks] = await db.query('SELECT * FROM banks ORDER BY id ASC');
-    res.json(banks);
+    
+    // Calculate live net balance for each bank from expenses (Receipts - Payments)
+    const [expenseBalances] = await db.query(`
+      SELECT bank, SUM(receipt_amount - payment_amount) as net_balance 
+      FROM expenses 
+      WHERE bank IS NOT NULL AND bank != ''
+      GROUP BY bank
+    `);
+
+    const balanceMap = {};
+    expenseBalances.forEach(row => {
+      balanceMap[row.bank] = parseFloat(row.net_balance || 0);
+    });
+
+    const banksWithBalance = banks.map(b => ({
+      ...b,
+      balance: balanceMap[b.name] !== undefined ? balanceMap[b.name] : 0
+    }));
+
+    res.json(banksWithBalance);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

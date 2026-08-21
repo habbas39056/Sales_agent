@@ -16,23 +16,36 @@ const storage = multer.diskStorage({
 });
 const upload = multer({ storage: storage });
 
-// Get all clients (or filtered by creator for non-admins)
+// Get all clients (or filtered by creator for non-admins) with live invoiced and balance metrics
 router.get('/', async (req, res) => {
   try {
     const { user_id, role } = req.query;
     
     if (user_id && role && role !== 'Admin') {
       const [rows] = await db.query(`
-        SELECT DISTINCT c.* 
+        SELECT c.*,
+               COALESCE(SUM(CASE WHEN i.status != 'Void' THEN i.amount ELSE 0 END), 0) as total_invoiced_amount,
+               COALESCE(SUM(CASE WHEN i.status != 'Void' THEN i.balance ELSE 0 END), 0) as total_balance,
+               COALESCE(SUM(CASE WHEN i.status != 'Void' THEN (i.amount - i.balance) ELSE 0 END), 0) as total_paid
         FROM clients c
         LEFT JOIN invoices i ON c.id = i.client_id
         WHERE c.created_by = ? OR i.agent_id = ?
+        GROUP BY c.id
         ORDER BY c.created_at DESC
       `, [user_id, user_id]);
       res.json(rows);
     } else {
       // Admins see all clients
-      const [rows] = await db.query('SELECT * FROM clients ORDER BY created_at DESC');
+      const [rows] = await db.query(`
+        SELECT c.*,
+               COALESCE(SUM(CASE WHEN i.status != 'Void' THEN i.amount ELSE 0 END), 0) as total_invoiced_amount,
+               COALESCE(SUM(CASE WHEN i.status != 'Void' THEN i.balance ELSE 0 END), 0) as total_balance,
+               COALESCE(SUM(CASE WHEN i.status != 'Void' THEN (i.amount - i.balance) ELSE 0 END), 0) as total_paid
+        FROM clients c
+        LEFT JOIN invoices i ON c.id = i.client_id
+        GROUP BY c.id
+        ORDER BY c.created_at DESC
+      `);
       res.json(rows);
     }
   } catch (error) {

@@ -469,7 +469,31 @@ async function updateLiveDb() {
         FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
     `);
-    console.log('✅ Ensured client_notes table exists.');
+    // 22. Future Payables (Scheduled Obligations & Accounts Payable)
+    await connection.query(`
+      CREATE TABLE IF NOT EXISTS future_payables (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        title VARCHAR(255) NOT NULL,
+        category VARCHAR(100) DEFAULT 'General',
+        amount DECIMAL(12, 2) NOT NULL DEFAULT 0.00,
+        due_date DATE NOT NULL,
+        priority ENUM('Low', 'Medium', 'High', 'Urgent') DEFAULT 'Medium',
+        preferred_bank VARCHAR(100) DEFAULT NULL,
+        notes TEXT,
+        reference_no VARCHAR(100) DEFAULT NULL,
+        recurring_cycle ENUM('One-Time', 'Weekly', 'Monthly', 'Quarterly', 'Yearly') DEFAULT 'One-Time',
+        status ENUM('Pending', 'Due Today', 'Overdue', 'Paid', 'Cancelled') DEFAULT 'Pending',
+        paid_at DATETIME DEFAULT NULL,
+        expense_id INT DEFAULT NULL,
+        last_notified_at DATETIME DEFAULT NULL,
+        created_by INT DEFAULT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        INDEX idx_due_date (due_date),
+        INDEX idx_status (status)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+    `);
+    console.log('✅ Ensured future_payables table exists.');
 
     console.log('\n🎉 Live database update completed successfully!');
   } catch (error) {

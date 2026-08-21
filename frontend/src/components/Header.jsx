@@ -40,7 +40,7 @@ export default function Header() {
     const u = userStr ? JSON.parse(userStr) : null;
     if (!u) return;
     try {
-      const res = await axios.get(`/api/notifications?user_id=${u.id}`);
+      const res = await axios.get(`/api/notifications?user_id=${u.id}&role=${encodeURIComponent(u.role || '')}`);
       setNotifications(prev => {
         const prevUnread = prev.filter(n => !n.is_read).length;
         const newUnread = res.data.filter(n => !n.is_read).length;
@@ -56,8 +56,13 @@ export default function Header() {
 
   useEffect(() => {
     fetchNotifications();
-    const interval = setInterval(fetchNotifications, 30000); // 30 sec polling
-    return () => clearInterval(interval);
+    const interval = setInterval(fetchNotifications, 8000); // 8 sec real-time polling
+    const onFocus = () => fetchNotifications();
+    window.addEventListener('focus', onFocus);
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('focus', onFocus);
+    };
   }, []);
 
   useEffect(() => {
@@ -226,19 +231,6 @@ export default function Header() {
         </div>
         
         <div className="header-actions">
-          {location.pathname === '/expenses' && (
-            <button className="btn-danger" style={{ padding: '0.4rem 0.75rem', borderRadius: '6px', fontSize: '0.85rem' }} onClick={async () => {
-              if(window.confirm("Are you sure you want to wipe all expense data? This cannot be undone.")) {
-                try {
-                  await axios.delete('/api/expenses/wipe');
-                  window.location.reload();
-                } catch(e) {
-                  alert('Failed to wipe data');
-                }
-              }
-            }}>Wipe Data</button>
-          )}
-
           <div className="header-notifications" ref={notifRef} style={{ position: 'relative' }}>
             <button 
               className="header-icon-btn" 
@@ -261,7 +253,8 @@ export default function Header() {
                   {notifications.filter(n => !n.is_read).length > 0 && (
                     <button onClick={async () => {
                       if(!user) return;
-                      await axios.put('/api/notifications/mark-all-read', { user_id: user.id });
+                      setNotifications(prev => prev.map(n => ({ ...n, is_read: 1 })));
+                      await axios.put('/api/notifications/mark-all-read', { user_id: user.id, role: user.role });
                       fetchNotifications();
                     }} style={{ fontSize: '0.75rem', color: '#4338ca', background: 'none', border: 'none', cursor: 'pointer', fontWeight: '600' }}>Mark all read</button>
                   )}

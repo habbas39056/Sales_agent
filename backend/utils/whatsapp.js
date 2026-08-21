@@ -104,14 +104,76 @@ async function sendWhatsAppMessage(to, message) {
 }
 
 /**
- * Fetch user's whatsapp number and send message
+ * Automatically polish and format messages using Grok AI
  */
-async function notifyUserWhatsApp(userId, message) {
+async function formatWhatsAppWithAI(rawMessage, context = {}) {
+    const apiKey = process.env.GROK_API_KEY || '';
+    if (!apiKey) return rawMessage;
+
+    // If message is already rich/detailed with multiple emojis and headers, skip re-prompting
+    if (rawMessage.includes('💰 *Amount') || rawMessage.includes('📌 *Payable:')) {
+        return rawMessage;
+    }
+
+    try {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 6000);
+
+        const fetchFn = typeof fetch !== 'undefined' ? fetch : (...args) => import('node-fetch').then(({default: f}) => f(...args));
+
+        const response = await fetchFn('https://api.groq.com/openai/v1/chat/completions', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${apiKey}`
+            },
+            body: JSON.stringify({
+                model: 'openai/gpt-oss-120b',
+                messages: [
+                    {
+                        role: 'system',
+                        content: `You are an executive business ERP communication AI for "Adwise Sales & Operations".
+Convert raw system notifications into rich, structured, executive WhatsApp messages.
+Rules:
+- ALWAYS show the real Project Name (e.g. "Digitizer", "Brand Identity") and NEVER display project numbers or IDs like "Project #7" or "ID: 7".
+- Add appropriate business emojis (📌, 💼, 🚀, 📅, ⚡, 🔔, ✅, 💰).
+- Use WhatsApp markdown (*bold*, _italics_).
+- Format clearly with headers, bullet points, and actionable next steps.
+- Do NOT add placeholders like [Your Name] or [Your Company].
+- Return ONLY the final formatted message text, nothing else.`
+                    },
+                    {
+                        role: 'user',
+                        content: `Transform this ERP notification into a rich WhatsApp alert: "${rawMessage}"\nContext: ${JSON.stringify(context)}`
+                    }
+                ],
+                temperature: 0.3
+            }),
+            signal: controller.signal
+        });
+
+        clearTimeout(timeoutId);
+        if (!response.ok) return rawMessage;
+
+        const data = await response.json();
+        const aiText = data.choices?.[0]?.message?.content?.trim();
+        return aiText || rawMessage;
+    } catch (e) {
+        console.warn('[WhatsApp AI Format Error]:', e.message);
+        return rawMessage;
+    }
+}
+
+/**
+ * Fetch user's whatsapp number, AI format message, and send message
+ */
+async function notifyUserWhatsApp(userId, message, context = {}) {
     if (!userId) return false;
     try {
-        const [[user]] = await db.query('SELECT whatsapp_number FROM users WHERE id = ?', [userId]);
+        const [[user]] = await db.query('SELECT whatsapp_number, name FROM users WHERE id = ?', [userId]);
         if (user && user.whatsapp_number) {
-            return await sendWhatsAppMessage(user.whatsapp_number, message);
+            const aiFormattedMessage = await formatWhatsAppWithAI(message, { recipient: user.name, ...context });
+            return await sendWhatsAppMessage(user.whatsapp_number, aiFormattedMessage);
         }
     } catch (e) {
         console.error('notifyUserWhatsApp error:', e);
@@ -120,14 +182,15 @@ async function notifyUserWhatsApp(userId, message) {
 }
 
 /**
- * Fetch client's whatsapp number and send message
+ * Fetch client's whatsapp number, AI format message, and send message
  */
-async function notifyClientWhatsApp(clientId, message) {
+async function notifyClientWhatsApp(clientId, message, context = {}) {
     if (!clientId) return false;
     try {
-        const [[client]] = await db.query('SELECT whatsapp_number FROM clients WHERE id = ?', [clientId]);
+        const [[client]] = await db.query('SELECT whatsapp_number, full_name, business_name FROM clients WHERE id = ?', [clientId]);
         if (client && client.whatsapp_number) {
-            return await sendWhatsAppMessage(client.whatsapp_number, message);
+            const aiFormattedMessage = await formatWhatsAppWithAI(message, { client: client.full_name, company: client.business_name, ...context });
+            return await sendWhatsAppMessage(client.whatsapp_number, aiFormattedMessage);
         }
     } catch (e) {
         console.error('notifyClientWhatsApp error:', e);
@@ -138,5 +201,7 @@ async function notifyClientWhatsApp(clientId, message) {
 module.exports = {
     sendWhatsAppMessage,
     notifyUserWhatsApp,
-    notifyClientWhatsApp
+    notifyClientWhatsApp,
+    formatWhatsAppWithAI
 };
+

@@ -188,7 +188,35 @@ function AppContent() {
             )}
             
             {(!user || user.role === 'Admin' || (user.modules_access && user.modules_access.includes('CASHBOOK'))) && (
-              <li><Link to="/expenses" className={`sidebar-link ${location.pathname === '/expenses' ? 'active' : ''}`}><CreditCard size={20} /> Expenses</Link></li>
+              <>
+                <li>
+                  <Link to="/expenses" className={`sidebar-link ${location.pathname.startsWith('/expenses') ? 'active' : ''}`}>
+                    <CreditCard size={20} /> Expenses
+                  </Link>
+                </li>
+                {location.pathname.startsWith('/expenses') && (
+                  <>
+                    <li className="submenu-item">
+                      <Link 
+                        to="/expenses" 
+                        className={`sidebar-link ${location.pathname === '/expenses' && !location.search.includes('tab=future-payables') ? 'active' : ''}`} 
+                        style={{ paddingLeft: '3.2rem', fontSize: '0.85rem', opacity: 0.9 }}
+                      >
+                        <Banknote size={16} /> Cash & Bank Ledger
+                      </Link>
+                    </li>
+                    <li className="submenu-item">
+                      <Link 
+                        to="/expenses?tab=future-payables" 
+                        className={`sidebar-link ${location.search.includes('tab=future-payables') ? 'active' : ''}`} 
+                        style={{ paddingLeft: '3.2rem', fontSize: '0.85rem', opacity: 0.9 }}
+                      >
+                        <Clock size={16} /> Future Payables
+                      </Link>
+                    </li>
+                  </>
+                )}
+              </>
             )}
             
             {(!user || user.role === 'Admin' || (user.modules_access && user.modules_access.includes('COMMISSIONS'))) && (

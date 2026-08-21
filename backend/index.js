@@ -40,6 +40,8 @@ app.use('/api/notifications', authMiddleware, require('./routes/notifications'))
 app.use('/api/client-reviews', authMiddleware, require('./routes/client_reviews'));
 app.use('/api/quotations', authMiddleware, require('./routes/quotations'));
 app.use('/api/terms-templates', authMiddleware, require('./routes/terms_templates'));
+const { router: futurePayablesRouter, checkAndSendPayableAlerts } = require('./routes/future_payables');
+app.use('/api/future-payables', authMiddleware, futurePayablesRouter);
 
 // Serve static frontend files
 app.use(express.static(path.join(__dirname, '../frontend/dist')));
@@ -75,8 +77,25 @@ const startDeadlineAutoAccepter = () => {
   }, 60 * 60 * 1000); // Check every 1 hour
 };
 
+const startFuturePayablesNotifier = () => {
+  // Check once on startup after 5 seconds
+  setTimeout(() => {
+    checkAndSendPayableAlerts().catch(console.error);
+  }, 5000);
+
+  // Check every 30 minutes for due/overdue payables
+  setInterval(async () => {
+    try {
+      await checkAndSendPayableAlerts();
+    } catch (error) {
+      console.error('Error in future payables notifier:', error);
+    }
+  }, 30 * 60 * 1000);
+};
+
 app.listen(PORT, '0.0.0.0', async () => {
   console.log(`Server running on port ${PORT}`);
   await updateLiveDb();
   startDeadlineAutoAccepter();
+  startFuturePayablesNotifier();
 });
