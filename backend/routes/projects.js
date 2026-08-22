@@ -1153,14 +1153,14 @@ router.post('/:id/steps/:step_id/approve-commission', async (req, res) => {
     try {
       const [[project]] = await db.query('SELECT title FROM projects WHERE id = ?', [req.params.id]);
       if (project) {
-        const msg = `Your commission for step "${step.title}" in project "${project.title}" has been released! Amount: ${final_amount.toFixed(2)}`;
+        const msg = `Your commission for step "${step.title}" in project "${project.title}" has been released! Amount: PKR ${final_amount.toFixed(2)}`;
         notifyUserWhatsApp(step.assignee_id, msg);
         
         // Portal notification for Assignee
         await db.query('INSERT INTO notifications (user_id, message, type, link) VALUES (?, ?, ?, ?)', [step.assignee_id, msg, 'commission', `/pm/project/${req.params.id}`]);
         
         // Portal notification for Admins/PMs
-        notifyManagers(req.params.id, `Commission of ${final_amount.toFixed(2)} released for step "${step.title}" in project "${project.title}"`, 'commission', `/pm/project/${req.params.id}`);
+        notifyManagers(req.params.id, `Commission of PKR ${final_amount.toFixed(2)} released for step "${step.title}" in project "${project.title}"`, 'commission', `/pm/project/${req.params.id}`);
       }
     } catch (e) {
       console.error('Failed to send whatsapp msg:', e);

@@ -238,13 +238,20 @@ export default function ProductionPortal() {
     }
   };
 
+  const isAdminOrPM = currentUser.role === 'Admin' || currentUser.role === 'Project Manager';
+
+  // For production / employee team members, only show projects where they have assigned steps or are the production lead
+  const relevantProjects = isAdminOrPM 
+    ? projects 
+    : projects.filter(p => (p.user_assigned_steps && p.user_assigned_steps.length > 0) || p.production_id === currentUser.id);
+
   // Metrics Calculations
-  const totalProjectsCount = projects.length;
-  const completedProjectsCount = projects.filter(p => p.status === 'Completed' || p.status === 'Commission Released').length;
+  const totalProjectsCount = relevantProjects.length;
+  const completedProjectsCount = relevantProjects.filter(p => p.status === 'Completed' || p.status === 'Commission Released').length;
   const activeProjectsCount = totalProjectsCount - completedProjectsCount;
 
   // Find overdue / urgent deadline projects
-  const urgentProjects = projects.filter(p => {
+  const urgentProjects = relevantProjects.filter(p => {
     if (p.status === 'Completed' || p.status === 'Commission Released') return false;
     const dl = getDeadlineInfo(p.locked_deadline);
     return dl.isOverdue || dl.isSoon;
@@ -253,16 +260,17 @@ export default function ProductionPortal() {
   // Calculate overall steps completed percentage across assigned projects
   let totalStepsCount = 0;
   let completedStepsCount = 0;
-  projects.forEach(p => {
-    const total = p.total_steps || (p.steps ? p.steps.length : 0);
-    const completed = p.completed_steps || (p.steps ? p.steps.filter(s => s.status === 'Completed').length : 0);
+  relevantProjects.forEach(p => {
+    const stepsToCount = isAdminOrPM ? (p.steps || []) : (p.user_assigned_steps || []);
+    const total = stepsToCount.length;
+    const completed = stepsToCount.filter(s => s.status === 'Completed').length;
     totalStepsCount += total;
     completedStepsCount += completed;
   });
   const overallProgressPercent = totalStepsCount > 0 ? Math.round((completedStepsCount / totalStepsCount) * 100) : 0;
 
   // Filter projects for display
-  const filteredProjects = projects.filter(p => {
+  const filteredProjects = relevantProjects.filter(p => {
     const isComp = p.status === 'Completed' || p.status === 'Commission Released';
     if (filterTab === 'Active') return !isComp;
     if (filterTab === 'Completed') return isComp;
@@ -275,11 +283,12 @@ export default function ProductionPortal() {
       return !isComp && (dl.label === '⏰ Due Today!' || dl.isOverdue);
     }
     
+    const stepsToCheck = isAdminOrPM ? (p.steps || []) : (p.user_assigned_steps || []);
     if (filterTab === 'Pending Approval') {
-      return !isComp && p.steps && p.steps.some(s => s.status === 'Pending Approval');
+      return !isComp && stepsToCheck.some(s => s.status === 'Pending Approval');
     }
     if (filterTab === 'Appealed') {
-      return !isComp && p.steps && p.steps.some(s => s.deadline_status === 'Appealed');
+      return !isComp && stepsToCheck.some(s => s.deadline_status === 'Appealed');
     }
     
     return true; // All
@@ -452,8 +461,9 @@ export default function ProductionPortal() {
           ) : (
             filteredProjects.map(p => {
               const dl = getDeadlineInfo(p.locked_deadline);
-              const total = p.total_steps || (p.steps ? p.steps.length : 0);
-              const completed = p.completed_steps || (p.steps ? p.steps.filter(s => s.status === 'Completed').length : 0);
+              const cardSteps = isAdminOrPM ? (p.steps || []) : (p.user_assigned_steps || []);
+              const total = cardSteps.length;
+              const completed = cardSteps.filter(s => s.status === 'Completed').length;
               const percent = total > 0 ? Math.round((completed / total) * 100) : 0;
               const isCompleted = p.status === 'Completed' || p.status === 'Commission Released';
 
@@ -483,9 +493,9 @@ export default function ProductionPortal() {
 
                   {/* Steps Checklist inside Project Card */}
                   {(() => {
-                    const displaySteps = (p.user_assigned_steps && p.user_assigned_steps.length > 0)
-                      ? p.user_assigned_steps
-                      : (p.steps || []);
+                    const displaySteps = isAdminOrPM
+                      ? (p.steps || [])
+                      : (p.user_assigned_steps || []);
 
                     if (displaySteps.length === 0) return null;
 

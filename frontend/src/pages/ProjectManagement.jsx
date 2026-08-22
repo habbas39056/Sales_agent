@@ -163,7 +163,7 @@ export default function ProjectManagement() {
       'Project Title': p.title || '',
       'Client Name': p.client_name || '',
       'Invoice #': p.invoice_number || 'N/A',
-      'Invoice Balance': p.balance !== null ? `$${parseFloat(p.balance).toFixed(2)}` : 'N/A',
+      'Invoice Balance': p.balance !== null ? `PKR ${parseFloat(p.balance).toFixed(2)}` : 'N/A',
       'Invoice Due Date': p.invoice_due_date ? new Date(p.invoice_due_date).toLocaleDateString() : '',
       'Project Due Date': p.project_due_date ? new Date(p.project_due_date).toLocaleDateString() : '',
       'Status': p.status || 'Assigned',
@@ -216,7 +216,7 @@ export default function ProjectManagement() {
           </div>
           <div className="pm-stat-info">
             <h4>Outstanding Balance</h4>
-            <p>${totalOutstandingBalance.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+            <p>PKR {totalOutstandingBalance.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
           </div>
         </div>
       </div>
@@ -377,7 +377,7 @@ export default function ProjectManagement() {
                     <td style={{ textAlign: 'right' }}>
                       {bal !== null ? (
                         <span className={`pm-balance-badge ${bal > 0 ? 'unpaid' : 'paid'}`}>
-                          ${bal.toFixed(2)}
+                          PKR {bal.toFixed(2)}
                         </span>
                       ) : (
                         <span style={{ color: '#94a3b8', fontSize: '0.78rem' }}>—</span>
@@ -522,12 +522,12 @@ export default function ProjectManagement() {
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '0.75rem', marginBottom: '1.25rem', background: '#f8fafc', padding: '0.85rem', borderRadius: '8px' }}>
               <div>
                 <span style={{ display: 'block', fontSize: '0.72rem', color: '#64748b', fontWeight: '700' }}>TOTAL AMOUNT</span>
-                <strong style={{ fontSize: '1.05rem', color: '#0f172a' }}>${parseFloat(previewInvoice.amount || 0).toFixed(2)}</strong>
+                <strong style={{ fontSize: '1.05rem', color: '#0f172a' }}>PKR {parseFloat(previewInvoice.amount || 0).toFixed(2)}</strong>
               </div>
               <div>
                 <span style={{ display: 'block', fontSize: '0.72rem', color: '#64748b', fontWeight: '700' }}>OUTSTANDING BALANCE</span>
                 <strong style={{ fontSize: '1.05rem', color: parseFloat(previewInvoice.balance) > 0 ? '#dc2626' : '#16a34a' }}>
-                  ${parseFloat(previewInvoice.balance || 0).toFixed(2)}
+                  PKR {parseFloat(previewInvoice.balance || 0).toFixed(2)}
                 </strong>
               </div>
               <div>
@@ -553,7 +553,7 @@ export default function ProjectManagement() {
                       <tr key={idx} style={{ borderBottom: '1px solid #f1f5f9' }}>
                         <td style={{ padding: '5px 8px' }}>{it.description || it.item_name}</td>
                         <td style={{ padding: '5px 8px', textAlign: 'center' }}>{it.quantity}</td>
-                        <td style={{ padding: '5px 8px', textAlign: 'right' }}>${parseFloat(it.total || 0).toFixed(2)}</td>
+                        <td style={{ padding: '5px 8px', textAlign: 'right' }}>PKR {parseFloat(it.total || 0).toFixed(2)}</td>
                       </tr>
                     ))}
                   </tbody>
