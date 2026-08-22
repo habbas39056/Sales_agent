@@ -17,17 +17,12 @@ export default function CreateQuotation() {
   const [banks, setBanks] = useState([]);
   const [isEditingInvNum, setIsEditingInvNum] = useState(false);
   const [isEditingBillFrom, setIsEditingBillFrom] = useState(false);
-  const [isManualClient, setIsManualClient] = useState(false);
   const [activeTab, setActiveTab] = useState('quotation');
         
   const [formData, setFormData] = useState({
     quotation_number: `QT-${Date.now()}`,
     client_id: '',
     manual_client_name: '',
-    manual_client_business: '',
-    manual_client_email: '',
-    manual_client_phone: '',
-    manual_client_address: '',
     project_id: '',
     agent_id: '',
     discount: 0,
@@ -69,17 +64,10 @@ export default function CreateQuotation() {
       if (id) {
         const invRes = await axios.get(`/api/quotations/${id}`);
         const inv = invRes.data;
-        if (inv.manual_client_name && !inv.client_id) {
-          setIsManualClient(true);
-        }
         setFormData({
           quotation_number: inv.quotation_number,
           client_id: inv.client_id || '',
           manual_client_name: inv.manual_client_name || '',
-          manual_client_business: inv.manual_client_business || inv.business_name || '',
-          manual_client_email: inv.manual_client_email || inv.client_email || '',
-          manual_client_phone: inv.manual_client_phone || '',
-          manual_client_address: inv.manual_client_address || inv.physical_address || '',
           project_id: inv.project_id || '',
           agent_id: inv.agent_id || '',
           discount: inv.discount || 0,
@@ -263,204 +251,87 @@ export default function CreateQuotation() {
             </div>
 
             <div className="bill-to-section">
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.4rem', paddingRight: '0.5rem' }}>
-                <div className="bill-to-label" style={{ margin: 0 }}>BILL TO</div>
-                <button 
-                  type="button" 
-                  onClick={() => {
-                    setIsManualClient(!isManualClient);
-                    if (!isManualClient) {
-                      setFormData(prev => ({ ...prev, client_id: '' }));
-                    }
-                  }}
-                  style={{
-                    background: 'none',
-                    border: 'none',
-                    color: 'var(--primary-color, #4f46e5)',
-                    fontSize: '0.78rem',
-                    fontWeight: '600',
-                    cursor: 'pointer',
-                    textDecoration: 'underline',
-                    padding: 0
-                  }}
-                >
-                  {isManualClient ? '🔍 Search Existing Clients' : '✍️ Write Client Manually'}
-                </button>
+              <div style={{ textAlign: 'right', paddingRight: '0.5rem' }}>
+                <div className="bill-to-label">BILL TO</div>
               </div>
               
-              {!isManualClient ? (
-                <div className="bill-to-row" style={{ minWidth: '300px', flexDirection: 'column', alignItems: 'stretch' }}>
-                  <CreatableSelect
-                    options={(clients || []).map(c => ({ value: c.id, label: `${c.full_name} (${c.business_name || 'Individual'})`, client: c }))}
-                    value={(() => {
-                      if (formData.client_id) {
-                        const found = (clients || []).find(c => String(c.id) === String(formData.client_id));
-                        return found ? { value: found.id, label: `${found.full_name} (${found.business_name || 'Individual'})` } : null;
+              <div className="bill-to-row" style={{ minWidth: '300px' }}>
+                <CreatableSelect
+                  options={(clients || []).map(c => ({ value: c.id, label: `${c.full_name}${c.business_name ? ` (${c.business_name})` : ''}`, client: c }))}
+                  value={(() => {
+                    if (formData.client_id) {
+                      const found = (clients || []).find(c => String(c.id) === String(formData.client_id));
+                      return found ? { value: found.id, label: `${found.full_name}${found.business_name ? ` (${found.business_name})` : ''}` } : null;
+                    }
+                    if (formData.manual_client_name) {
+                      return { value: formData.manual_client_name, label: formData.manual_client_name };
+                    }
+                    return null;
+                  })()}
+                  onChange={(selectedOption) => {
+                    if (!selectedOption) {
+                      setFormData(prev => ({ ...prev, client_id: '', manual_client_name: '' }));
+                    } else if (selectedOption.__isNew__) {
+                      setFormData(prev => ({ ...prev, client_id: '', manual_client_name: selectedOption.value }));
+                    } else if (selectedOption.client) {
+                      setFormData(prev => ({ ...prev, client_id: selectedOption.value, manual_client_name: '' }));
+                    } else {
+                      setFormData(prev => ({ ...prev, client_id: '', manual_client_name: selectedOption.value }));
+                    }
+                  }}
+                  onCreateOption={(inputValue) => {
+                    setFormData(prev => ({
+                      ...prev,
+                      client_id: '',
+                      manual_client_name: inputValue
+                    }));
+                  }}
+                  placeholder="Search existing client or type name directly..."
+                  formatCreateLabel={(inputValue) => `Type client name: "${inputValue}"`}
+                  isSearchable={true}
+                  isClearable={true}
+                  styles={{
+                    control: (base, state) => ({
+                      ...base,
+                      backgroundColor: '#eff6ff',
+                      borderColor: state.isFocused ? 'var(--primary-color)' : 'transparent',
+                      fontWeight: '700',
+                      boxShadow: 'none',
+                      padding: '2px',
+                      '&:hover': {
+                        borderColor: '#cbd5e1'
                       }
-                      if (formData.manual_client_name) {
-                        return { value: 'custom', label: `✍️ ${formData.manual_client_name}` };
+                    }),
+                    singleValue: (base) => ({
+                      ...base,
+                      color: 'var(--accent-color)',
+                    }),
+                    menu: (base) => ({
+                      ...base,
+                      zIndex: 9999,
+                      borderRadius: '8px',
+                      boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)',
+                      overflow: 'hidden'
+                    }),
+                    option: (base, state) => ({
+                      ...base,
+                      backgroundColor: state.isSelected 
+                        ? 'var(--primary-color)' 
+                        : state.isFocused 
+                          ? '#f1f5f9' 
+                          : '#ffffff',
+                      color: state.isSelected ? '#ffffff' : '#334155',
+                      cursor: 'pointer',
+                      padding: '10px 16px',
+                      fontWeight: state.isSelected ? '600' : '500',
+                      '&:active': {
+                        backgroundColor: '#0284c7',
+                        color: '#ffffff'
                       }
-                      return null;
-                    })()}
-                    onChange={(selectedOption) => {
-                      if (!selectedOption) {
-                        setFormData(prev => ({ 
-                          ...prev, 
-                          client_id: '', 
-                          manual_client_name: '',
-                          manual_client_business: '',
-                          manual_client_email: '',
-                          manual_client_address: '' 
-                        }));
-                      } else if (selectedOption.__isNew__ || selectedOption.value === 'custom') {
-                        setFormData(prev => ({ 
-                          ...prev, 
-                          client_id: '', 
-                          manual_client_name: selectedOption.label.replace(/^✍️\s*/, ''),
-                          manual_client_business: '',
-                          manual_client_email: '',
-                          manual_client_address: '' 
-                        }));
-                      } else {
-                        const c = selectedOption.client || (clients || []).find(cli => String(cli.id) === String(selectedOption.value));
-                        setFormData(prev => ({ 
-                          ...prev, 
-                          client_id: selectedOption.value, 
-                          manual_client_name: c ? c.full_name : '',
-                          manual_client_business: c ? c.business_name || '' : '',
-                          manual_client_email: c ? c.email || '' : '',
-                          manual_client_address: c ? c.physical_address || '' : ''
-                        }));
-                      }
-                    }}
-                    onCreateOption={(inputValue) => {
-                      setFormData(prev => ({
-                        ...prev,
-                        client_id: '',
-                        manual_client_name: inputValue
-                      }));
-                    }}
-                    placeholder="Search or type client name..."
-                    formatCreateLabel={(inputValue) => `✍️ Use "${inputValue}" as custom client`}
-                    isSearchable={true}
-                    isClearable={true}
-                    styles={{
-                      control: (base, state) => ({
-                        ...base,
-                        backgroundColor: '#eff6ff',
-                        borderColor: state.isFocused ? 'var(--primary-color)' : 'transparent',
-                        fontWeight: '700',
-                        boxShadow: 'none',
-                        padding: '2px',
-                        '&:hover': {
-                          borderColor: '#cbd5e1'
-                        }
-                      }),
-                      singleValue: (base) => ({
-                        ...base,
-                        color: 'var(--accent-color)',
-                      }),
-                      menu: (base) => ({
-                        ...base,
-                        zIndex: 9999,
-                        borderRadius: '8px',
-                        boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)',
-                        overflow: 'hidden'
-                      }),
-                      option: (base, state) => ({
-                        ...base,
-                        backgroundColor: state.isSelected 
-                          ? 'var(--primary-color)' 
-                          : state.isFocused 
-                            ? '#f1f5f9' 
-                            : '#ffffff',
-                        color: state.isSelected ? '#ffffff' : '#334155',
-                        cursor: 'pointer',
-                        padding: '10px 16px',
-                        fontWeight: state.isSelected ? '600' : '500',
-                        '&:active': {
-                          backgroundColor: '#0284c7',
-                          color: '#ffffff'
-                        }
-                      })
-                    }}
-                  />
-
-                  {/* If custom client name typed, allow adding optional details */}
-                  {!formData.client_id && formData.manual_client_name && (
-                    <div style={{ marginTop: '0.6rem', display: 'flex', flexDirection: 'column', gap: '0.4rem', background: '#f8fafc', padding: '0.6rem', borderRadius: '6px', border: '1px solid #e2e8f0' }}>
-                      <span style={{ fontSize: '0.75rem', fontWeight: '700', color: '#475569' }}>Manual Client Details:</span>
-                      <input 
-                        type="text" 
-                        placeholder="Business / Company (Optional)" 
-                        value={formData.manual_client_business || ''} 
-                        onChange={e => setFormData({ ...formData, manual_client_business: e.target.value })}
-                        style={{ padding: '0.35rem 0.6rem', fontSize: '0.82rem', border: '1px solid #cbd5e1', borderRadius: '4px' }}
-                      />
-                      <input 
-                        type="email" 
-                        placeholder="Client Email (Optional)" 
-                        value={formData.manual_client_email || ''} 
-                        onChange={e => setFormData({ ...formData, manual_client_email: e.target.value })}
-                        style={{ padding: '0.35rem 0.6rem', fontSize: '0.82rem', border: '1px solid #cbd5e1', borderRadius: '4px' }}
-                      />
-                      <input 
-                        type="text" 
-                        placeholder="Address / Location (Optional)" 
-                        value={formData.manual_client_address || ''} 
-                        onChange={e => setFormData({ ...formData, manual_client_address: e.target.value })}
-                        style={{ padding: '0.35rem 0.6rem', fontSize: '0.82rem', border: '1px solid #cbd5e1', borderRadius: '4px' }}
-                      />
-                    </div>
-                  )}
-                </div>
-              ) : (
-                <div className="bill-to-row" style={{ minWidth: '300px', flexDirection: 'column', alignItems: 'stretch' }}>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.45rem', background: '#f8fafc', padding: '0.75rem', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
-                    <input 
-                      type="text" 
-                      name="manual_client_name"
-                      placeholder="Client Name / Contact Person *" 
-                      value={formData.manual_client_name || ''} 
-                      onChange={e => setFormData({ ...formData, manual_client_name: e.target.value })}
-                      required
-                      style={{ padding: '0.45rem 0.65rem', fontSize: '0.85rem', fontWeight: '700', border: '1px solid #94a3b8', borderRadius: '6px' }}
-                    />
-                    <input 
-                      type="text" 
-                      name="manual_client_business"
-                      placeholder="Business / Company Name (Optional)" 
-                      value={formData.manual_client_business || ''} 
-                      onChange={e => setFormData({ ...formData, manual_client_business: e.target.value })}
-                      style={{ padding: '0.4rem 0.65rem', fontSize: '0.82rem', border: '1px solid #cbd5e1', borderRadius: '6px' }}
-                    />
-                    <input 
-                      type="email" 
-                      name="manual_client_email"
-                      placeholder="Email Address (Optional)" 
-                      value={formData.manual_client_email || ''} 
-                      onChange={e => setFormData({ ...formData, manual_client_email: e.target.value })}
-                      style={{ padding: '0.4rem 0.65rem', fontSize: '0.82rem', border: '1px solid #cbd5e1', borderRadius: '6px' }}
-                    />
-                    <input 
-                      type="text" 
-                      name="manual_client_phone"
-                      placeholder="Phone / WhatsApp Number (Optional)" 
-                      value={formData.manual_client_phone || ''} 
-                      onChange={e => setFormData({ ...formData, manual_client_phone: e.target.value })}
-                      style={{ padding: '0.4rem 0.65rem', fontSize: '0.82rem', border: '1px solid #cbd5e1', borderRadius: '6px' }}
-                    />
-                    <textarea 
-                      name="manual_client_address"
-                      placeholder="Physical Address (Optional)" 
-                      value={formData.manual_client_address || ''} 
-                      onChange={e => setFormData({ ...formData, manual_client_address: e.target.value })}
-                      rows={2}
-                      style={{ padding: '0.4rem 0.65rem', fontSize: '0.82rem', border: '1px solid #cbd5e1', borderRadius: '6px', resize: 'vertical' }}
-                    />
-                  </div>
-                </div>
-              )}
+                    })
+                  }}
+                />
+              </div>
 
               <div className="bill-to-row">
                 <label>Quotation Date:</label>

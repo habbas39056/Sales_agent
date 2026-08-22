@@ -394,12 +394,19 @@ async function updateLiveDb() {
         id INT AUTO_INCREMENT PRIMARY KEY,
         quotation_id INT NOT NULL,
         description TEXT NOT NULL,
+        details TEXT NULL,
+        category VARCHAR(50) DEFAULT 'SERVICE',
+        unit VARCHAR(50) NULL,
         quantity DECIMAL(10,2) DEFAULT 1.00,
         unit_price DECIMAL(10,2) DEFAULT 0.00,
         total DECIMAL(10,2) DEFAULT 0.00,
         FOREIGN KEY (quotation_id) REFERENCES quotations(id) ON DELETE CASCADE
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
     `);
+
+    await addColumnIfNotExists('quotation_items', 'details', 'TEXT NULL');
+    await addColumnIfNotExists('quotation_items', 'category', "VARCHAR(50) DEFAULT 'SERVICE'");
+    await addColumnIfNotExists('quotation_items', 'unit', 'VARCHAR(50) NULL');
 
     await addColumnIfNotExists('quotations', 'manual_client_name', 'VARCHAR(255) NULL');
     await addColumnIfNotExists('quotations', 'manual_client_email', 'VARCHAR(255) NULL');

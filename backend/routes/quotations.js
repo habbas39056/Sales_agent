@@ -125,8 +125,8 @@ router.post('/', async (req, res) => {
     for (const item of items) {
       const itemTotal = Number(item.quantity || 1) * Number(item.unit_price || 0);
       await connection.query(
-        'INSERT INTO quotation_items (quotation_id, description, quantity, unit_price, total) VALUES (?, ?, ?, ?, ?)',
-        [quoteId, item.description, item.quantity, item.unit_price, itemTotal]
+        'INSERT INTO quotation_items (quotation_id, description, details, category, unit, quantity, unit_price, total) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+        [quoteId, item.description, item.details || '', item.category || 'SERVICE', item.unit || '', item.quantity, item.unit_price, itemTotal]
       );
     }
 
@@ -206,8 +206,8 @@ router.put('/:id', async (req, res) => {
     for (const item of items) {
       const itemTotal = Number(item.quantity || 1) * Number(item.unit_price || 0);
       await connection.query(
-        'INSERT INTO quotation_items (quotation_id, description, quantity, unit_price, total) VALUES (?, ?, ?, ?, ?)',
-        [req.params.id, item.description, item.quantity, item.unit_price, itemTotal]
+        'INSERT INTO quotation_items (quotation_id, description, details, category, unit, quantity, unit_price, total) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+        [req.params.id, item.description, item.details || '', item.category || 'SERVICE', item.unit || '', item.quantity, item.unit_price, itemTotal]
       );
     }
 
