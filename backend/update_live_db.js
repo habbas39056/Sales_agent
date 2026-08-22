@@ -400,6 +400,12 @@ async function updateLiveDb() {
         FOREIGN KEY (quotation_id) REFERENCES quotations(id) ON DELETE CASCADE
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
     `);
+
+    await addColumnIfNotExists('quotations', 'manual_client_name', 'VARCHAR(255) NULL');
+    await addColumnIfNotExists('quotations', 'manual_client_email', 'VARCHAR(255) NULL');
+    await addColumnIfNotExists('quotations', 'manual_client_phone', 'VARCHAR(100) NULL');
+    await addColumnIfNotExists('quotations', 'manual_client_business', 'VARCHAR(255) NULL');
+    await addColumnIfNotExists('quotations', 'manual_client_address', 'TEXT NULL');
     // 18. Terms and Conditions Templates Table
     await connection.query(`
       CREATE TABLE IF NOT EXISTS terms_templates (
