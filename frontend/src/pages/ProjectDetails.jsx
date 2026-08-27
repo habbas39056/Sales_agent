@@ -78,6 +78,7 @@ export default function ProjectDetails() {
   const currentUserStr = localStorage.getItem('user');
   const currentUser = currentUserStr ? JSON.parse(currentUserStr) : null;
   const canManageSteps = currentUser && ['Admin', 'Project Manager', 'PM', 'Product Manager', 'Production Manager'].includes(currentUser.role);
+  const canViewInvoices = currentUser && ['Admin', 'Project Manager', 'PM', 'Product Manager'].includes(currentUser.role);
 
   useEffect(() => {
     fetchProjectDetails();
@@ -578,7 +579,7 @@ export default function ProjectDetails() {
                             </span>
                           )}
 
-                          {(() => {
+                          {canViewInvoices && (() => {
                             let itemIds = [];
                             try { itemIds = typeof step.invoice_item_ids === 'string' ? JSON.parse(step.invoice_item_ids) : step.invoice_item_ids; } catch(e){}
                             if (Array.isArray(itemIds) && itemIds.length > 0 && project.invoice && project.invoice.items) {
@@ -863,7 +864,7 @@ export default function ProjectDetails() {
                   {isExpanded && (
                     <div className="step-expanded-content">
                       <div className="step-tabs">
-                        {['Details', 'Fields', 'Documents', 'Comments', 'Internal Chat', 'Revisions', 'Invoices', 'Activity'].map(tab => (
+                        {['Details', 'Fields', 'Documents', 'Comments', 'Internal Chat', 'Revisions', ...(canViewInvoices ? ['Invoices'] : []), 'Activity'].map(tab => (
                           <button 
                             key={tab} 
                             className={`step-tab ${activeTab === tab ? 'active' : ''}`}
@@ -942,7 +943,7 @@ export default function ProjectDetails() {
                           </div>
                         )}
 
-                        {activeTab === 'Invoices' && (
+                        {activeTab === 'Invoices' && canViewInvoices && (
                           <div className="tab-pane-invoices">
                             {project.invoice ? (
                               <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
@@ -1357,7 +1358,7 @@ export default function ProjectDetails() {
       {/* Reject Step Modal */}
       {isRejectModalOpen && stepToReject && (
         <div className="modal-overlay">
-          <div className="modal-content" style={{ maxWidth: '500px' }}>
+          <div className="modal-content" style={{ maxWidth: '520px', width: '90%' }}>
             <div className="modal-header">
               <h2>Reject & Reassign Step</h2>
               <button className="modal-close" onClick={() => setIsRejectModalOpen(false)}>
@@ -1365,6 +1366,29 @@ export default function ProjectDetails() {
               </button>
             </div>
             <form onSubmit={handleRejectSubmit}>
+              {/* Step Details Preview */}
+              <div style={{ background: '#f8fafc', padding: '0.85rem', borderRadius: '8px', border: '1px solid #e2e8f0', marginBottom: '1.25rem' }}>
+                <div style={{ fontWeight: '700', fontSize: '0.95rem', color: '#0f172a', marginBottom: '0.25rem' }}>
+                  {stepToReject.title}
+                </div>
+                {stepToReject.assignee_name && (
+                  <div style={{ fontSize: '0.82rem', color: '#475569', marginBottom: '0.25rem' }}>
+                    <strong>Assigned to:</strong> {stepToReject.assignee_name}
+                  </div>
+                )}
+                {stepToReject.description && (
+                  <div style={{ fontSize: '0.8rem', color: '#64748b', background: '#ffffff', padding: '0.5rem', borderRadius: '6px', border: '1px solid #cbd5e1', marginTop: '0.35rem', maxHeight: '90px', overflowY: 'auto' }}>
+                    <strong>Step Description:</strong>
+                    <div style={{ marginTop: '0.2rem', whiteSpace: 'pre-wrap' }}>{stepToReject.description}</div>
+                  </div>
+                )}
+                {(stepToReject.deliverable_name || stepToReject.deliverable_url) && (
+                  <div style={{ fontSize: '0.8rem', color: '#334155', marginTop: '0.35rem' }}>
+                    <strong>Submitted Deliverable:</strong> {stepToReject.deliverable_name || stepToReject.deliverable_url}
+                  </div>
+                )}
+              </div>
+
               <div className="form-group" style={{ marginBottom: '1rem' }}>
                 <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: '600' }}>
                   New Deadline for "{stepToReject.title}"
@@ -1464,7 +1488,7 @@ export default function ProjectDetails() {
       {/* Reassign Step Modal */}
       {isReassignModalOpen && stepToReassign && (
         <div className="modal-overlay">
-          <div className="modal-content" style={{ maxWidth: '400px' }}>
+          <div className="modal-content" style={{ maxWidth: '520px', width: '90%' }}>
             <div className="modal-header">
               <h2>Reassign Step</h2>
               <button className="modal-close" onClick={() => setIsReassignModalOpen(false)}>
@@ -1472,6 +1496,29 @@ export default function ProjectDetails() {
               </button>
             </div>
             <form onSubmit={handleReassignSubmit}>
+              {/* Step Details Preview */}
+              <div style={{ background: '#f8fafc', padding: '0.85rem', borderRadius: '8px', border: '1px solid #e2e8f0', marginBottom: '1.25rem' }}>
+                <div style={{ fontWeight: '700', fontSize: '0.95rem', color: '#0f172a', marginBottom: '0.25rem' }}>
+                  {stepToReassign.title}
+                </div>
+                {stepToReassign.assignee_name && (
+                  <div style={{ fontSize: '0.82rem', color: '#475569', marginBottom: '0.25rem' }}>
+                    <strong>Assigned to:</strong> {stepToReassign.assignee_name}
+                  </div>
+                )}
+                {stepToReassign.description && (
+                  <div style={{ fontSize: '0.8rem', color: '#64748b', background: '#ffffff', padding: '0.5rem', borderRadius: '6px', border: '1px solid #cbd5e1', marginTop: '0.35rem', maxHeight: '90px', overflowY: 'auto' }}>
+                    <strong>Step Description:</strong>
+                    <div style={{ marginTop: '0.2rem', whiteSpace: 'pre-wrap' }}>{stepToReassign.description}</div>
+                  </div>
+                )}
+                {(stepToReassign.deliverable_name || stepToReassign.deliverable_url) && (
+                  <div style={{ fontSize: '0.8rem', color: '#334155', marginTop: '0.35rem' }}>
+                    <strong>Submitted Deliverable:</strong> {stepToReassign.deliverable_name || stepToReassign.deliverable_url}
+                  </div>
+                )}
+              </div>
+
               <div className="form-group" style={{ marginBottom: '1rem' }}>
                 <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: '600' }}>
                   Select New Deadline for "{stepToReassign.title}"

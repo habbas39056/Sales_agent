@@ -534,7 +534,7 @@ export default function DeadlineWorkflow() {
                         ✅ Confirmed
                       </span>
                     )}
-                    {item.invoice_items && item.invoice_items.length > 0 && (
+                    {(currentUser.role === 'Admin' || currentUser.role === 'Product Manager' || currentUser.role === 'PM' || currentUser.role === 'Project Manager') && item.invoice_items && item.invoice_items.length > 0 && (
                       <span style={{ background: '#fdf4ff', color: '#c026d3', fontSize: '0.7rem', padding: '2px 6px', borderRadius: '8px', fontWeight: '700', display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
                         🧾 Items: {item.invoice_items.map(i => i.description).join(', ')}
                       </span>
@@ -563,11 +563,49 @@ export default function DeadlineWorkflow() {
                     </div>
                   )}
 
-                  {item.description && item.step_status === 'Pending Approval' && (
-                    <div style={{ background: '#f8fafc', border: '1px solid #f1f5f9', borderRadius: '8px', padding: '0.5rem 0.75rem', marginTop: '0.5rem', fontSize: '0.82rem', color: '#475569' }}>
-                      <strong>Task Description / Notes:</strong> {item.description}
+                  {item.description && (
+                    <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '8px', padding: '0.65rem 0.85rem', marginTop: '0.5rem', fontSize: '0.85rem', color: '#334155' }}>
+                      <strong style={{ display: 'block', marginBottom: '0.2rem', color: '#1e293b' }}>Task Details / Notes:</strong> 
+                      <div style={{ whiteSpace: 'pre-wrap' }}>{item.description}</div>
                     </div>
                   )}
+
+                  {/* Reassigned Feedback To-Dos Box */}
+                  {(() => {
+                    const todosList = (item.reject_todos && item.reject_todos !== '0' && item.reject_todos !== 0) 
+                      ? item.reject_todos 
+                      : ((item.reassign_todos && item.reassign_todos !== '0' && item.reassign_todos !== 0) ? item.reassign_todos : null);
+                    if (!todosList) return null;
+                    let parsedTodos = [];
+                    try {
+                      parsedTodos = typeof todosList === 'string' ? JSON.parse(todosList) : todosList;
+                    } catch (e) {}
+                    
+                    if (Array.isArray(parsedTodos) && parsedTodos.length > 0) {
+                      return (
+                        <div style={{ marginTop: '0.65rem', padding: '0.75rem 1rem', background: '#fff1f2', border: '1px solid #fecaca', borderRadius: '8px', display: 'flex', flexDirection: 'column', gap: '0.4rem', width: '100%' }}>
+                          <strong style={{ fontSize: '0.82rem', color: '#e11d48', display: 'flex', alignItems: 'center', gap: '0.35rem', textTransform: 'uppercase' }}>
+                            ⚠️ Reassignment Feedback & Change Requests:
+                          </strong>
+                          <ul style={{ margin: 0, paddingLeft: '1.25rem', display: 'flex', flexDirection: 'column', gap: '0.35rem', color: '#4c1d95', fontSize: '0.85rem' }}>
+                            {parsedTodos.map((todo, idx) => (
+                              <li key={idx} style={{ lineHeight: '1.4' }}>
+                                <span>{todo.text}</span>
+                                {todo.file_url && (
+                                  <div style={{ marginTop: '0.2rem' }}>
+                                    <a href={`http://localhost:5000${todo.file_url}`} target="_blank" rel="noopener noreferrer" style={{ display: 'inline-flex', alignItems: 'center', gap: '0.2rem', fontSize: '0.75rem', color: '#2563eb', textDecoration: 'none', background: '#eff6ff', padding: '0.15rem 0.45rem', borderRadius: '4px', border: '1px solid #bfdbfe' }}>
+                                      <ExternalLink size={11} /> View Attached File
+                                    </a>
+                                  </div>
+                                )}
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      );
+                    }
+                    return null;
+                  })()}
                 </div>
 
                 {/* Deadline Comparison Box - Hidden in Tasks for Approval */}

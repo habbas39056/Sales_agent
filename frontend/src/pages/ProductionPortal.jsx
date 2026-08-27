@@ -655,6 +655,70 @@ export default function ProductionPortal() {
                                   </span>
                                 )}
                               </div>
+
+                              {/* Step Details, Deliverables & Feedback To-Dos */}
+                              <div style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: '0.4rem', marginTop: '0.25rem' }}>
+                                {step.description && (
+                                  <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '6px', padding: '0.5rem 0.75rem', fontSize: '0.82rem', color: '#334155' }}>
+                                    <strong style={{ color: '#1e293b' }}>Description / Instructions:</strong>
+                                    <div style={{ whiteSpace: 'pre-wrap', marginTop: '0.2rem' }}>{step.description}</div>
+                                  </div>
+                                )}
+
+                                {(step.deliverable_name || step.deliverable_url) && (
+                                  <div style={{ background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: '6px', padding: '0.45rem 0.75rem', fontSize: '0.8rem', color: '#166534', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '0.4rem' }}>
+                                    <div>
+                                      <strong>Submitted Deliverable:</strong> {step.deliverable_name || 'File Package'}
+                                    </div>
+                                    {step.deliverable_url && (
+                                      <a 
+                                        href={step.deliverable_url.startsWith('http') ? step.deliverable_url : `https://${step.deliverable_url}`} 
+                                        target="_blank" 
+                                        rel="noopener noreferrer" 
+                                        style={{ color: '#15803d', fontWeight: '700', textDecoration: 'underline', display: 'inline-flex', alignItems: 'center', gap: '0.2rem' }}
+                                      >
+                                        <ExternalLink size={12} /> View File
+                                      </a>
+                                    )}
+                                  </div>
+                                )}
+
+                                {(() => {
+                                  const todosList = (step.reject_todos && step.reject_todos !== '0' && step.reject_todos !== 0) 
+                                    ? step.reject_todos 
+                                    : ((step.reassign_todos && step.reassign_todos !== '0' && step.reassign_todos !== 0) ? step.reassign_todos : null);
+                                  if (!todosList) return null;
+                                  let parsedTodos = [];
+                                  try {
+                                    parsedTodos = typeof todosList === 'string' ? JSON.parse(todosList) : todosList;
+                                  } catch (e) {}
+                                  
+                                  if (Array.isArray(parsedTodos) && parsedTodos.length > 0) {
+                                    return (
+                                      <div style={{ padding: '0.65rem 0.85rem', background: '#fff1f2', border: '1px solid #fecaca', borderRadius: '6px', display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
+                                        <strong style={{ fontSize: '0.78rem', color: '#e11d48', display: 'flex', alignItems: 'center', gap: '0.3rem', textTransform: 'uppercase' }}>
+                                          ⚠️ Revision Feedback & Required Changes:
+                                        </strong>
+                                        <ul style={{ margin: 0, paddingLeft: '1.25rem', display: 'flex', flexDirection: 'column', gap: '0.25rem', color: '#4c1d95', fontSize: '0.82rem' }}>
+                                          {parsedTodos.map((todo, idx) => (
+                                            <li key={idx} style={{ lineHeight: '1.35' }}>
+                                              <span>{todo.text}</span>
+                                              {todo.file_url && (
+                                                <div style={{ marginTop: '0.2rem' }}>
+                                                  <a href={`http://localhost:5000${todo.file_url}`} target="_blank" rel="noopener noreferrer" style={{ display: 'inline-flex', alignItems: 'center', gap: '0.2rem', fontSize: '0.75rem', color: '#2563eb', textDecoration: 'none', background: '#eff6ff', padding: '0.15rem 0.4rem', borderRadius: '4px', border: '1px solid #bfdbfe' }}>
+                                                    <ExternalLink size={11} /> View Attached File
+                                                  </a>
+                                                </div>
+                                              )}
+                                            </li>
+                                          ))}
+                                        </ul>
+                                      </div>
+                                    );
+                                  }
+                                  return null;
+                                })()}
+                              </div>
                             </div>
                           );
                         })}

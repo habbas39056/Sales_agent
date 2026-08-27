@@ -287,8 +287,9 @@ router.get('/:id', async (req, res) => {
     `;
     const stepsParams = [req.params.id];
 
-    // Restrict visibility: If not Admin, not Client, and not PM, only see your own steps or unassigned steps
-    if (user_id && role && role !== 'Admin' && role !== 'Client' && project.pm_id != user_id) {
+    // Restrict visibility: If not Admin, not Client, and not PM/Manager, only see your own steps or unassigned steps
+    const isManagerRole = ['Admin', 'Project Manager', 'PM', 'Product Manager', 'Production Manager'].includes(role);
+    if (user_id && role && !isManagerRole && role !== 'Client' && project.pm_id != user_id) {
       stepsQuery += ` AND (ps.assignee_id = ? OR ps.assignee_id IS NULL)`;
       stepsParams.push(user_id);
     }

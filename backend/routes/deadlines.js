@@ -5,7 +5,7 @@ const db = require('../db');
 // Get pending deadline appeals & step deadlines with role-based scoping
 router.get('/appeals', async (req, res) => {
   const { user_id, role } = req.query;
-  const isAdminOrPm = role === 'Admin' || role === 'Product Manager' || role === 'PM' || role === 'Project Manager';
+  const isAdminOrPm = ['Admin', 'Product Manager', 'PM', 'Project Manager', 'Production Manager'].includes(role);
 
   try {
     let query = `
@@ -94,7 +94,7 @@ router.get('/appeals', async (req, res) => {
 // Get pending deadline appeals & pending acceptance count with role-based scoping
 router.get('/appeals/count', async (req, res) => {
   const { user_id, role } = req.query;
-  const isAdminOrPm = role === 'Admin' || role === 'Product Manager' || role === 'PM' || role === 'Project Manager';
+  const isAdminOrPm = ['Admin', 'Product Manager', 'PM', 'Project Manager', 'Production Manager'].includes(role);
 
   try {
     let query = "SELECT COUNT(*) as pending_count FROM project_steps ps JOIN projects p ON ps.project_id = p.id WHERE (ps.deadline_status = 'Appealed' OR ps.deadline_status = 'Pending Acceptance' OR ps.deadline_status IS NULL)";
