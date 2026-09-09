@@ -605,7 +605,7 @@ router.get('/', async (req, res) => {
         const [payments] = await db.query(paySql, payParams);
         for (const p of payments) {
           const payAmt = parseFloat(p.payment_amount || 0);
-          const invAmt = parseFloat(p.invoice_amount || 0);
+          const invTotal = parseFloat(p.invoice_amount || 0);
           const invComm = parseFloat(p.commission_amount || 0);
 
           let earned = 0;
