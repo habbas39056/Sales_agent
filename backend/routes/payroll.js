@@ -89,7 +89,13 @@ router.get('/', async (req, res) => {
         const bonus = parseFloat(p.bonus || 0);
         const advanceSalary = parseFloat(p.advance_salary || 0);
         const tax = parseFloat(p.tax_deduction || 0);
-        const otherDeds = parseFloat(p.other_deductions || 0);
+
+        // Fetch live penalties from salary_penalties to ensure forgiven penalties are immediately cleared
+        const [[penRow]] = await db.query(
+          'SELECT COALESCE(SUM(amount), 0.00) as total_pen FROM salary_penalties WHERE user_id = ? AND month = ?',
+          [p.user_id, targetMonth]
+        );
+        const otherDeds = parseFloat(penRow?.total_pen || 0);
 
         const grossSalary = baseSalary + commission + bonus;
         const totalDeductions = advanceSalary + tax + otherDeds;
@@ -97,9 +103,9 @@ router.get('/', async (req, res) => {
 
         await db.query(`
           UPDATE payrolls 
-          SET overtime_allowance = ?, gross_salary = ?, deductions = ?, net_salary = ? 
+          SET overtime_allowance = ?, other_deductions = ?, gross_salary = ?, deductions = ?, net_salary = ? 
           WHERE id = ?
-        `, [commission, grossSalary, totalDeductions, netSalary, p.id]);
+        `, [commission, otherDeds, grossSalary, totalDeductions, netSalary, p.id]);
       }
     }
 
@@ -255,19 +261,22 @@ async function syncUserPendingPayroll(userId, month, dbClient) {
       VALUES (?, ?, ?, ?, 0.00, ?, ?, 0.00, ?, ?, ?, 'Pending')
     `, [userId, month, baseSalary, commission, grossSalary, advSalary, otherDeductions, totalDeductions, netSalary]);
   } else if (existing.status === 'Pending') {
+    // Re-check live penalties from salary_penalties so forgiven late penalties are reflected immediately
+    const [[penRow]] = await dbClient.query('SELECT COALESCE(SUM(amount), 0.00) as total_pen FROM salary_penalties WHERE user_id = ? AND month = ?', [userId, month]);
+    const otherDeds = parseFloat(penRow?.total_pen || 0);
+
     const bonus = parseFloat(existing.bonus || 0);
     const advanceSalary = parseFloat(existing.advance_salary || 0);
     const tax = parseFloat(existing.tax_deduction || 0);
-    const otherDeds = parseFloat(existing.other_deductions || 0);
     const grossSalary = baseSalary + commission + bonus;
     const totalDeductions = advanceSalary + tax + otherDeds;
     const netSalary = Math.max(0, grossSalary - totalDeductions);
 
     await dbClient.query(`
       UPDATE payrolls 
-      SET base_salary = ?, overtime_allowance = ?, gross_salary = ?, deductions = ?, net_salary = ? 
+      SET base_salary = ?, overtime_allowance = ?, other_deductions = ?, gross_salary = ?, deductions = ?, net_salary = ? 
       WHERE id = ?
-    `, [baseSalary, commission, grossSalary, totalDeductions, netSalary, existing.id]);
+    `, [baseSalary, commission, otherDeds, grossSalary, totalDeductions, netSalary, existing.id]);
   }
 }
 

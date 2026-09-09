@@ -140,6 +140,7 @@ export default function Commissions() {
     try {
       await axios.post(`/api/projects/${projectId}/steps/${stepId}/forgive-late`, { forgive: true });
       fetchCommissions();
+      fetchBreakdown();
       fetchForfeitedCommissions();
     } catch(err) {
       console.error('Failed to toggle forgive late', err);

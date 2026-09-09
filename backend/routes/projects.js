@@ -38,6 +38,53 @@ async function notifyManagers(projectId, message, type, link) {
   }
 }
 
+// Helper to determine step items value strictly based on selected invoice items (with smart project fallback)
+async function getStepItemsTotal(step, dbClient) {
+  let items_total = 0;
+  
+  if (step.invoice_item_ids) {
+    let itemIds = [];
+    try {
+      itemIds = typeof step.invoice_item_ids === 'string' ? JSON.parse(step.invoice_item_ids) : step.invoice_item_ids;
+    } catch(e) {}
+    if (typeof itemIds === 'number') itemIds = [itemIds];
+    if (!Array.isArray(itemIds) && itemIds !== null && itemIds !== undefined) itemIds = [itemIds];
+    
+    if (Array.isArray(itemIds) && itemIds.length > 0) {
+      // Exclude items categorized as 'OTHER'
+      const [items] = await dbClient.query(
+        "SELECT SUM(total) as t FROM invoice_items WHERE id IN (?) AND (category != 'OTHER' OR category IS NULL)", 
+        [itemIds]
+      );
+      items_total = parseFloat(items[0]?.t || 0);
+    }
+  }
+
+  // Fallback: If no explicit items were tagged on this step, check linked project invoice items or amount
+  if (items_total === 0 && step.project_id) {
+    const [invItems] = await dbClient.query(
+      `SELECT SUM(ii.total) as t 
+       FROM invoice_items ii 
+       JOIN invoices i ON ii.invoice_id = i.id 
+       WHERE i.project_id = ? AND (ii.category != 'OTHER' OR ii.category IS NULL)`,
+      [step.project_id]
+    );
+    items_total = parseFloat(invItems[0]?.t || 0);
+
+    if (items_total === 0) {
+      const [[inv]] = await dbClient.query(
+        "SELECT amount FROM invoices WHERE project_id = ? ORDER BY id DESC LIMIT 1",
+        [step.project_id]
+      );
+      if (inv && inv.amount > 0) {
+        items_total = parseFloat(inv.amount);
+      }
+    }
+  }
+
+  return items_total;
+}
+
 async function notifyInternalTeam(projectId, message, type, link, triggerUserId) {
   const [[project]] = await db.query('SELECT pm_id, production_id FROM projects WHERE id = ?', [projectId]);
   const [managers] = await db.query("SELECT id FROM users WHERE role IN ('Admin', 'Product Manager')");
@@ -762,39 +809,98 @@ router.post('/:id/steps/:step_id/forgive-late', async (req, res) => {
   const connection = await db.getConnection();
   try {
     await connection.beginTransaction();
+
+    const [[step]] = await connection.query('SELECT * FROM project_steps WHERE id = ? AND project_id = ?', [req.params.step_id, req.params.id]);
+    if (!step) {
+      await connection.rollback();
+      return res.status(404).json({ error: 'Step not found' });
+    }
+
     await connection.query(
       'UPDATE project_steps SET forgive_late_commission = ? WHERE id = ? AND project_id = ?',
-      [forgive, req.params.step_id, req.params.id]
+      [forgive ? 1 : 0, req.params.step_id, req.params.id]
     );
 
+    // Calculate step value and commission
+    const items_total = await getStepItemsTotal(step, connection);
+    let comm_pct = 0;
+    if (step.assignee_id) {
+      const [[user]] = await connection.query('SELECT commission_percentage FROM users WHERE id = ?', [step.assignee_id]);
+      comm_pct = parseFloat(user?.commission_percentage || 0);
+    }
+    const calculatedBase = items_total > 0 && comm_pct > 0 ? Number(((items_total * comm_pct) / 100).toFixed(2)) : 0;
+
+    const stepMonth = step.completed_at 
+      ? new Date(step.completed_at).toISOString().slice(0, 7)
+      : new Date().toISOString().slice(0, 7);
+    const currentMonth = new Date().toISOString().slice(0, 7);
+
+    // Check existing commission record for this step
+    const [[existingComm]] = await connection.query('SELECT * FROM commissions WHERE step_id = ?', [req.params.step_id]);
+
+    let finalAmount = 0;
+
     if (forgive) {
+      // 1. Delete late penalty from salary_penalties
       await connection.query('DELETE FROM salary_penalties WHERE step_id = ?', [req.params.step_id]);
 
-      const [[project]] = await connection.query('SELECT status FROM projects WHERE id = ?', [req.params.id]);
-      if (project && project.status === 'Commission Released') {
-        const [[step]] = await connection.query('SELECT assignee_id, invoice_item_ids FROM project_steps WHERE id = ?', [req.params.step_id]);
-        if (step && step.assignee_id && step.invoice_item_ids) {
-          let itemIds = [];
-          try { itemIds = typeof step.invoice_item_ids === 'string' ? JSON.parse(step.invoice_item_ids) : step.invoice_item_ids; } catch(e){}
-          
-          if (Array.isArray(itemIds) && itemIds.length > 0) {
-            const [items] = await connection.query('SELECT SUM(total) as items_total FROM invoice_items WHERE id IN (?)', [itemIds]);
-            const items_total = items[0].items_total || 0;
-            
-            if (items_total > 0) {
-              const [[user]] = await connection.query('SELECT commission_percentage FROM users WHERE id = ?', [step.assignee_id]);
-              const comm_pct = parseFloat(user.commission_percentage) || 0;
-              const base_amount = items_total * (comm_pct / 100);
-              
-              if (base_amount > 0) {
-                await connection.query(
-                  'INSERT INTO commissions (project_id, user_id, base_amount, deductions, final_amount, status, released_at, step_id) VALUES (?, ?, ?, ?, ?, "Released", NOW(), ?)', 
-                  [req.params.id, step.assignee_id, base_amount, 0, base_amount, step.id]
-                );
-              }
-            }
+      // Determine effective base amount (use existing base_amount if positive, else calculatedBase)
+      const base_amount = existingComm && parseFloat(existingComm.base_amount || 0) > 0 
+        ? parseFloat(existingComm.base_amount) 
+        : calculatedBase;
+      finalAmount = base_amount;
+
+      // 2. Update existing commission record or insert if none exists
+      if (existingComm) {
+        await connection.query(
+          'UPDATE commissions SET base_amount = ?, deductions = 0.00, final_amount = ?, status = "Released", released_at = COALESCE(released_at, NOW()) WHERE id = ?',
+          [base_amount, base_amount, existingComm.id]
+        );
+      } else if (step.assignee_id && base_amount > 0) {
+        await connection.query(
+          'INSERT INTO commissions (project_id, user_id, base_amount, deductions, final_amount, status, released_at, step_id) VALUES (?, ?, ?, 0.00, ?, "Released", NOW(), ?)',
+          [req.params.id, step.assignee_id, base_amount, base_amount, req.params.step_id]
+        );
+      }
+
+      // 3. Mark step commission_released = TRUE
+      await connection.query('UPDATE project_steps SET commission_released = TRUE WHERE id = ?', [req.params.step_id]);
+    } else {
+      // Reinstating penalty (forgive = false)
+      const base_amount = existingComm && parseFloat(existingComm.base_amount || 0) > 0 
+        ? parseFloat(existingComm.base_amount) 
+        : calculatedBase;
+
+      if (base_amount > 0 && step.assignee_id) {
+        const [[penExists]] = await connection.query('SELECT id FROM salary_penalties WHERE step_id = ?', [req.params.step_id]);
+        if (!penExists) {
+          await connection.query(
+            'INSERT INTO salary_penalties (user_id, step_id, month, amount, reason) VALUES (?, ?, ?, ?, ?)',
+            [step.assignee_id, req.params.step_id, stepMonth, base_amount, 'Late delivery penalty']
+          );
+        }
+      }
+
+      if (existingComm) {
+        await connection.query(
+          'UPDATE commissions SET deductions = base_amount, final_amount = 0.00 WHERE id = ?',
+          [existingComm.id]
+        );
+      }
+    }
+
+    // Auto-sync pending payroll for the step month and current month
+    if (step.assignee_id) {
+      try {
+        const payrollRouter = require('./payroll');
+        if (payrollRouter.syncUserPendingPayroll) {
+          await payrollRouter.syncUserPendingPayroll(step.assignee_id, stepMonth, connection);
+          if (currentMonth !== stepMonth) {
+            await payrollRouter.syncUserPendingPayroll(step.assignee_id, currentMonth, connection);
           }
         }
+      } catch (syncErr) {
+        console.error('Error syncing payroll during forgive-late:', syncErr);
       }
     }
 
@@ -803,23 +909,25 @@ router.post('/:id/steps/:step_id/forgive-late', async (req, res) => {
     if (forgive) {
       try {
         const [[project]] = await db.query('SELECT title FROM projects WHERE id = ?', [req.params.id]);
-        const [[step]] = await db.query('SELECT title, assignee_id FROM project_steps WHERE id = ?', [req.params.step_id]);
         if (project && step && step.assignee_id) {
-          const msg = `Your late delivery for step "${step.title}" in project "${project.title}" has been forgiven. Your commission has been processed and released!`;
+          const msg = `Your late delivery for step "${step.title}" in project "${project.title}" has been forgiven. Your commission of PKR ${finalAmount.toFixed(2)} has been processed and released!`;
           notifyUserWhatsApp(step.assignee_id, msg);
           
           // Portal notification for Assignee
           await db.query('INSERT INTO notifications (user_id, message, type, link) VALUES (?, ?, ?, ?)', [step.assignee_id, msg, 'commission', `/pm/project/${req.params.id}`]);
           
           // Portal notification for Admins/PMs
-          notifyManagers(req.params.id, `Late delivery forgiven and commission released for step "${step.title}" in project "${project.title}"`, 'commission', `/pm/project/${req.params.id}`);
+          notifyManagers(req.params.id, `Late delivery forgiven and commission of PKR ${finalAmount.toFixed(2)} released for step "${step.title}" in project "${project.title}"`, 'commission', `/pm/project/${req.params.id}`);
         }
       } catch (e) {
         console.error('Failed to send whatsapp msg:', e);
       }
     }
 
-    res.json({ message: forgive ? 'Late delivery forgiven. Commission processed.' : 'Late delivery penalty reinstated.' });
+    res.json({ 
+      message: forgive ? 'Late delivery forgiven. Commission processed.' : 'Late delivery penalty reinstated.',
+      commission_amount: finalAmount
+    });
   } catch (error) {
     await connection.rollback();
     res.status(500).json({ error: error.message });
@@ -1062,10 +1170,6 @@ router.post('/:id/steps/:step_id/approve-commission', async (req, res) => {
     if (step.commission_released) throw new Error('Commission already released for this step');
     if (!step.assignee_id) throw new Error('No assignee for this step to receive commission');
 
-    // Commission Logic
-    const [[late_setting]] = await connection.query('SELECT setting_value FROM settings WHERE setting_key = "late_delivery_deduction_pct"');
-    const late_deduction_pct = late_setting ? (parseFloat(late_setting.setting_value) || 0) : 0;
-    
     let step_is_late = false;
     if (step.deadline && step.completed_at) {
       const d_deadline = new Date(step.deadline);
@@ -1076,21 +1180,7 @@ router.post('/:id/steps/:step_id/approve-commission', async (req, res) => {
       }
     }
 
-    let items_total = 0;
-    if (step.invoice_item_ids) {
-      let itemIds = [];
-      try { itemIds = typeof step.invoice_item_ids === 'string' ? JSON.parse(step.invoice_item_ids) : step.invoice_item_ids; } catch(e) {}
-      if (typeof itemIds === 'number') itemIds = [itemIds];
-      if (!Array.isArray(itemIds) && itemIds !== null && itemIds !== undefined) itemIds = [itemIds];
-      
-      if (Array.isArray(itemIds) && itemIds.length > 0) {
-        const [items] = await connection.query(
-          "SELECT SUM(total) as items_total FROM invoice_items WHERE id IN (?) AND (category != 'OTHER' OR category IS NULL)", 
-          [itemIds]
-        );
-        items_total = parseFloat(items[0]?.items_total || 0);
-      }
-    }
+    const items_total = await getStepItemsTotal(step, connection);
 
     let base_amount = 0;
     let deductions = 0;
@@ -1103,25 +1193,44 @@ router.post('/:id/steps/:step_id/approve-commission', async (req, res) => {
       final_amount = base_amount - deductions;
     }
 
+    const stepMonth = (step.completed_at ? new Date(step.completed_at) : new Date()).toISOString().slice(0, 7);
+    const currentMonth = new Date().toISOString().slice(0, 7);
+
+    // Check existing commission record
+    const [[existingComm]] = await connection.query('SELECT id FROM commissions WHERE step_id = ?', [step.id]);
+
     if (step_is_late && !step.forgive_late_commission) {
       // Step was late and not forgiven. Commission forfeited.
-      // Insert penalty into salary_penalties
       if (base_amount > 0) {
-        const currentMonth = new Date().toISOString().slice(0, 7);
         await connection.query(
           'INSERT INTO salary_penalties (user_id, step_id, month, amount, reason) VALUES (?, ?, ?, ?, ?)',
-          [step.assignee_id, step.id, currentMonth, base_amount, 'Late delivery penalty']
+          [step.assignee_id, step.id, stepMonth, base_amount, 'Late delivery penalty']
         );
       }
 
-      // We still insert a record into commissions so it shows up in their breakdown as 0
-      await connection.query(
-        'INSERT INTO commissions (project_id, user_id, base_amount, deductions, final_amount, status, released_at, step_id) VALUES (?, ?, ?, ?, ?, "Released", NOW(), ?)', 
-        [req.params.id, step.assignee_id, base_amount, base_amount, 0, step.id]
-      );
+      if (existingComm) {
+        await connection.query(
+          'UPDATE commissions SET base_amount = ?, deductions = ?, final_amount = 0.00, status = "Released", released_at = NOW() WHERE id = ?',
+          [base_amount, base_amount, existingComm.id]
+        );
+      } else {
+        await connection.query(
+          'INSERT INTO commissions (project_id, user_id, base_amount, deductions, final_amount, status, released_at, step_id) VALUES (?, ?, ?, ?, 0.00, "Released", NOW(), ?)', 
+          [req.params.id, step.assignee_id, base_amount, base_amount, step.id]
+        );
+      }
 
-      // Update step to commission released but 0 payout.
       await connection.query('UPDATE project_steps SET commission_released = TRUE WHERE id = ?', [step.id]);
+
+      // Sync pending payroll
+      const payrollRouter = require('./payroll');
+      if (payrollRouter.syncUserPendingPayroll) {
+        await payrollRouter.syncUserPendingPayroll(step.assignee_id, stepMonth, connection);
+        if (currentMonth !== stepMonth) {
+          await payrollRouter.syncUserPendingPayroll(step.assignee_id, currentMonth, connection);
+        }
+      }
+
       await connection.commit();
       
       try {
@@ -1130,10 +1239,7 @@ router.post('/:id/steps/:step_id/approve-commission', async (req, res) => {
           const msg = `Commission processed for step "${step.title}" in project "${project.title}". Amount: 0.00 (Late delivery penalty applied)`;
           notifyUserWhatsApp(step.assignee_id, msg);
           
-          // Portal notification for Assignee
           await db.query('INSERT INTO notifications (user_id, message, type, link) VALUES (?, ?, ?, ?)', [step.assignee_id, msg, 'commission', `/pm/project/${req.params.id}`]);
-          
-          // Portal notification for Admins/PMs
           notifyManagers(req.params.id, `Commission penalized (late delivery) for step "${step.title}" in project "${project.title}"`, 'commission', `/pm/project/${req.params.id}`);
         }
       } catch (e) {
@@ -1143,12 +1249,29 @@ router.post('/:id/steps/:step_id/approve-commission', async (req, res) => {
       return res.json({ message: 'Step was late and not forgiven. 0 commission released, penalty applied.' });
     }
     
-    // Always insert a record so the task is counted as "Completed Tasks" on the dashboard
-    await connection.query('INSERT INTO commissions (project_id, user_id, base_amount, deductions, final_amount, status, released_at, step_id) VALUES (?, ?, ?, ?, ?, "Released", NOW(), ?)', 
-      [req.params.id, step.assignee_id, base_amount, deductions, final_amount, step.id]
-    );
+    // Step was on-time OR forgiven
+    if (existingComm) {
+      await connection.query(
+        'UPDATE commissions SET base_amount = ?, deductions = 0.00, final_amount = ?, status = "Released", released_at = NOW() WHERE id = ?',
+        [base_amount, final_amount, existingComm.id]
+      );
+    } else {
+      await connection.query('INSERT INTO commissions (project_id, user_id, base_amount, deductions, final_amount, status, released_at, step_id) VALUES (?, ?, ?, 0.00, ?, "Released", NOW(), ?)', 
+        [req.params.id, step.assignee_id, base_amount, final_amount, step.id]
+      );
+    }
 
     await connection.query('UPDATE project_steps SET commission_released = TRUE WHERE id = ?', [step.id]);
+
+    // Sync pending payroll
+    const payrollRouter = require('./payroll');
+    if (payrollRouter.syncUserPendingPayroll) {
+      await payrollRouter.syncUserPendingPayroll(step.assignee_id, stepMonth, connection);
+      if (currentMonth !== stepMonth) {
+        await payrollRouter.syncUserPendingPayroll(step.assignee_id, currentMonth, connection);
+      }
+    }
+
     await connection.commit();
     
     try {
@@ -1157,10 +1280,7 @@ router.post('/:id/steps/:step_id/approve-commission', async (req, res) => {
         const msg = `Your commission for step "${step.title}" in project "${project.title}" has been released! Amount: PKR ${final_amount.toFixed(2)}`;
         notifyUserWhatsApp(step.assignee_id, msg);
         
-        // Portal notification for Assignee
         await db.query('INSERT INTO notifications (user_id, message, type, link) VALUES (?, ?, ?, ?)', [step.assignee_id, msg, 'commission', `/pm/project/${req.params.id}`]);
-        
-        // Portal notification for Admins/PMs
         notifyManagers(req.params.id, `Commission of PKR ${final_amount.toFixed(2)} released for step "${step.title}" in project "${project.title}"`, 'commission', `/pm/project/${req.params.id}`);
       }
     } catch (e) {
