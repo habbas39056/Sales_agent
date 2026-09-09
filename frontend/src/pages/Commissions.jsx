@@ -37,9 +37,6 @@ export default function Commissions() {
 
   useEffect(() => {
     fetchSpecialists();
-    fetchCommissions();
-    fetchBreakdown();
-    fetchForfeitedCommissions();
   }, []);
 
   useEffect(() => {
@@ -124,6 +121,10 @@ export default function Commissions() {
         params.append('user_id', user.id);
         params.append('role', user.role);
       }
+      if (startDate) params.append('start_date', startDate);
+      if (endDate) params.append('end_date', endDate);
+      if (selectedAgent && selectedAgent !== 'all') params.append('agent_id', selectedAgent);
+      if (selectedTargetRole && selectedTargetRole !== 'all') params.append('target_role', selectedTargetRole);
       
       const queryString = params.toString();
       if (queryString) url += `?${queryString}`;
@@ -182,9 +183,18 @@ export default function Commissions() {
   const currentCommissions = filteredCommissions.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
   const currentBreakdown = filteredBreakdown.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
 
-  const totalEarnedSum = commissions.reduce((sum, a) => sum + Number(a.total_earned || 0), 0);
-  const totalPaidSum = commissions.reduce((sum, a) => sum + Number(a.total_paid_out || 0), 0);
-  const totalPendingSum = commissions.reduce((sum, a) => sum + Number(a.pending_payout || 0), 0);
+  // Dynamic KPI Card totals based on active tab and applied filters (including date, status, agent, role, search)
+  const totalPaidSum = viewMode === 'breakdown'
+    ? filteredBreakdown.reduce((sum, item) => sum + Number(item.earned_commission || 0), 0)
+    : filteredCommissions.reduce((sum, a) => sum + Number(a.total_paid_out || 0), 0);
+
+  const totalPendingSum = viewMode === 'breakdown'
+    ? filteredBreakdown.reduce((sum, item) => sum + Number(item.pending_commission || 0), 0)
+    : filteredCommissions.reduce((sum, a) => sum + Number(a.pending_payout || 0), 0);
+
+  const totalEarnedSum = viewMode === 'breakdown'
+    ? filteredBreakdown.reduce((sum, item) => sum + Number(item.potential_commission || (Number(item.earned_commission || 0) + Number(item.pending_commission || 0))), 0)
+    : filteredCommissions.reduce((sum, a) => sum + Number(a.total_earned || (Number(a.total_paid_out || 0) + Number(a.pending_payout || 0))), 0);
 
   return (
     <div className="invoice-management-container modern-ui">
@@ -304,6 +314,41 @@ export default function Commissions() {
                   ✕
                 </button>
               )}
+            </div>
+
+            {/* Quick Month Filter Shortcuts */}
+            <div style={{ display: 'flex', gap: '0.35rem', alignItems: 'center' }}>
+              <button
+                type="button"
+                onClick={() => {
+                  const now = new Date();
+                  const y = now.getFullYear();
+                  const m = String(now.getMonth() + 1).padStart(2, '0');
+                  const lastDay = new Date(y, now.getMonth() + 1, 0).getDate();
+                  setStartDate(`${y}-${m}-01`);
+                  setEndDate(`${y}-${m}-${String(lastDay).padStart(2, '0')}`);
+                  setCurrentPage(1);
+                }}
+                style={{ padding: '0.35rem 0.65rem', borderRadius: '20px', border: '1px solid #e2e8f0', background: '#f8fafc', fontSize: '0.78rem', fontWeight: 600, color: '#475569', cursor: 'pointer' }}
+              >
+                This Month
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  const now = new Date();
+                  const prev = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+                  const y = prev.getFullYear();
+                  const m = String(prev.getMonth() + 1).padStart(2, '0');
+                  const lastDay = new Date(y, prev.getMonth() + 1, 0).getDate();
+                  setStartDate(`${y}-${m}-01`);
+                  setEndDate(`${y}-${m}-${String(lastDay).padStart(2, '0')}`);
+                  setCurrentPage(1);
+                }}
+                style={{ padding: '0.35rem 0.65rem', borderRadius: '20px', border: '1px solid #e2e8f0', background: '#f8fafc', fontSize: '0.78rem', fontWeight: 600, color: '#475569', cursor: 'pointer' }}
+              >
+                Last Month
+              </button>
             </div>
           </div>
 

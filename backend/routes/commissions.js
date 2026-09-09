@@ -52,7 +52,7 @@ async function getStepItemsTotal(step, dbClient) {
 // Get all forfeited commissions (late steps that resulted in 0 commission)
 router.get('/forfeited', async (req, res) => {
   try {
-    const { user_id, role } = req.query;
+    const { user_id, role, agent_id, target_role, start_date, end_date } = req.query;
     const isManager = ['Admin', 'Project Manager', 'PM', 'Product Manager'].includes(role);
     
     let query = `
@@ -81,6 +81,22 @@ router.get('/forfeited', async (req, res) => {
     if (user_id && role && !isManager) {
       query += ` AND ps.assignee_id = ?`;
       params.push(user_id);
+    }
+    if (agent_id && agent_id !== 'all') {
+      query += ` AND ps.assignee_id = ?`;
+      params.push(agent_id);
+    }
+    if (target_role && target_role !== 'all') {
+      query += ` AND u.role = ?`;
+      params.push(target_role);
+    }
+    if (start_date) {
+      query += ` AND DATE(ps.completed_at) >= ?`;
+      params.push(start_date);
+    }
+    if (end_date) {
+      query += ` AND DATE(ps.completed_at) <= ?`;
+      params.push(end_date);
     }
 
     query += ` ORDER BY ps.completed_at DESC`;
@@ -369,36 +385,50 @@ router.get('/breakdown', async (req, res) => {
     if (start_date) {
       releasedQuery += ` AND DATE(c.released_at) >= ?`;
       releasedParams.push(start_date);
+      pendingQuery += ` AND DATE(COALESCE(ps.completed_at, ps.created_at)) >= ?`;
+      pendingParams.push(start_date);
       paymentQuery += ` AND DATE(ip.payment_date) >= ?`;
       paymentParams.push(start_date);
-      pendingInvoiceQuery += ` AND DATE(i.created_at) >= ?`;
+      pendingInvoiceQuery += ` AND DATE(COALESCE(i.issue_date, i.created_at)) >= ?`;
       pendingInvoiceParams.push(start_date);
     }
     if (end_date) {
       releasedQuery += ` AND DATE(c.released_at) <= ?`;
       releasedParams.push(end_date);
+      pendingQuery += ` AND DATE(COALESCE(ps.completed_at, ps.created_at)) <= ?`;
+      pendingParams.push(end_date);
       paymentQuery += ` AND DATE(ip.payment_date) <= ?`;
       paymentParams.push(end_date);
-      pendingInvoiceQuery += ` AND DATE(i.created_at) <= ?`;
+      pendingInvoiceQuery += ` AND DATE(COALESCE(i.issue_date, i.created_at)) <= ?`;
       pendingInvoiceParams.push(end_date);
     }
 
-    const [releasedRows] = await db.query(releasedQuery, releasedParams);
-    const [pendingRows] = await db.query(pendingQuery, pendingParams);
-    const [paymentRows] = await db.query(paymentQuery, paymentParams);
-    const [pendingInvRows] = await db.query(pendingInvoiceQuery, pendingInvoiceParams);
+    const isPaidFilter = status === 'Paid';
+    const isPendingFilter = status === 'Pending' || status === 'Unpaid';
+    const isOverdueFilter = status === 'Overdue';
+    const isAllFilter = !status || status === 'all';
+
+    if (isOverdueFilter) {
+      pendingQuery += ` AND ps.deadline IS NOT NULL AND DATE(ps.deadline) < CURDATE()`;
+      pendingInvoiceQuery += ` AND i.due_date IS NOT NULL AND DATE(i.due_date) < CURDATE()`;
+    }
+
+    const [releasedRows] = (isAllFilter || isPaidFilter) ? await db.query(releasedQuery, releasedParams) : [[]];
+    const [pendingRows] = (isAllFilter || isPendingFilter || isOverdueFilter) ? await db.query(pendingQuery, pendingParams) : [[]];
+    const [paymentRows] = (isAllFilter || isPaidFilter) ? await db.query(paymentQuery, paymentParams) : [[]];
+    const [pendingInvRows] = (isAllFilter || isPendingFilter || isOverdueFilter) ? await db.query(pendingInvoiceQuery, pendingInvoiceParams) : [[]];
 
     let allCommissions = [];
 
-    // Append Released Project Steps
-    if (!status || status === 'all' || status === 'Paid') {
+    // Append Released Project Steps (Paid)
+    if (isAllFilter || isPaidFilter) {
       for (const relRow of releasedRows) {
         allCommissions.push(relRow);
       }
     }
 
-    // Process pending project steps with smart value calculation
-    if (!status || status === 'all' || status === 'Pending') {
+    // Process pending project steps with smart value calculation (Pending / Unpaid / Overdue)
+    if (isAllFilter || isPendingFilter || isOverdueFilter) {
       for (const row of pendingRows) {
         const items_total = await getStepItemsTotal(row, db);
         const comm_pct = parseFloat(row.commission_percentage) || 0;
@@ -412,8 +442,8 @@ router.get('/breakdown', async (req, res) => {
       }
     }
 
-    // Process Direct Invoice Payments (Earned Commissions)
-    if (!status || status === 'all' || status === 'Paid') {
+    // Process Direct Invoice Payments (Earned Commissions / Paid)
+    if (isAllFilter || isPaidFilter) {
       for (const payRow of paymentRows) {
         const invTotal = parseFloat(payRow.invoice_total_amount) || 0;
         const payAmt = parseFloat(payRow.invoice_paid_amount) || 0;
@@ -436,8 +466,8 @@ router.get('/breakdown', async (req, res) => {
       }
     }
 
-    // Process Pending Invoice Balances (Pending Commissions)
-    if (!status || status === 'all' || status === 'Pending') {
+    // Process Pending Invoice Balances (Pending Commissions / Unpaid / Overdue)
+    if (isAllFilter || isPendingFilter || isOverdueFilter) {
       for (const pInvRow of pendingInvRows) {
         const invTotal = parseFloat(pInvRow.invoice_total_amount) || 0;
         const balAmt = parseFloat(pInvRow.invoice_pending_balance) || 0;
@@ -518,7 +548,12 @@ router.get('/breakdown', async (req, res) => {
 // Get all agents and their aggregate commission data
 router.get('/', async (req, res) => {
   try {
-    const { user_id, role, target_role, start_date, end_date, agent_id } = req.query;
+    const { user_id, role, target_role, start_date, end_date, agent_id, status } = req.query;
+
+    const isPaidFilter = status === 'Paid';
+    const isPendingFilter = status === 'Pending' || status === 'Unpaid';
+    const isOverdueFilter = status === 'Overdue';
+    const isAllFilter = !status || status === 'all';
     
     let userQuery = `SELECT id, name, email, role, commission_percentage FROM users WHERE role != 'Client'`;
     const userParams = [];
@@ -548,115 +583,158 @@ router.get('/', async (req, res) => {
       let total_invoices = 0;
       const commPct = parseFloat(u.commission_percentage || 0);
 
-      // 1. Direct Invoice Sales Commission (Earned from actual payments received)
-      let paySql = `
-        SELECT ip.amount as payment_amount, i.amount as invoice_amount, i.commission_amount, u.commission_percentage
-        FROM invoice_payments ip
-        JOIN invoices i ON ip.invoice_id = i.id
-        JOIN users u ON i.agent_id = u.id
-        WHERE i.agent_id = ? AND i.status != 'Void'
-      `;
-      const payParams = [u.id];
-      if (start_date) {
-        paySql += ` AND DATE(ip.payment_date) >= ?`;
-        payParams.push(start_date);
-      }
-      if (end_date) {
-        paySql += ` AND DATE(ip.payment_date) <= ?`;
-        payParams.push(end_date);
-      }
-
-      const [payments] = await db.query(paySql, payParams);
-      for (const p of payments) {
-        const payAmt = parseFloat(p.payment_amount || 0);
-        const invAmt = parseFloat(p.invoice_amount || 0);
-        const invComm = parseFloat(p.commission_amount || 0);
-
-        let earned = 0;
-        if (invComm > 0 && invAmt > 0) {
-          earned = (payAmt / invAmt) * invComm;
-        } else if (commPct > 0) {
-          earned = payAmt * (commPct / 100);
+      // 1. Direct Invoice Sales Commission (Paid / Earned)
+      if (isAllFilter || isPaidFilter) {
+        let paySql = `
+          SELECT ip.amount as payment_amount, i.amount as invoice_amount, i.commission_amount, u.commission_percentage
+          FROM invoice_payments ip
+          JOIN invoices i ON ip.invoice_id = i.id
+          JOIN users u ON i.agent_id = u.id
+          WHERE i.agent_id = ? AND i.status != 'Void'
+        `;
+        const payParams = [u.id];
+        if (start_date) {
+          paySql += ` AND DATE(ip.payment_date) >= ?`;
+          payParams.push(start_date);
         }
-        total_paid_out += earned;
-        total_earned += earned;
-      }
-
-      // Direct Invoice Pending Commission (Unpaid invoice balances)
-      let pendingInvSql = `
-        SELECT amount, balance, commission_amount 
-        FROM invoices 
-        WHERE agent_id = ? AND status != 'Void' AND balance > 0
-      `;
-      const pendingInvParams = [u.id];
-      if (start_date) {
-        pendingInvSql += ` AND DATE(created_at) >= ?`;
-        pendingInvParams.push(start_date);
-      }
-      if (end_date) {
-        pendingInvSql += ` AND DATE(created_at) <= ?`;
-        pendingInvParams.push(end_date);
-      }
-
-      const [pendingInvoices] = await db.query(pendingInvSql, pendingInvParams);
-      for (const inv of pendingInvoices) {
-        const invTotal = parseFloat(inv.amount || 0);
-        const invBalance = parseFloat(inv.balance || 0);
-        const invComm = parseFloat(inv.commission_amount || 0);
-
-        let pending = 0;
-        if (invComm > 0 && invTotal > 0) {
-          pending = (invBalance / invTotal) * invComm;
-        } else if (commPct > 0) {
-          pending = invBalance * (commPct / 100);
+        if (end_date) {
+          paySql += ` AND DATE(ip.payment_date) <= ?`;
+          payParams.push(end_date);
         }
-        pending_payout += pending;
-        total_earned += pending;
+
+        const [payments] = await db.query(paySql, payParams);
+        for (const p of payments) {
+          const payAmt = parseFloat(p.payment_amount || 0);
+          const invAmt = parseFloat(p.invoice_amount || 0);
+          const invComm = parseFloat(p.commission_amount || 0);
+
+          let earned = 0;
+          if (invComm > 0 && invTotal > 0) {
+            earned = (payAmt / invTotal) * invComm;
+          } else if (commPct > 0) {
+            earned = payAmt * (commPct / 100);
+          }
+          total_paid_out += earned;
+          total_earned += earned;
+        }
+
+        // 2. Project Steps Commission (Released / Paid)
+        let relSql = `SELECT COALESCE(SUM(final_amount), 0) as total FROM commissions WHERE user_id = ? AND status = 'Released'`;
+        const relParams = [u.id];
+        if (start_date) {
+          relSql += ` AND DATE(released_at) >= ?`;
+          relParams.push(start_date);
+        }
+        if (end_date) {
+          relSql += ` AND DATE(released_at) <= ?`;
+          relParams.push(end_date);
+        }
+        const [releasedProjectComms] = await db.query(relSql, relParams);
+        const projReleased = parseFloat(releasedProjectComms[0]?.total || 0);
+        total_paid_out += projReleased;
+        total_earned += projReleased;
       }
 
-      // Total invoice count for this agent
+      // 3. Direct Invoice Pending Commission (Unpaid invoice balances)
+      if (isAllFilter || isPendingFilter || isOverdueFilter) {
+        let pendingInvSql = `
+          SELECT amount, balance, commission_amount, due_date
+          FROM invoices 
+          WHERE agent_id = ? AND status != 'Void' AND balance > 0
+        `;
+        const pendingInvParams = [u.id];
+        if (start_date) {
+          pendingInvSql += ` AND DATE(COALESCE(issue_date, created_at)) >= ?`;
+          pendingInvParams.push(start_date);
+        }
+        if (end_date) {
+          pendingInvSql += ` AND DATE(COALESCE(issue_date, created_at)) <= ?`;
+          pendingInvParams.push(end_date);
+        }
+        if (isOverdueFilter) {
+          pendingInvSql += ` AND due_date IS NOT NULL AND DATE(due_date) < CURDATE()`;
+        }
+
+        const [pendingInvoices] = await db.query(pendingInvSql, pendingInvParams);
+        for (const inv of pendingInvoices) {
+          const invTotal = parseFloat(inv.amount || 0);
+          const invBalance = parseFloat(inv.balance || 0);
+          const invComm = parseFloat(inv.commission_amount || 0);
+
+          let pending = 0;
+          if (invComm > 0 && invTotal > 0) {
+            pending = (invBalance / invTotal) * invComm;
+          } else if (commPct > 0) {
+            pending = invBalance * (commPct / 100);
+          }
+          pending_payout += pending;
+          total_earned += pending;
+        }
+
+        // 4. Project Steps Commission (Pending / In-Progress Steps)
+        let pendingStepSql = `
+          SELECT id, project_id, invoice_item_ids, deadline, completed_at, created_at 
+          FROM project_steps 
+          WHERE assignee_id = ? AND commission_released = FALSE
+        `;
+        const pendingStepParams = [u.id];
+        if (start_date) {
+          pendingStepSql += ` AND DATE(COALESCE(completed_at, created_at)) >= ?`;
+          pendingStepParams.push(start_date);
+        }
+        if (end_date) {
+          pendingStepSql += ` AND DATE(COALESCE(completed_at, created_at)) <= ?`;
+          pendingStepParams.push(end_date);
+        }
+        if (isOverdueFilter) {
+          pendingStepSql += ` AND deadline IS NOT NULL AND DATE(deadline) < CURDATE()`;
+        }
+
+        const [pendingSteps] = await db.query(pendingStepSql, pendingStepParams);
+
+        for (const pStep of pendingSteps) {
+          const stepVal = await getStepItemsTotal(pStep, db);
+          if (stepVal > 0 && commPct > 0) {
+            const stepComm = (stepVal * commPct) / 100;
+            pending_payout += stepComm;
+            total_earned += stepComm;
+          }
+        }
+      }
+
+      // Tasks / Invoices count based on role and date filter
       let invCountSql = `SELECT COUNT(*) as cnt FROM invoices WHERE agent_id = ? AND status != 'Void'`;
       const invCountParams = [u.id];
       if (start_date) {
-        invCountSql += ` AND DATE(created_at) >= ?`;
+        invCountSql += ` AND DATE(COALESCE(issue_date, created_at)) >= ?`;
         invCountParams.push(start_date);
       }
       if (end_date) {
-        invCountSql += ` AND DATE(created_at) <= ?`;
+        invCountSql += ` AND DATE(COALESCE(issue_date, created_at)) <= ?`;
         invCountParams.push(end_date);
       }
       const [invCountRes] = await db.query(invCountSql, invCountParams);
-      total_invoices = invCountRes[0]?.cnt || 0;
+      const invCount = invCountRes[0]?.cnt || 0;
 
-      // 2. Project Steps Commission (Released)
-      let relSql = `SELECT COALESCE(SUM(final_amount), 0) as total FROM commissions WHERE user_id = ? AND status = 'Released'`;
-      const relParams = [u.id];
+      let stepCountSql = `SELECT COUNT(*) as cnt FROM project_steps WHERE assignee_id = ? AND status = 'Completed'`;
+      const stepCountParams = [u.id];
       if (start_date) {
-        relSql += ` AND DATE(released_at) >= ?`;
-        relParams.push(start_date);
+        stepCountSql += ` AND DATE(completed_at) >= ?`;
+        stepCountParams.push(start_date);
       }
       if (end_date) {
-        relSql += ` AND DATE(released_at) <= ?`;
-        relParams.push(end_date);
+        stepCountSql += ` AND DATE(completed_at) <= ?`;
+        stepCountParams.push(end_date);
       }
-      const [releasedProjectComms] = await db.query(relSql, relParams);
-      const projReleased = parseFloat(releasedProjectComms[0]?.total || 0);
-      total_paid_out += projReleased;
-      total_earned += projReleased;
+      const [stepCountRes] = await db.query(stepCountSql, stepCountParams);
+      const stepCount = stepCountRes[0]?.cnt || 0;
 
-      // 3. Project Steps Commission (Pending / In-Progress Steps)
-      const [pendingSteps] = await db.query(
-        `SELECT id, project_id, invoice_item_ids FROM project_steps WHERE assignee_id = ? AND commission_released = FALSE`,
-        [u.id]
-      );
-
-      for (const pStep of pendingSteps) {
-        const stepVal = await getStepItemsTotal(pStep, db);
-        if (stepVal > 0 && commPct > 0) {
-          const stepComm = (stepVal * commPct) / 100;
-          pending_payout += stepComm;
-          total_earned += stepComm;
-        }
+      if (u.role === 'Production') {
+        total_invoices = stepCount;
+      } else if (u.role === 'Sales' || u.role === 'Sales Rep') {
+        total_invoices = invCount;
+      } else {
+        total_invoices = invCount > 0 ? invCount : stepCount;
       }
 
       results.push({
