@@ -901,9 +901,9 @@ export default function ProjectDetails() {
                                   <p>{new Date(step.completed_at).toLocaleString()}</p>
                                 </div>
                               )}
-                              {step.status === 'Completed' && step.completed_at && step.deadline && new Date(step.completed_at) > new Date(new Date(step.deadline).setHours(23, 59, 59, 999)) && currentUser?.role === 'Admin' && (
+                              {step.status === 'Completed' && step.completed_at && step.deadline && new Date(step.completed_at) > new Date(new Date(step.deadline).setHours(23, 59, 59, 999)) && currentUser && ['Admin', 'Project Manager', 'PM', 'Product Manager'].includes(currentUser.role) && (
                                 <div className="tp-col" style={{ gridColumn: '1 / -1', marginTop: '1rem', padding: '1rem', backgroundColor: '#fef2f2', borderRadius: '8px', border: '1px solid #fecaca' }}>
-                                  <label style={{ color: '#b91c1c' }}>Admin Override: Late Delivery Penalty</label>
+                                  <label style={{ color: '#b91c1c' }}>Late Delivery Penalty {step.forgive_late_commission ? '(Forgiven)' : ''}</label>
                                   <p style={{ fontSize: '0.85rem', color: '#7f1d1d', margin: '0.25rem 0 0.75rem 0' }}>This step was delivered after its deadline. By default, the assigned member will receive 0 commission for this step.</p>
                                   <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                                     <span style={{ fontSize: '0.85rem', fontWeight: '600', color: '#991b1b' }}>Forgive late delivery and pay commission?</span>

@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
-import { Banknote, User, Filter, Calendar, RotateCcw, Search } from 'lucide-react';
+import { Banknote, User, Filter, Calendar, RotateCcw, Search, Clock } from 'lucide-react';
 import Pagination from '../components/Pagination';
+import CommissionTimelineModal from '../components/CommissionTimelineModal';
 import './InvoiceManagement.css'; // Reuse styles
 
 export default function Commissions() {
@@ -12,6 +13,16 @@ export default function Commissions() {
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [viewMode, setViewMode] = useState('summary'); // 'summary' or 'breakdown'
+
+  // Timeline Modal State
+  const [isTimelineModalOpen, setIsTimelineModalOpen] = useState(false);
+  const [selectedTimelineInvoice, setSelectedTimelineInvoice] = useState(null);
+
+  const openTimelineModal = (invoiceIdOrNumber) => {
+    if (!invoiceIdOrNumber) return;
+    setSelectedTimelineInvoice(invoiceIdOrNumber);
+    setIsTimelineModalOpen(true);
+  };
 
   // Filter states
   const [startDate, setStartDate] = useState('');
@@ -388,6 +399,11 @@ export default function Commissions() {
                     const paidInv = parseFloat(item.invoice_paid_amount || 0);
                     const paidFraction = totalInv > 0 ? (paidInv / totalInv) * 100 : 0;
                     
+                    // Restrict installments and invoice payment progress strictly to Sales person commissions (not production members)
+                    const isProduction = item.agent_role === 'Production' || item.agent_role === 'Product Manager' || Boolean(item.step_id);
+                    const isSalesAgent = !isProduction && (item.agent_role === 'Sales' || item.agent_role === 'Sales Rep' || Boolean(item.is_sales_commission));
+                    const installmentsCount = parseInt(item.installments_count, 10) || 0;
+                    
                     return (
                       <tr key={idx}>
                         <td>
@@ -417,12 +433,43 @@ export default function Commissions() {
                           )}
                         </td>
                         <td style={{ width: '220px' }}>
-                          <div style={{ marginBottom: '0.3rem' }}>
-                            {item.invoice_numbers && item.invoice_numbers.length > 0 
-                              ? item.invoice_numbers.map(inv => <span key={inv} style={{ display: 'inline-block', background: '#f8fafc', padding: '0.1rem 0.4rem', borderRadius: '4px', fontSize: '0.75rem', marginRight: '0.2rem', border: '1px solid #e2e8f0', color: '#475569' }}>{inv}</span>)
-                              : <span style={{ color: '#94a3b8', fontSize: '0.75rem' }}>N/A</span>}
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem', marginBottom: '0.3rem', flexWrap: 'wrap' }}>
+                            {item.invoice_numbers && item.invoice_numbers.length > 0 ? (
+                              item.invoice_numbers.map(inv => (
+                                <span 
+                                  key={inv} 
+                                  onClick={() => isSalesAgent ? openTimelineModal(item.invoice_id || inv) : null}
+                                  title={isSalesAgent ? "Click to view payment timeline" : undefined}
+                                  style={{ 
+                                    display: 'inline-block', 
+                                    background: '#f1f5f9', 
+                                    padding: '0.15rem 0.5rem', 
+                                    borderRadius: '4px', 
+                                    fontSize: '0.75rem', 
+                                    border: '1px solid #e2e8f0', 
+                                    color: '#475569', 
+                                    fontWeight: 600, 
+                                    cursor: isSalesAgent ? 'pointer' : 'default' 
+                                  }}
+                                >
+                                  {inv}
+                                </span>
+                              ))
+                            ) : (
+                              <span style={{ color: '#94a3b8', fontSize: '0.75rem' }}>N/A</span>
+                            )}
+                            {/* ONLY show installment indicator for Sales Person, AND ONLY if at least 1 payment has been made! */}
+                            {isSalesAgent && installmentsCount > 0 && (
+                              <span 
+                                onClick={() => openTimelineModal(item.invoice_id || item.invoice_numbers[0])}
+                                style={{ cursor: 'pointer', color: '#4338ca', fontSize: '0.76rem', fontWeight: 700, textDecoration: 'underline', display: 'inline-flex', alignItems: 'center', gap: '0.2rem' }}
+                                title="View payment installments and release timeline"
+                              >
+                                <Clock size={13} /> {installmentsCount} { installmentsCount === 1 ? 'installment' : 'installments' }
+                              </span>
+                            )}
                           </div>
-                          {(item.agent_role === 'Sales' || item.agent_role === 'Sales Rep') && totalInv > 0 ? (
+                          {isSalesAgent && totalInv > 0 ? (
                             <div>
                               <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.75rem', marginBottom: '0.2rem', color: '#64748b' }}>
                                 <span>Paid: {paidFraction.toFixed(1)}%</span>
@@ -432,7 +479,7 @@ export default function Commissions() {
                                 <div style={{ width: `${paidFraction}%`, height: '100%', background: paidFraction >= 100 ? '#10b981' : '#3b82f6' }}></div>
                               </div>
                             </div>
-                          ) : (item.agent_role === 'Sales' || item.agent_role === 'Sales Rep') && totalInv <= 0 ? (
+                          ) : isSalesAgent && totalInv <= 0 ? (
                             <span style={{ fontSize: '0.75rem', color: '#94a3b8' }}>No amounts</span>
                           ) : null}
                         </td>
@@ -548,6 +595,13 @@ export default function Commissions() {
           </div>
         </div>
       )}
+
+      {/* Payment & Commission Release Timeline Modal */}
+      <CommissionTimelineModal 
+        isOpen={isTimelineModalOpen}
+        invoiceIdOrNumber={selectedTimelineInvoice}
+        onClose={() => setIsTimelineModalOpen(false)}
+      />
 
     </div>
   );

@@ -231,6 +231,16 @@ router.post('/:id/payments', async (req, res) => {
       0
     ]);
 
+    // Auto-sync agent's pending payroll commission for the payment month
+    const [[invAgent]] = await connection.query('SELECT agent_id FROM invoices WHERE id = ?', [invoiceId]);
+    if (invAgent && invAgent.agent_id) {
+      const paymentMonth = (payment_date || new Date().toISOString()).slice(0, 7);
+      const payrollRouter = require('./payroll');
+      if (payrollRouter.syncUserPendingPayroll) {
+        await payrollRouter.syncUserPendingPayroll(invAgent.agent_id, paymentMonth, connection);
+      }
+    }
+
     await connection.commit();
 
     try {
@@ -303,6 +313,18 @@ router.delete('/:id/payments/:paymentId', async (req, res) => {
       ORDER BY id DESC
       LIMIT 1
     `, [payment.amount, payment.transaction_id || '', expenseDescPrefix]);
+
+    // Auto-sync agent's pending payroll commission for the payment month
+    const [[invAgent]] = await connection.query('SELECT agent_id FROM invoices WHERE id = ?', [invoiceId]);
+    if (invAgent && invAgent.agent_id && payment.payment_date) {
+      const paymentMonth = (payment.payment_date instanceof Date 
+        ? payment.payment_date.toISOString().slice(0, 7) 
+        : String(payment.payment_date).slice(0, 7));
+      const payrollRouter = require('./payroll');
+      if (payrollRouter.syncUserPendingPayroll) {
+        await payrollRouter.syncUserPendingPayroll(invAgent.agent_id, paymentMonth, connection);
+      }
+    }
 
     await connection.commit();
     res.json({ message: 'Payment deleted successfully', newBalance, newStatus, totalPaid });

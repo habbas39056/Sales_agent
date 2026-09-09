@@ -55,6 +55,54 @@ router.get('/', async (req, res) => {
     const { month, status, search } = req.query;
     const targetMonth = month || new Date().toISOString().slice(0, 7); // Default to current YYYY-MM
 
+    // 1. If no payroll records exist yet for targetMonth, auto-initialize for active employees
+    const [[countRow]] = await db.query('SELECT COUNT(*) as cnt FROM payrolls WHERE month = ?', [targetMonth]);
+    if (countRow.cnt === 0) {
+      const [employees] = await db.query("SELECT id, COALESCE(base_salary, 0.00) as base_salary FROM users WHERE role != 'Client'");
+      for (const emp of employees) {
+        const baseSalary = parseFloat(emp.base_salary) || 0;
+        const [[advRow]] = await db.query('SELECT COALESCE(SUM(amount), 0.00) as total_adv FROM salary_advances WHERE user_id = ? AND month = ?', [emp.id, targetMonth]);
+        const advSalary = parseFloat(advRow?.total_adv || 0);
+
+        const [[penRow]] = await db.query('SELECT COALESCE(SUM(amount), 0.00) as total_pen FROM salary_penalties WHERE user_id = ? AND month = ?', [emp.id, targetMonth]);
+        const otherDeductions = parseFloat(penRow?.total_pen || 0);
+
+        const commission = await calculateUserMonthlyCommission(emp.id, targetMonth, db);
+        const grossSalary = baseSalary + commission;
+        const totalDeductions = advSalary + otherDeductions;
+        const netSalary = Math.max(0, grossSalary - totalDeductions);
+
+        await db.query(`
+          INSERT INTO payrolls (user_id, month, base_salary, overtime_allowance, bonus, gross_salary, advance_salary, tax_deduction, other_deductions, deductions, net_salary, status)
+          VALUES (?, ?, ?, ?, 0.00, ?, ?, 0.00, ?, ?, ?, 'Pending')
+        `, [emp.id, targetMonth, baseSalary, commission, grossSalary, advSalary, otherDeductions, totalDeductions, netSalary]);
+      }
+    } else {
+      // 2. Real-time Auto-Sync: Recalculate and update current commission for all Pending payrolls in targetMonth
+      const [pendingPayrolls] = await db.query(
+        'SELECT id, user_id, base_salary, bonus, advance_salary, tax_deduction, other_deductions FROM payrolls WHERE month = ? AND status = "Pending"',
+        [targetMonth]
+      );
+      for (const p of pendingPayrolls) {
+        const commission = await calculateUserMonthlyCommission(p.user_id, targetMonth, db);
+        const baseSalary = parseFloat(p.base_salary || 0);
+        const bonus = parseFloat(p.bonus || 0);
+        const advanceSalary = parseFloat(p.advance_salary || 0);
+        const tax = parseFloat(p.tax_deduction || 0);
+        const otherDeds = parseFloat(p.other_deductions || 0);
+
+        const grossSalary = baseSalary + commission + bonus;
+        const totalDeductions = advanceSalary + tax + otherDeds;
+        const netSalary = Math.max(0, grossSalary - totalDeductions);
+
+        await db.query(`
+          UPDATE payrolls 
+          SET overtime_allowance = ?, gross_salary = ?, deductions = ?, net_salary = ? 
+          WHERE id = ?
+        `, [commission, grossSalary, totalDeductions, netSalary, p.id]);
+      }
+    }
+
     let query = `
       SELECT 
         p.*,
@@ -131,6 +179,98 @@ router.get('/', async (req, res) => {
   }
 });
 
+// Helper to calculate an employee's exact earned commission for a specific month (YYYY-MM)
+async function calculateUserMonthlyCommission(userId, targetMonth, dbClient) {
+  let totalCommission = 0;
+
+  // 1. Direct Invoice Payments Commission for this month (Payments received in this month)
+  const [payments] = await dbClient.query(`
+    SELECT 
+      ip.amount as payment_amount,
+      i.amount as invoice_amount,
+      i.commission_amount as invoice_commission_amount,
+      u.commission_percentage
+    FROM invoice_payments ip
+    JOIN invoices i ON ip.invoice_id = i.id
+    JOIN users u ON i.agent_id = u.id
+    WHERE i.agent_id = ? 
+      AND i.status != 'Void'
+      AND (DATE_FORMAT(ip.payment_date, '%Y-%m') = ? OR ip.payment_date LIKE ?)
+  `, [userId, targetMonth, `${targetMonth}%`]);
+
+  for (const pay of payments) {
+    const payAmt = parseFloat(pay.payment_amount || 0);
+    const invAmt = parseFloat(pay.invoice_amount || 0);
+    const invComm = parseFloat(pay.invoice_commission_amount || 0);
+    const commPct = parseFloat(pay.commission_percentage || 0);
+
+    let comm = 0;
+    if (invComm > 0 && invAmt > 0) {
+      comm = (payAmt / invAmt) * invComm;
+    } else if (commPct > 0) {
+      comm = payAmt * (commPct / 100);
+    }
+    totalCommission += comm;
+  }
+
+  // 2. Project Step Commissions released in this month
+  const [stepComms] = await dbClient.query(`
+    SELECT COALESCE(SUM(final_amount), 0) as step_total
+    FROM commissions
+    WHERE user_id = ?
+      AND status = 'Released'
+      AND (DATE_FORMAT(released_at, '%Y-%m') = ? OR released_at LIKE ?)
+  `, [userId, targetMonth, `${targetMonth}%`]);
+
+  totalCommission += parseFloat(stepComms[0]?.step_total || 0);
+
+  return Number(totalCommission.toFixed(2));
+}
+
+// Helper to auto-sync or auto-create a user's pending payroll record when payments or commissions change
+async function syncUserPendingPayroll(userId, month, dbClient) {
+  if (!userId || !month) return;
+
+  const [[emp]] = await dbClient.query('SELECT id, base_salary FROM users WHERE id = ?', [userId]);
+  if (!emp) return;
+
+  const baseSalary = parseFloat(emp.base_salary || 0);
+  const commission = await calculateUserMonthlyCommission(userId, month, dbClient);
+
+  const [[existing]] = await dbClient.query('SELECT * FROM payrolls WHERE user_id = ? AND month = ?', [userId, month]);
+
+  if (!existing) {
+    const [[advRow]] = await dbClient.query('SELECT COALESCE(SUM(amount), 0.00) as total_adv FROM salary_advances WHERE user_id = ? AND month = ?', [userId, month]);
+    const advSalary = parseFloat(advRow?.total_adv || 0);
+
+    const [[penRow]] = await dbClient.query('SELECT COALESCE(SUM(amount), 0.00) as total_pen FROM salary_penalties WHERE user_id = ? AND month = ?', [userId, month]);
+    const otherDeductions = parseFloat(penRow?.total_pen || 0);
+
+    const grossSalary = baseSalary + commission;
+    const totalDeductions = advSalary + otherDeductions;
+    const netSalary = Math.max(0, grossSalary - totalDeductions);
+
+    await dbClient.query(`
+      INSERT INTO payrolls (user_id, month, base_salary, overtime_allowance, bonus, gross_salary, advance_salary, tax_deduction, other_deductions, deductions, net_salary, status)
+      VALUES (?, ?, ?, ?, 0.00, ?, ?, 0.00, ?, ?, ?, 'Pending')
+    `, [userId, month, baseSalary, commission, grossSalary, advSalary, otherDeductions, totalDeductions, netSalary]);
+  } else if (existing.status === 'Pending') {
+    const bonus = parseFloat(existing.bonus || 0);
+    const advanceSalary = parseFloat(existing.advance_salary || 0);
+    const tax = parseFloat(existing.tax_deduction || 0);
+    const otherDeds = parseFloat(existing.other_deductions || 0);
+    const grossSalary = baseSalary + commission + bonus;
+    const totalDeductions = advanceSalary + tax + otherDeds;
+    const netSalary = Math.max(0, grossSalary - totalDeductions);
+
+    await dbClient.query(`
+      UPDATE payrolls 
+      SET base_salary = ?, overtime_allowance = ?, gross_salary = ?, deductions = ?, net_salary = ? 
+      WHERE id = ?
+    `, [baseSalary, commission, grossSalary, totalDeductions, netSalary, existing.id]);
+  }
+}
+
 // POST /api/payroll/generate
 // Generate monthly payroll for all non-client active users for a month
 router.post('/generate', async (req, res) => {
@@ -164,28 +304,96 @@ router.post('/generate', async (req, res) => {
       );
       const otherDeductions = parseFloat(penRow.total_pen || 0);
 
-      const grossSalary = baseSalary;
-      const totalDeductions = advSalary + otherDeductions;
-      const netSalary = Math.max(0, grossSalary - totalDeductions);
+      // Calculate earned commission for this employee in targetMonth (from invoice payments and milestone steps)
+      const commission = await calculateUserMonthlyCommission(emp.id, targetMonth, connection);
 
-      // INSERT IGNORE so existing customized payroll records for this month are preserved
-      const [result] = await connection.query(
-        `INSERT IGNORE INTO payrolls (user_id, month, base_salary, overtime_allowance, bonus, gross_salary, advance_salary, tax_deduction, other_deductions, deductions, net_salary, status)
-         VALUES (?, ?, ?, 0.00, 0.00, ?, ?, 0.00, ?, ?, ?, 'Pending')`,
-        [emp.id, targetMonth, baseSalary, grossSalary, advSalary, otherDeductions, totalDeductions, netSalary]
+      const [[existing]] = await connection.query(
+        'SELECT * FROM payrolls WHERE user_id = ? AND month = ?',
+        [emp.id, targetMonth]
       );
 
-      if (result.affectedRows > 0) {
+      if (!existing) {
+        const grossSalary = baseSalary + commission;
+        const totalDeductions = advSalary + otherDeductions;
+        const netSalary = Math.max(0, grossSalary - totalDeductions);
+
+        await connection.query(
+          `INSERT INTO payrolls (user_id, month, base_salary, overtime_allowance, bonus, gross_salary, advance_salary, tax_deduction, other_deductions, deductions, net_salary, status)
+           VALUES (?, ?, ?, ?, 0.00, ?, ?, 0.00, ?, ?, ?, 'Pending')`,
+          [emp.id, targetMonth, baseSalary, commission, grossSalary, advSalary, otherDeductions, totalDeductions, netSalary]
+        );
+        generatedCount++;
+      } else if (existing.status === 'Pending') {
+        const bonus = parseFloat(existing.bonus || 0);
+        const tax = parseFloat(existing.tax_deduction || 0);
+        const grossSalary = baseSalary + commission + bonus;
+        const totalDeductions = advSalary + otherDeductions + tax;
+        const netSalary = Math.max(0, grossSalary - totalDeductions);
+
+        await connection.query(
+          `UPDATE payrolls 
+           SET base_salary = ?, overtime_allowance = ?, advance_salary = ?, other_deductions = ?, deductions = ?, gross_salary = ?, net_salary = ? 
+           WHERE id = ?`,
+          [baseSalary, commission, advSalary, otherDeductions, totalDeductions, grossSalary, netSalary, existing.id]
+        );
         generatedCount++;
       }
     }
 
     await connection.commit();
-    res.json({ message: `Generated payroll records for ${generatedCount} employees for ${targetMonth}` });
+    res.json({ message: `Processed payroll records for ${generatedCount} employees for ${targetMonth}` });
   } catch (error) {
     await connection.rollback();
     console.error('Error generating monthly payroll:', error);
     res.status(500).json({ error: 'Failed to generate monthly payroll' });
+  } finally {
+    connection.release();
+  }
+});
+
+// POST /api/payroll/sync-commissions
+// Recalculate commissions for all Pending payrolls in targetMonth
+router.post('/sync-commissions', async (req, res) => {
+  const { month } = req.body;
+  const targetMonth = month || new Date().toISOString().slice(0, 7);
+
+  const connection = await db.getConnection();
+  try {
+    await connection.beginTransaction();
+
+    const [pendingPayrolls] = await connection.query(
+      'SELECT id, user_id, base_salary, bonus, advance_salary, tax_deduction, other_deductions FROM payrolls WHERE month = ? AND status = "Pending"',
+      [targetMonth]
+    );
+
+    let updatedCount = 0;
+    for (const p of pendingPayrolls) {
+      const commission = await calculateUserMonthlyCommission(p.user_id, targetMonth, connection);
+      const baseSalary = parseFloat(p.base_salary || 0);
+      const bonus = parseFloat(p.bonus || 0);
+      const grossSalary = baseSalary + commission + bonus;
+
+      const advanceSalary = parseFloat(p.advance_salary || 0);
+      const tax = parseFloat(p.tax_deduction || 0);
+      const otherDeds = parseFloat(p.other_deductions || 0);
+      const totalDeductions = advanceSalary + tax + otherDeds;
+      const netSalary = Math.max(0, grossSalary - totalDeductions);
+
+      await connection.query(`
+        UPDATE payrolls 
+        SET overtime_allowance = ?, gross_salary = ?, deductions = ?, net_salary = ? 
+        WHERE id = ?
+      `, [commission, grossSalary, totalDeductions, netSalary, p.id]);
+
+      updatedCount++;
+    }
+
+    await connection.commit();
+    res.json({ message: `Successfully synchronized commissions for ${updatedCount} employees for ${targetMonth}` });
+  } catch (error) {
+    await connection.rollback();
+    console.error('Error syncing monthly commissions:', error);
+    res.status(500).json({ error: 'Failed to sync monthly commissions' });
   } finally {
     connection.release();
   }
@@ -483,5 +691,8 @@ router.delete('/:id', async (req, res) => {
     connection.release();
   }
 });
+
+router.calculateUserMonthlyCommission = calculateUserMonthlyCommission;
+router.syncUserPendingPayroll = syncUserPendingPayroll;
 
 module.exports = router;

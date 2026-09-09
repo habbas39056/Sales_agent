@@ -2,9 +2,10 @@ import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { 
   Banknote, Users, CheckCircle, Clock, Plus, Search, 
-  Printer, Edit, Trash2, CreditCard, Building2, X, Calendar, ArrowDownRight, FileText, Wallet
+  Printer, Edit, Trash2, CreditCard, Building2, X, Calendar, ArrowDownRight, FileText, Wallet, RotateCcw
 } from 'lucide-react';
 import Pagination from '../components/Pagination';
+import CommissionTimelineModal from '../components/CommissionTimelineModal';
 import './Payroll.css';
 
 const API_URL = import.meta.env.VITE_API_URL || '/api';
@@ -13,6 +14,10 @@ export default function Payroll() {
   // Month selection state (default to current YYYY-MM e.g., '2026-07')
   const [selectedMonth, setSelectedMonth] = useState(new Date().toISOString().slice(0, 7));
   const [payrolls, setPayrolls] = useState([]);
+
+  // Timeline Modal State
+  const [selectedTimelineInvoice, setSelectedTimelineInvoice] = useState(null);
+  const [isTimelineModalOpen, setIsTimelineModalOpen] = useState(false);
   const [advances, setAdvances] = useState([]);
   const [employees, setEmployees] = useState([]);
   const [banks, setBanks] = useState([]);
@@ -168,6 +173,20 @@ export default function Payroll() {
     } catch (err) {
       console.error('Error generating payroll:', err);
       setError('Failed to generate monthly payroll.');
+      setLoading(false);
+    }
+  };
+
+  // Sync / Recalculate Commissions on pending payrolls for the selected month
+  const handleSyncCommissions = async () => {
+    try {
+      setLoading(true);
+      const res = await axios.post(`${API_URL}/payroll/sync-commissions`, { month: selectedMonth });
+      showTempMessage(res.data.message || `Synchronized commissions for ${selectedMonth}`);
+      fetchPayrollData();
+    } catch (err) {
+      console.error('Error syncing commissions:', err);
+      setError('Failed to sync monthly commissions.');
       setLoading(false);
     }
   };
@@ -344,6 +363,9 @@ export default function Payroll() {
           </button>
           <button className="btn-secondary-payroll" onClick={() => setIsBaseSalariesModalOpen(true)}>
             <Building2 size={18} /> Manage Base Salaries
+          </button>
+          <button className="btn-secondary-payroll" onClick={handleSyncCommissions} title="Sync/Recalculate commissions for this month based on payments received">
+            <RotateCcw size={18} color="#4f46e5" /> Sync Commissions
           </button>
           <button className="btn-primary-payroll" onClick={handleGeneratePayroll}>
             <Plus size={18} /> Generate {selectedMonth} Payroll
@@ -1200,6 +1222,7 @@ export default function Payroll() {
                           <th style={{ textAlign: 'left', padding: '0.75rem', borderBottom: '1px solid #cbd5e1' }}>Project / Step</th>
                           <th style={{ textAlign: 'left', padding: '0.75rem', borderBottom: '1px solid #cbd5e1' }}>Invoice / Products</th>
                           <th style={{ textAlign: 'center', padding: '0.75rem', borderBottom: '1px solid #cbd5e1' }}>Comm. %</th>
+                          <th style={{ textAlign: 'center', padding: '0.75rem', borderBottom: '1px solid #cbd5e1' }}>Date</th>
                           <th style={{ textAlign: 'right', padding: '0.75rem', borderBottom: '1px solid #cbd5e1' }}>Potential</th>
                           <th style={{ textAlign: 'right', padding: '0.75rem', borderBottom: '1px solid #cbd5e1' }}>Earned</th>
                         </tr>
@@ -1213,8 +1236,31 @@ export default function Payroll() {
                             </td>
                             <td style={{ padding: '0.75rem' }}>
                               {item.invoice_numbers && item.invoice_numbers.length > 0 && (
-                                <div style={{ fontSize: '0.75rem', color: '#475569', marginBottom: '0.25rem' }}>
-                                  Invoices: {item.invoice_numbers.join(', ')}
+                                <div style={{ fontSize: '0.75rem', color: '#475569', marginBottom: '0.25rem', display: 'flex', alignItems: 'center', gap: '0.35rem', flexWrap: 'wrap' }}>
+                                  <span>Invoices:</span>
+                                  {item.invoice_numbers.map((inv, i) => {
+                                    const isSalesEmployee = payslipItem.employee_role === 'Sales' || payslipItem.employee_role === 'Sales Rep';
+                                    return isSalesEmployee ? (
+                                      <span 
+                                        key={i}
+                                        onClick={() => {
+                                          setSelectedTimelineInvoice(inv);
+                                          setIsTimelineModalOpen(true);
+                                        }}
+                                        title="Click to view payment timeline & split release"
+                                        style={{ cursor: 'pointer', background: '#eff6ff', color: '#2563eb', padding: '0.1rem 0.45rem', borderRadius: '4px', fontWeight: 700, border: '1px solid #bfdbfe' }}
+                                      >
+                                        {inv}
+                                      </span>
+                                    ) : (
+                                      <span 
+                                        key={i}
+                                        style={{ background: '#f1f5f9', color: '#475569', padding: '0.1rem 0.45rem', borderRadius: '4px', fontWeight: 600, border: '1px solid #e2e8f0' }}
+                                      >
+                                        {inv}
+                                      </span>
+                                    );
+                                  })}
                                 </div>
                               )}
                               {item.products && item.products.length > 0 && (
@@ -1225,6 +1271,9 @@ export default function Payroll() {
                             </td>
                             <td style={{ textAlign: 'center', padding: '0.75rem', fontWeight: '500' }}>
                               {item.commission_percentage || 0}%
+                            </td>
+                            <td style={{ textAlign: 'center', padding: '0.75rem', color: '#64748b', fontSize: '0.8rem' }}>
+                              {item.date ? new Date(item.date).toLocaleDateString() : '-'}
                             </td>
                             <td style={{ textAlign: 'right', padding: '0.75rem', color: '#64748b' }}>
                               PKR {Number(item.potential_commission || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
@@ -1244,6 +1293,13 @@ export default function Payroll() {
           </div>
         );
       })()}
+
+      {/* Invoice Timeline Modal */}
+      <CommissionTimelineModal 
+        isOpen={isTimelineModalOpen}
+        invoiceIdOrNumber={selectedTimelineInvoice}
+        onClose={() => setIsTimelineModalOpen(false)}
+      />
     </div>
   );
 }
