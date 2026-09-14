@@ -8,7 +8,7 @@ import {
 import { 
   TrendingUp, TrendingDown, DollarSign, CreditCard, Banknote, 
   FileText, Download, Filter, Calendar, Search, RefreshCw, 
-  CheckCircle2, Clock, AlertTriangle, User, FileSpreadsheet, Eye, ArrowUpRight
+  CheckCircle2, Clock, AlertTriangle, User, UserCheck, FileSpreadsheet, Eye, ArrowUpRight
 } from 'lucide-react';
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
@@ -38,6 +38,7 @@ export default function SalesReportView() {
   const [endDate, setEndDate] = useState('');
   const [selectedPreset, setSelectedPreset] = useState('all');
   const [selectedClient, setSelectedClient] = useState('all');
+  const [selectedAgent, setSelectedAgent] = useState('all');
   const [selectedStatus, setSelectedStatus] = useState('all');
   const [searchTerm, setSearchTerm] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
@@ -47,6 +48,7 @@ export default function SalesReportView() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [clientsList, setClientsList] = useState([]);
+  const [agentsList, setAgentsList] = useState([]);
   const [salesData, setSalesData] = useState({
     invoices: [],
     summary: {
@@ -76,6 +78,22 @@ export default function SalesReportView() {
       }
     };
     fetchClients();
+  }, []);
+
+  // Fetch Sales Agents for Filter Dropdown
+  useEffect(() => {
+    const fetchAgents = async () => {
+      try {
+        const token = localStorage.getItem('token');
+        const res = await axios.get(`${API_URL}/users/specialists`, {
+          headers: token ? { Authorization: `Bearer ${token}` } : {}
+        });
+        setAgentsList(res.data || []);
+      } catch (err) {
+        console.error('Failed to load sales agents list:', err);
+      }
+    };
+    fetchAgents();
   }, []);
 
   // Preset Date Calculator
@@ -132,6 +150,7 @@ export default function SalesReportView() {
       if (startDate) params.append('start_date', startDate);
       if (endDate) params.append('end_date', endDate);
       if (selectedClient && selectedClient !== 'all') params.append('client_id', selectedClient);
+      if (selectedAgent && selectedAgent !== 'all') params.append('agent_id', selectedAgent);
       if (selectedStatus && selectedStatus !== 'all') params.append('status', selectedStatus);
 
       const res = await axios.get(`${API_URL}/reports/sales?${params.toString()}`);
@@ -178,7 +197,7 @@ export default function SalesReportView() {
 
   useEffect(() => {
     fetchSalesReport();
-  }, [startDate, endDate, selectedClient, selectedStatus]);
+  }, [startDate, endDate, selectedClient, selectedAgent, selectedStatus]);
 
   // Client-side Filtered Invoices
   const filteredInvoices = useMemo(() => {
@@ -189,6 +208,7 @@ export default function SalesReportView() {
       (inv.invoice_number && inv.invoice_number.toLowerCase().includes(term)) ||
       (inv.client_name && inv.client_name.toLowerCase().includes(term)) ||
       (inv.business_name && inv.business_name.toLowerCase().includes(term)) ||
+      (inv.agent_name && inv.agent_name.toLowerCase().includes(term)) ||
       (inv.project_title && inv.project_title.toLowerCase().includes(term))
     );
   }, [salesData.invoices, searchTerm]);
@@ -231,6 +251,7 @@ export default function SalesReportView() {
       'Invoice #': inv.invoice_number,
       'Client Name': inv.client_name || '-',
       'Business / Company': inv.business_name || '-',
+      'Sales Agent': inv.agent_name || 'Unassigned',
       'Project': inv.project_title || 'Direct Sale',
       'Issue Date': inv.issue_date ? new Date(inv.issue_date).toLocaleDateString() : '-',
       'Due Date': inv.due_date ? new Date(inv.due_date).toLocaleDateString() : '-',
@@ -302,10 +323,11 @@ export default function SalesReportView() {
     doc.setTextColor(30, 41, 59);
     doc.text('2. Itemized Sales Ledger', 14, nextY);
 
-    const invoiceTableHeaders = [['Inv #', 'Client / Business', 'Issue Date', 'Amount', 'Paid', 'Balance', 'Status']];
+    const invoiceTableHeaders = [['Inv #', 'Client / Business', 'Sales Agent', 'Issue Date', 'Amount', 'Paid', 'Balance', 'Status']];
     const invoiceTableRows = (salesData.invoices || []).slice(0, 40).map(inv => [
       inv.invoice_number,
       inv.client_name || inv.business_name || 'N/A',
+      inv.agent_name || 'Unassigned',
       inv.issue_date ? new Date(inv.issue_date).toLocaleDateString() : '-',
       `PKR ${parseFloat(inv.amount || 0).toLocaleString()}`,
       `PKR ${parseFloat(inv.paid_amount || (inv.amount - inv.balance) || 0).toLocaleString()}`,
@@ -422,6 +444,26 @@ export default function SalesReportView() {
             </select>
           </div>
 
+          {/* Sales Agent Filter */}
+          <div className="filter-field">
+            <label><UserCheck size={14} /> Filter by Sales Agent</label>
+            <select 
+              value={selectedAgent} 
+              onChange={(e) => {
+                setSelectedAgent(e.target.value);
+                setCurrentPage(1);
+              }}
+            >
+              <option value="all">All Sales Agents ({agentsList.length})</option>
+              <option value="unassigned">Unassigned Invoices</option>
+              {agentsList.map(a => (
+                <option key={a.id} value={a.id}>
+                  {a.full_name || a.name} {a.role ? `(${a.role})` : ''}
+                </option>
+              ))}
+            </select>
+          </div>
+
           {/* Status Filter */}
           <div className="filter-field">
             <label><Filter size={14} /> Invoice Status</label>
@@ -464,29 +506,41 @@ export default function SalesReportView() {
         {/* Realized Revenue */}
         <div className="sales-kpi-card card-green">
           <div className="card-top">
-            <span className="card-title">Realized Cash Revenue</span>
-            <div className="card-icon"><Banknote size={20} /></div>
+            <span className="card-title">Realized Revenue</span>
+            <div className="card-icon"><DollarSign size={20} /></div>
           </div>
           <div className="card-body">
-            <h2 className="card-value text-green">{fmt(salesData.summary.realized_revenue)}</h2>
+            <h2 className="card-value">{fmt(salesData.summary.realized_revenue)}</h2>
             <div className="card-meta">
-              <span className="meta-pill green">
-                <CheckCircle2 size={12} /> {salesData.summary.collection_rate}% Collected
-              </span>
+              <span className="meta-pill green">{salesData.summary.collection_rate}% Realization</span>
             </div>
           </div>
         </div>
 
         {/* Accounts Receivable */}
-        <div className="sales-kpi-card card-orange">
+        <div className="sales-kpi-card card-amber">
           <div className="card-top">
             <span className="card-title">Accounts Receivable (A/R)</span>
-            <div className="card-icon"><Clock size={20} /></div>
+            <div className="card-icon"><TrendingDown size={20} /></div>
           </div>
           <div className="card-body">
-            <h2 className="card-value text-orange">{fmt(salesData.summary.outstanding_ar)}</h2>
+            <h2 className="card-value">{fmt(salesData.summary.outstanding_ar)}</h2>
             <div className="card-meta">
-              <span className="meta-pill orange">Outstanding Due</span>
+              <span className="meta-pill amber">Uncollected Capital</span>
+            </div>
+          </div>
+        </div>
+
+        {/* Net Realized Profit */}
+        <div className="sales-kpi-card card-purple">
+          <div className="card-top">
+            <span className="card-title">Net Realized Profit</span>
+            <div className="card-icon"><TrendingUp size={20} /></div>
+          </div>
+          <div className="card-body">
+            <h2 className="card-value">{fmt(salesData.summary.net_profit)}</h2>
+            <div className="card-meta">
+              <span className="meta-pill purple">{salesData.summary.profit_margin}% Margin</span>
             </div>
           </div>
         </div>
@@ -494,60 +548,40 @@ export default function SalesReportView() {
         {/* Direct Expenses */}
         <div className="sales-kpi-card card-red">
           <div className="card-top">
-            <span className="card-title">Period Operating Expenses</span>
+            <span className="card-title">Direct Expenses (Period)</span>
             <div className="card-icon"><CreditCard size={20} /></div>
           </div>
           <div className="card-body">
-            <h2 className="card-value text-red">{fmt(salesData.summary.total_expenses)}</h2>
+            <h2 className="card-value">{fmt(salesData.summary.total_expenses)}</h2>
             <div className="card-meta">
-              <span className="meta-pill red">Outflow</span>
+              <span className="meta-pill red">Operating Costs</span>
             </div>
           </div>
         </div>
 
-        {/* Net Profit */}
-        <div className="sales-kpi-card card-purple">
-          <div className="card-top">
-            <span className="card-title">Net Realized Profit</span>
-            <div className="card-icon">
-              {salesData.summary.net_profit >= 0 ? <TrendingUp size={20} /> : <TrendingDown size={20} />}
-            </div>
-          </div>
-          <div className="card-body">
-            <h2 className={`card-value ${salesData.summary.net_profit >= 0 ? 'text-purple' : 'text-red'}`}>
-              {fmt(salesData.summary.net_profit)}
-            </h2>
-            <div className="card-meta">
-              <span className={`meta-pill ${salesData.summary.net_profit >= 0 ? 'purple' : 'red'}`}>
-                {salesData.summary.profit_margin}% Margin
-              </span>
-            </div>
-          </div>
-        </div>
-
-        {/* Average Deal Size */}
+        {/* Average Order Value */}
         <div className="sales-kpi-card card-teal">
           <div className="card-top">
-            <span className="card-title">Avg. Invoice Value (AOV)</span>
-            <div className="card-icon"><DollarSign size={20} /></div>
+            <span className="card-title">Average Deal Value</span>
+            <div className="card-icon"><CheckCircle2 size={20} /></div>
           </div>
           <div className="card-body">
             <h2 className="card-value">{fmt(salesData.summary.avg_order_value)}</h2>
             <div className="card-meta">
-              <span className="meta-pill teal">Per Transaction</span>
+              <span className="meta-pill teal">Per Closed Transaction</span>
             </div>
           </div>
         </div>
       </div>
 
-      {/* 4. Interactive Analytics Visualizations */}
-      <div className="sales-charts-row">
+      {/* 4. Analytics Visualizations */}
+      <div className="sales-analytics-row">
         {/* Trend Area Chart */}
         <div className="sales-chart-card chart-main">
           <div className="chart-header">
             <div>
-              <h3>Sales Trend & Realization Curve</h3>
-              <p className="chart-subtitle">Monthly comparison of Billed Sales vs Realized Cash Inflow vs Outflow</p>
+              <h3>Invoiced Sales vs Cash Collections</h3>
+              <p className="chart-subtitle">Monthly cash flow dynamics and pipeline trajectory</p>
             </div>
           </div>
           <div className="chart-container-box">
@@ -711,7 +745,7 @@ export default function SalesReportView() {
             <Search size={16} />
             <input 
               type="text" 
-              placeholder="Search by invoice #, client, business, or project..." 
+              placeholder="Search by invoice #, client, business, sales agent, or project..." 
               value={searchTerm}
               onChange={(e) => {
                 setSearchTerm(e.target.value);
@@ -727,6 +761,7 @@ export default function SalesReportView() {
               <tr>
                 <th>Invoice #</th>
                 <th>Client / Account</th>
+                <th>Sales Agent</th>
                 <th>Project</th>
                 <th>Issue Date</th>
                 <th>Due Date</th>
@@ -740,13 +775,13 @@ export default function SalesReportView() {
             <tbody>
               {loading ? (
                 <tr>
-                  <td colSpan="10" className="table-loading-cell">
+                  <td colSpan="11" className="table-loading-cell">
                     <div className="loading-state"><RefreshCw className="spinner" size={24} /> Loading sales transactions...</div>
                   </td>
                 </tr>
               ) : paginatedInvoices.length === 0 ? (
                 <tr>
-                  <td colSpan="10" className="table-empty-cell">
+                  <td colSpan="11" className="table-empty-cell">
                     No sales transactions match the specified filters.
                   </td>
                 </tr>
@@ -766,6 +801,14 @@ export default function SalesReportView() {
                         <div className="client-cell-info">
                           <span className="client-main-name">{inv.client_name || 'Anonymous Client'}</span>
                           {inv.business_name && <span className="client-sub-name">{inv.business_name}</span>}
+                        </div>
+                      </td>
+                      <td>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+                          <User size={13} style={{ color: '#64748b' }} />
+                          <span style={{ fontWeight: 600, color: '#334155', fontSize: '0.82rem' }}>
+                            {inv.agent_name || <span className="text-muted" style={{ fontWeight: 400 }}>Unassigned</span>}
+                          </span>
                         </div>
                       </td>
                       <td>

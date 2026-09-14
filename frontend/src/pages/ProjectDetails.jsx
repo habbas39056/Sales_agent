@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import axios from 'axios';
-import { ArrowLeft, FileText, UploadCloud, Download, CheckCircle, Clock, Plus, X, Check, ExternalLink, Image, FileCode, Film, Music, Archive, Upload, Edit, Link2, Trash2, AlertCircle } from 'lucide-react';
+import { ArrowLeft, FileText, UploadCloud, Download, CheckCircle, Clock, Plus, X, Check, ExternalLink, Image, FileCode, Film, Music, Archive, Upload, Edit, Link2, Trash2, AlertCircle, Calendar } from 'lucide-react';
 import StepComments from '../components/StepComments';
 import StepInhouseChat from '../components/StepInhouseChat';
 import StepActivityLog from '../components/StepActivityLog';
+import { getProjectDueDateStatus } from '../utils/projectDueDate';
 import './ProjectDetails.css';
 import './Modal.css';
 
@@ -387,6 +388,9 @@ export default function ProjectDetails() {
   const completedSteps = allSteps.filter(s => s.status === 'Completed').length;
   const percent = totalSteps > 0 ? Math.round((completedSteps / totalSteps) * 100) : 0;
 
+  const projectDueDate = project.due_date || project.locked_deadline;
+  const dueStatus = getProjectDueDateStatus(projectDueDate, project.status);
+
   return (
     <div className="project-details-container">
       
@@ -399,10 +403,31 @@ export default function ProjectDetails() {
         <div className="pd-header-content">
           <div className="pd-header-info">
             <h1>{project.title}</h1>
-            <p className="pd-subtitle">
+            <p className="pd-subtitle" style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '0.35rem' }}>
               <span className="subtitle-label">Client:</span> <span className="subtitle-value">{project.client_name || 'No Client'}</span>
               <span className="subtitle-divider">·</span>
               <span className="subtitle-label">Service:</span> <span className="subtitle-value">{project.service_type || 'Unspecified'}</span>
+              <span className="subtitle-divider">·</span>
+              <span className="subtitle-label">Due Date:</span> 
+              {dueStatus.status === 'none' ? (
+                <span className="subtitle-value" style={{ fontStyle: 'italic', color: '#94a3b8' }}>No Due Date</span>
+              ) : (
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }}>
+                  <Calendar size={13} style={{ color: dueStatus.color }} />
+                  <span className="subtitle-value" style={{ fontWeight: 600 }}>{dueStatus.formattedDate}</span>
+                  <span style={{
+                    fontSize: '0.72rem',
+                    fontWeight: 700,
+                    padding: '0.12rem 0.5rem',
+                    borderRadius: '9999px',
+                    color: dueStatus.color,
+                    background: dueStatus.bg,
+                    border: `1px solid ${dueStatus.border}`
+                  }}>
+                    {dueStatus.badgeText}
+                  </span>
+                </span>
+              )}
             </p>
             {project.assigned_members && project.assigned_members.length > 0 && (
               <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginTop: '0.5rem' }}>
@@ -459,6 +484,49 @@ export default function ProjectDetails() {
           </div>
         </div>
       </div>
+
+      {/* Overdue Warning Alert Banner */}
+      {dueStatus.status === 'overdue' && (
+        <div style={{
+          marginTop: '1rem',
+          padding: '0.9rem 1.25rem',
+          borderRadius: '12px',
+          backgroundColor: '#fef2f2',
+          border: '1px solid #fecaca',
+          color: '#991b1b',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          gap: '1rem',
+          boxShadow: '0 1px 3px 0 rgba(239, 68, 68, 0.08)'
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+            <div style={{ background: '#fee2e2', padding: '0.5rem', borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <AlertCircle size={22} style={{ color: '#dc2626' }} />
+            </div>
+            <div>
+              <div style={{ fontWeight: 700, fontSize: '0.92rem', color: '#991b1b', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                Project Deadline Exceeded — Overdue by {dueStatus.daysOverdue} day{dueStatus.daysOverdue === 1 ? '' : 's'}!
+              </div>
+              <div style={{ fontSize: '0.82rem', color: '#b91c1c', marginTop: '2px' }}>
+                The target completion deadline was <strong>{dueStatus.formattedDate}</strong>. Immediate action is required to expedite remaining workflow steps.
+              </div>
+            </div>
+          </div>
+          <span style={{
+            fontSize: '0.75rem',
+            fontWeight: 700,
+            padding: '0.35rem 0.75rem',
+            borderRadius: '9999px',
+            color: '#dc2626',
+            background: '#ffffff',
+            border: '1px solid #fecaca',
+            whiteSpace: 'nowrap'
+          }}>
+            🚨 {dueStatus.daysOverdue}d Past Deadline
+          </span>
+        </div>
+      )}
 
 
 

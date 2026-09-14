@@ -276,6 +276,10 @@ router.put('/:id', async (req, res) => {
 // 4. Delete a Future Payable
 router.delete('/:id', async (req, res) => {
   try {
+    const [[payable]] = await db.query('SELECT expense_id FROM future_payables WHERE id = ?', [req.params.id]);
+    if (payable && payable.expense_id) {
+      await db.query('DELETE FROM expenses WHERE id = ?', [payable.expense_id]);
+    }
     await db.query(`DELETE FROM future_payables WHERE id = ?`, [req.params.id]);
     res.json({ message: 'Future payable removed successfully' });
   } catch (err) {

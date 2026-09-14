@@ -1,7 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import axios from 'axios';
-import { User, Phone, Mail, MapPin, Building, ArrowLeft, Folder, FileText, CreditCard, Activity, StickyNote, Plus, Trash2, Edit, X } from 'lucide-react';
+import { 
+  User, Phone, Mail, MapPin, Building, ArrowLeft, Folder, FileText, 
+  CreditCard, Activity, StickyNote, Plus, Trash2, Edit, X,
+  MessageSquare, Receipt, CheckCircle2, AlertCircle
+} from 'lucide-react';
 import './ClientProfile.css';
 
 export default function ClientProfile() {
@@ -93,30 +97,113 @@ export default function ClientProfile() {
   if (loading) return <div className="loading">Loading client profile...</div>;
   if (!data) return <div className="loading">Client not found.</div>;
 
-  const { client, projects, invoices, subscriptions, files, notes = [] } = data;
+  const { client, projects = [], invoices = [], subscriptions = [], files = [], notes = [] } = data;
+
+  const totalInvoiced = invoices.filter(i => i.status !== 'Void').reduce((sum, i) => sum + (Number(i.amount) || 0), 0);
+  const totalPaid = invoices.filter(i => i.status !== 'Void').reduce((sum, i) => sum + ((Number(i.amount) || 0) - (Number(i.balance) || 0)), 0);
+  const totalBalance = invoices.filter(i => i.status !== 'Void').reduce((sum, i) => sum + (Number(i.balance) || 0), 0);
+  const cleanPhone = client.whatsapp_number ? client.whatsapp_number.replace(/[^0-9]/g, '') : '';
+
+  const formatCurrency = (amount) => {
+    const num = Number(amount) || 0;
+    return 'PKR ' + num.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
+  };
 
   return (
-    <div className="client-profile-container">
+    <div className="client-profile-container modern-ui">
+      {/* Top Header with Back Navigation & Quick Actions */}
       <div className="profile-header">
-        <Link to="/clients" className="back-link"><ArrowLeft size={16} /> Back to Clients</Link>
+        <Link to="/clients" className="back-link">
+          <ArrowLeft size={16} /> Back to Clients Directory
+        </Link>
+        
+        <div className="profile-top-actions">
+          {cleanPhone && (
+            <a 
+              href={`https://wa.me/${cleanPhone}`} 
+              target="_blank" 
+              rel="noopener noreferrer" 
+              className="profile-btn whatsapp"
+              title="Chat on WhatsApp"
+            >
+              <MessageSquare size={15} /> WhatsApp
+            </a>
+          )}
+          {client.email && (
+            <a 
+              href={`mailto:${client.email}`} 
+              className="profile-btn email"
+              title="Send Email"
+            >
+              <Mail size={15} /> Email
+            </a>
+          )}
+          <Link to={`/quotations/new?client_id=${client.id}`} className="profile-btn secondary">
+            <FileText size={15} /> New Quotation
+          </Link>
+          <Link to={`/invoices/new?client_id=${client.id}`} className="profile-btn primary">
+            <Receipt size={15} /> New Invoice
+          </Link>
+        </div>
       </div>
 
+      {/* Main Profile Info Card */}
       <div className="profile-card card">
         <div className="profile-main">
           {client.profile_image_url ? (
             <img src={client.profile_image_url} alt={client.full_name} className="profile-avatar" />
           ) : (
-            <div className="profile-avatar placeholder"><User size={40} /></div>
+            <div className="profile-avatar placeholder">
+              {client.full_name ? client.full_name.slice(0, 2).toUpperCase() : <User size={36} />}
+            </div>
           )}
           <div className="profile-info">
-            <h1>{client.full_name}</h1>
+            <div className="profile-title-badge-row">
+              <h1>{client.business_name || client.full_name}</h1>
+              {client.business_name && client.business_name !== client.full_name && (
+                <span className="profile-sub-title">Contact: {client.full_name}</span>
+              )}
+              <span className="profile-id-chip">Client #{client.id}</span>
+            </div>
+
             <div className="profile-meta">
-              {client.business_name && <span className="meta-item"><Building size={16} /> {client.business_name}</span>}
-              {client.email && <span className="meta-item"><Mail size={16} /> {client.email}</span>}
-              {client.whatsapp_number && <span className="meta-item"><Phone size={16} /> {client.whatsapp_number}</span>}
-              {client.physical_address && <span className="meta-item"><MapPin size={16} /> {client.physical_address}</span>}
+              {client.business_name && <span className="meta-item"><Building size={15} /> {client.business_name}</span>}
+              {client.email && <span className="meta-item"><Mail size={15} /> {client.email}</span>}
+              {client.whatsapp_number && <span className="meta-item"><Phone size={15} /> {client.whatsapp_number}</span>}
+              {client.physical_address && <span className="meta-item"><MapPin size={15} /> {client.physical_address}</span>}
             </div>
           </div>
+        </div>
+      </div>
+
+      {/* Client Financial Health & KPI Summary Cards */}
+      <div className="profile-kpi-grid">
+        <div className="profile-kpi-card">
+          <span className="kpi-label">Total Invoiced</span>
+          <div className="kpi-value">{formatCurrency(totalInvoiced)}</div>
+          <span className="kpi-subtext">{invoices.length} total invoice(s)</span>
+        </div>
+
+        <div className="profile-kpi-card">
+          <span className="kpi-label">Paid / Collected</span>
+          <div className="kpi-value green-text">{formatCurrency(totalPaid)}</div>
+          <span className="kpi-subtext">Received into accounts</span>
+        </div>
+
+        <div className="profile-kpi-card">
+          <span className="kpi-label">Outstanding Balance</span>
+          <div className={`kpi-value ${totalBalance > 0 ? 'rose-text' : 'green-text'}`}>
+            {formatCurrency(totalBalance)}
+          </div>
+          <span className="kpi-subtext">
+            {totalBalance > 0 ? 'Pending client settlement' : 'Account in good standing'}
+          </span>
+        </div>
+
+        <div className="profile-kpi-card">
+          <span className="kpi-label">Active Projects</span>
+          <div className="kpi-value">{projects.length}</div>
+          <span className="kpi-subtext">Operational engagements</span>
         </div>
       </div>
 

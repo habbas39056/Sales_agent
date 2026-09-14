@@ -93,6 +93,12 @@ export default function CreateInvoice() {
           }))
         });
         setPayments(inv.payments || []);
+      } else {
+        const urlParams = new URLSearchParams(window.location.search);
+        const preselectedClient = urlParams.get('client_id');
+        if (preselectedClient) {
+          setFormData(prev => ({ ...prev, client_id: preselectedClient }));
+        }
       }
     } catch (error) {
       console.error('Failed to fetch data:', error);
@@ -836,7 +842,7 @@ export default function CreateInvoice() {
               <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '2rem' }}>
                 <div style={{ flex: 1 }}>
                   <div style={{ marginBottom: '1.5rem' }}>
-                    <img src="/Adwise-Labs-Primary-Logo.png" alt="Adwise Labs Logo" style={{ maxWidth: '220px', height: 'auto', display: 'block' }} />
+                    <img src="/logo.webp" alt="Adwise Labs Logo" style={{ maxWidth: '220px', height: 'auto', display: 'block' }} />
                   </div>
                   <h2 style={{ fontSize: '1.2rem', marginBottom: '1.5rem' }}>Invoice {formData.invoice_number}</h2>
                   
@@ -909,7 +915,7 @@ export default function CreateInvoice() {
               {formData.terms_and_conditions && (
                 <div className="terms-page-break">
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem', borderBottom: '2px solid #0f172a', paddingBottom: '1rem' }}>
-                    <img src="/Adwise-Labs-Primary-Logo.png" alt="Adwise Labs Logo" style={{ maxWidth: '180px', height: 'auto' }} />
+                    <img src="/logo.webp" alt="Adwise Labs Logo" style={{ maxWidth: '180px', height: 'auto' }} />
                     <h2 style={{ fontSize: '1.3rem', color: '#0f172a', margin: 0, textTransform: 'uppercase', letterSpacing: '1px' }}>Terms & Conditions</h2>
                   </div>
                   

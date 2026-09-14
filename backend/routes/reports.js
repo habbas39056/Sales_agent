@@ -31,7 +31,7 @@ router.get('/dashboard', async (req, res) => {
 // Enterprise Sales Overview with full filtering, metrics, and breakdowns
 router.get('/sales', async (req, res) => {
     try {
-        const { user_id, role, start_date, end_date, client_id, status } = req.query;
+        const { user_id, role, start_date, end_date, client_id, status, agent_id } = req.query;
         
         let query = `
             SELECT 
@@ -44,6 +44,8 @@ router.get('/sales', async (req, res) => {
                 c.email as client_email,
                 p.id as project_id,
                 p.title as project_title,
+                i.agent_id,
+                u.name as agent_name,
                 i.amount,
                 i.balance,
                 (i.amount - i.balance) as paid_amount,
@@ -54,6 +56,7 @@ router.get('/sales', async (req, res) => {
             FROM invoices i
             LEFT JOIN clients c ON i.client_id = c.id
             LEFT JOIN projects p ON i.project_id = p.id
+            LEFT JOIN users u ON i.agent_id = u.id
             WHERE 1=1
         `;
         const params = [];
@@ -76,6 +79,15 @@ router.get('/sales', async (req, res) => {
         if (client_id && client_id !== 'all') {
             query += ` AND i.client_id = ?`;
             params.push(client_id);
+        }
+
+        if (agent_id && agent_id !== 'all') {
+            if (agent_id === 'unassigned') {
+                query += ` AND (i.agent_id IS NULL OR i.agent_id = 0)`;
+            } else {
+                query += ` AND i.agent_id = ?`;
+                params.push(agent_id);
+            }
         }
 
         if (status && status !== 'all') {
@@ -2551,9 +2563,11 @@ router.get('/accounting', async (req, res) => {
 
         // Bank Accounts list with live balances
         const bankAccounts = banks.map(b => {
+            const hasOpeningInExpenses = expenses.some(e => (e.bank === b.bank_name || e.bank === b.name) && (e.category === 'Opening Balance' || (e.reference && e.reference.startsWith('OPENING-'))));
+            const baseOpening = hasOpeningInExpenses ? 0 : parseFloat(b.opening_balance || b.starting_balance || 0);
             const bankReceipts = expenses.filter(e => e.bank === b.bank_name || e.bank === b.name).reduce((sum, e) => sum + parseFloat(e.receipt_amount || 0), 0);
             const bankPayments = expenses.filter(e => e.bank === b.bank_name || e.bank === b.name).reduce((sum, e) => sum + parseFloat(e.payment_amount || 0), 0);
-            const computedBal = parseFloat(b.starting_balance || 0) + (bankReceipts - bankPayments);
+            const computedBal = baseOpening + (bankReceipts - bankPayments);
             return {
                 id: b.id,
                 bank_name: b.bank_name || b.name,
@@ -2563,7 +2577,20 @@ router.get('/accounting', async (req, res) => {
             };
         });
 
-        const totalLiquidCash = bankAccounts.reduce((sum, b) => sum + b.balance, 0) || netCashbookBalance;
+        // Compute and add Cash in Hand
+        const cashReceipts = expenses.filter(e => (!e.bank || e.bank.trim() === '') && (e.mode || '').toLowerCase() === 'cash').reduce((sum, e) => sum + parseFloat(e.receipt_amount || 0), 0);
+        const cashPayments = expenses.filter(e => (!e.bank || e.bank.trim() === '') && (e.mode || '').toLowerCase() === 'cash').reduce((sum, e) => sum + parseFloat(e.payment_amount || 0), 0);
+        const cashInHand = Math.max(0, cashReceipts - cashPayments);
+
+        bankAccounts.unshift({
+            id: 'cash',
+            bank_name: 'Cash in Hand (Counter)',
+            account_number: '-',
+            branch: 'Office Drawer',
+            balance: Number(cashInHand.toFixed(2))
+        });
+
+        const totalLiquidCash = bankAccounts.reduce((sum, b) => sum + b.balance, 0);
 
         // Liquidity Runway & Coverage
         const workingCapital = totalAccountsReceivable + totalLiquidCash - totalAccountsPayable;
@@ -2763,85 +2790,6 @@ router.get('/accounting', async (req, res) => {
     }
 });
 
-// GET /api/reports/invoices-aging
-router.get('/invoices-aging', async (req, res) => {
-    try {
-        const query = `
-            SELECT 
-                SUM(CASE WHEN DATEDIFF(CURDATE(), due_date) <= 0 THEN balance ELSE 0 END) as current,
-                SUM(CASE WHEN DATEDIFF(CURDATE(), due_date) BETWEEN 1 AND 30 THEN balance ELSE 0 END) as overdue_1_30,
-                SUM(CASE WHEN DATEDIFF(CURDATE(), due_date) BETWEEN 31 AND 60 THEN balance ELSE 0 END) as overdue_31_60,
-                SUM(CASE WHEN DATEDIFF(CURDATE(), due_date) BETWEEN 61 AND 90 THEN balance ELSE 0 END) as overdue_61_90,
-                SUM(CASE WHEN DATEDIFF(CURDATE(), due_date) > 90 THEN balance ELSE 0 END) as overdue_90_plus
-            FROM invoices
-            WHERE status != 'Paid' AND status != 'Void' AND due_date IS NOT NULL
-        `;
-        const [rows] = await db.query(query);
-        res.json(rows[0]);
-    } catch (err) {
-        console.error('Error fetching invoice aging:', err);
-        res.status(500).json({ error: 'Failed to fetch invoice aging' });
-    }
-});
-
-// GET /api/reports/cash-flow
-router.get('/cash-flow', async (req, res) => {
-    try {
-        const queryIn = `
-            SELECT DATE_FORMAT(payment_date, '%Y-%m') as month, SUM(amount) as inflow
-            FROM invoice_payments
-            GROUP BY DATE_FORMAT(payment_date, '%Y-%m')
-        `;
-        const queryOut = `
-            SELECT DATE_FORMAT(date, '%Y-%m') as month, SUM(payment_amount) as outflow
-            FROM expenses
-            GROUP BY DATE_FORMAT(date, '%Y-%m')
-        `;
-        const [inflows] = await db.query(queryIn);
-        const [outflows] = await db.query(queryOut);
-
-        const flowMap = {};
-        inflows.forEach(i => {
-            if (i.month) flowMap[i.month] = { month: i.month, inflow: i.inflow, outflow: 0 };
-        });
-        outflows.forEach(o => {
-            if (o.month) {
-                if (!flowMap[o.month]) flowMap[o.month] = { month: o.month, inflow: 0, outflow: 0 };
-                flowMap[o.month].outflow = o.outflow;
-            }
-        });
-
-        const sortedFlow = Object.values(flowMap).sort((a, b) => a.month.localeCompare(b.month));
-        res.json(sortedFlow);
-    } catch (err) {
-        console.error('Error fetching cash flow:', err);
-        res.status(500).json({ error: 'Failed to fetch cash flow' });
-    }
-});
-
-// GET /api/reports/revenue-concentration
-router.get('/revenue-concentration', async (req, res) => {
-    try {
-        const query = `
-            SELECT 
-                c.full_name as client_name,
-                c.business_name,
-                COALESCE(SUM(i.amount), 0) as total_revenue,
-                COUNT(i.id) as total_invoices
-            FROM clients c
-            JOIN invoices i ON c.id = i.client_id
-            WHERE i.status != 'Void'
-            GROUP BY c.id
-            ORDER BY total_revenue DESC
-            LIMIT 10
-        `;
-        const [rows] = await db.query(query);
-        res.json(rows);
-    } catch (err) {
-        console.error('Error fetching revenue concentration:', err);
-        res.status(500).json({ error: 'Failed to fetch revenue concentration' });
-    }
-});
 
 // GET /api/reports/expenses
 // Enterprise Corporate Expense Intelligence, Category Analytics & Spend Control
@@ -3321,7 +3269,6 @@ const handleIncomeVsExpense = async (req, res) => {
 };
 
 router.get('/income-vs-expense', handleIncomeVsExpense);
-router.get('/profit', handleIncomeVsExpense);
 
 module.exports = router;
 

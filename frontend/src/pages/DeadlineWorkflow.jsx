@@ -1,7 +1,17 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import axios from 'axios';
-import { useNavigate, useLocation } from 'react-router-dom';
-import { Clock, CheckCircle2, XCircle, ArrowRight, User, AlertCircle, FolderKanban, RefreshCw, Calendar, ShieldCheck, Edit3, ExternalLink, Search } from 'lucide-react';
+import { useNavigate, useLocation, Link } from 'react-router-dom';
+import { 
+  Clock, CheckCircle2, XCircle, ArrowRight, User, AlertCircle, 
+  FolderKanban, RefreshCw, Calendar, ShieldCheck, Edit3, ExternalLink, 
+  Search, FileText, Download, LayoutGrid, List, RotateCcw, X, 
+  AlertTriangle, Check, Send, ShieldAlert, CheckSquare, MessageSquare, 
+  Receipt, ArrowUpRight, HelpCircle
+} from 'lucide-react';
+import * as XLSX from 'xlsx';
+import { jsPDF } from 'jspdf';
+import autoTable from 'jspdf-autotable';
+import { getProjectDueDateStatus } from '../utils/projectDueDate';
 import './DeadlineWorkflow.css';
 
 export default function DeadlineWorkflow() {
@@ -10,9 +20,21 @@ export default function DeadlineWorkflow() {
   const [processingId, setProcessingId] = useState(null);
   const [filterTab, setFilterTab] = useState('Pending Acceptance');
 
+  // Search & Filter States
+  const [searchQuery, setSearchQuery] = useState('');
+  const [urgencyFilter, setUrgencyFilter] = useState('All');
+  const [startDate, setStartDate] = useState('');
+  const [endDate, setEndDate] = useState('');
+
+  // UI View Mode: 'cards' or 'table'
+  const [viewMode, setViewMode] = useState('cards');
+
   const navigate = useNavigate();
   const location = useLocation();
+  const currentUser = JSON.parse(localStorage.getItem('user') || '{}');
+  const isManagerRole = ['Admin', 'Product Manager', 'PM', 'Project Manager', 'Production Manager'].includes(currentUser.role);
 
+  // Sync tab with URL search parameter
   useEffect(() => {
     const params = new URLSearchParams(location.search);
     const tab = params.get('tab');
@@ -24,12 +46,12 @@ export default function DeadlineWorkflow() {
       setFilterTab('Accepted');
     } else if (tab === 'all') {
       setFilterTab('All');
-    } else {
+    } else if (tab === 'pending') {
       setFilterTab('Pending Acceptance');
     }
   }, [location.search]);
 
-  // Extension Appeal Modal state
+  // Extension Appeal Modal State
   const [appealModalStep, setAppealModalStep] = useState(null);
   const [appealForm, setAppealForm] = useState({
     proposed_deadline: '',
@@ -37,11 +59,18 @@ export default function DeadlineWorkflow() {
   });
   const [submittingAppeal, setSubmittingAppeal] = useState(false);
 
+  // Rejection / Revision Request Modal State
+  const [revisionModal, setRevisionModal] = useState({
+    isOpen: false,
+    stepId: null,
+    projectId: null,
+    stepTitle: '',
+    feedback: ''
+  });
+
   // Direct Edit Date State
   const [editingDateStepId, setEditingDateStepId] = useState(null);
   const [editingDateValue, setEditingDateValue] = useState('');
-
-  const currentUser = JSON.parse(localStorage.getItem('user') || '{}');
 
   useEffect(() => {
     fetchAppeals();
@@ -64,6 +93,7 @@ export default function DeadlineWorkflow() {
     }
   };
 
+  // Review (Approve or Reject) an Appeal
   const handleReviewAppeal = async (stepId, action) => {
     if (!window.confirm(`Are you sure you want to ${action.toLowerCase()} this deadline extension appeal?`)) return;
     setProcessingId(stepId);
@@ -73,31 +103,33 @@ export default function DeadlineWorkflow() {
         user_id: currentUser.id
       });
       alert(`Deadline appeal ${action === 'Approve' ? 'approved' : 'rejected'} successfully!`);
-      fetchAppeals();
+      await fetchAppeals();
     } catch (error) {
       console.error('Failed to review appeal', error);
-      alert('Failed to process review.');
+      alert('Failed to process appeal review: ' + (error.response?.data?.error || error.message));
     } finally {
       setProcessingId(null);
     }
   };
 
+  // Confirm / Accept a Deadline
   const handleConfirmDeadline = async (stepId) => {
     setProcessingId(stepId);
     try {
       await axios.post(`/api/deadlines/accept/${stepId}`, {
         user_id: currentUser.id
       });
-      alert('Step deadline confirmed successfully!');
-      fetchAppeals();
+      alert('✓ Step deadline confirmed and accepted successfully!');
+      await fetchAppeals();
     } catch (error) {
       console.error('Failed to confirm deadline', error);
-      alert('Failed to confirm deadline.');
+      alert('Failed to confirm deadline: ' + (error.response?.data?.error || error.message));
     } finally {
       setProcessingId(null);
     }
   };
 
+  // Open Appeal Modal
   const handleOpenAppealModal = (item) => {
     setAppealModalStep(item);
     setAppealForm({
@@ -106,6 +138,7 @@ export default function DeadlineWorkflow() {
     });
   };
 
+  // Submit Appeal
   const handleSubmitAppeal = async (e) => {
     e.preventDefault();
     if (!appealModalStep || !appealForm.proposed_deadline) return;
@@ -118,15 +151,16 @@ export default function DeadlineWorkflow() {
       });
       alert('Deadline extension appeal submitted successfully!');
       setAppealModalStep(null);
-      fetchAppeals();
+      await fetchAppeals();
     } catch (error) {
       console.error('Failed to submit appeal', error);
-      alert('Failed to submit deadline appeal.');
+      alert('Failed to submit deadline appeal: ' + (error.response?.data?.error || error.message));
     } finally {
       setSubmittingAppeal(false);
     }
   };
 
+  // Direct Date Save (Admin / PM)
   const handleSaveDirectDate = async (stepId) => {
     if (!editingDateValue) return;
     setProcessingId(stepId);
@@ -137,15 +171,16 @@ export default function DeadlineWorkflow() {
       });
       alert('Step deadline updated successfully!');
       setEditingDateStepId(null);
-      fetchAppeals();
+      await fetchAppeals();
     } catch (error) {
       console.error('Failed to update date', error);
-      alert('Failed to update deadline date.');
+      alert('Failed to update deadline date: ' + (error.response?.data?.error || error.message));
     } finally {
       setProcessingId(null);
     }
   };
 
+  // Approve Deliverable
   const handleApproveTask = async (stepId, projectId) => {
     if (!window.confirm('Are you sure you want to approve this deliverable and mark the task as completed?')) return;
     setProcessingId(stepId);
@@ -153,38 +188,50 @@ export default function DeadlineWorkflow() {
       await axios.post(`/api/deadlines/tasks/${stepId}/approve`, {
         user_id: currentUser.id
       });
-      alert('Task approved and completed successfully!');
-      fetchAppeals();
+      alert('✓ Task approved and completed successfully!');
+      await fetchAppeals();
     } catch (error) {
       console.error('Failed to approve task', error);
-      alert('Failed to approve task.');
+      alert('Failed to approve task: ' + (error.response?.data?.error || error.message));
     } finally {
       setProcessingId(null);
     }
   };
 
-  const handleRejectTask = async (stepId, projectId) => {
-    const feedback = prompt('Enter revision instructions / reason for rejection (this will be sent to the team member):');
-    if (feedback === null) return;
-    setProcessingId(stepId);
+  // Open Revision Request Modal
+  const handleOpenRevisionModal = (item) => {
+    setRevisionModal({
+      isOpen: true,
+      stepId: item.step_id,
+      projectId: item.project_id,
+      stepTitle: item.step_title,
+      feedback: ''
+    });
+  };
+
+  // Submit Revision Request
+  const handleSubmitRevision = async (e) => {
+    e.preventDefault();
+    if (!revisionModal.feedback.trim()) {
+      alert('Please specify revision instructions for the team member.');
+      return;
+    }
+    setProcessingId(revisionModal.stepId);
     try {
-      await axios.post(`/api/deadlines/tasks/${stepId}/reject`, {
+      await axios.post(`/api/deadlines/tasks/${revisionModal.stepId}/reject`, {
         user_id: currentUser.id,
-        feedback: feedback.trim() || 'Deliverable was rejected and requires revision.'
+        feedback: revisionModal.feedback.trim()
       });
       alert('Task returned to production team member for revision.');
-      fetchAppeals();
+      setRevisionModal({ isOpen: false, stepId: null, projectId: null, stepTitle: '', feedback: '' });
+      await fetchAppeals();
     } catch (error) {
       console.error('Failed to reject task', error);
-      alert('Failed to reject task.');
+      alert('Failed to request revision: ' + (error.response?.data?.error || error.message));
     } finally {
       setProcessingId(null);
     }
   };
-
-  const [startDate, setStartDate] = useState('');
-  const [endDate, setEndDate] = useState('');
-  const [searchQuery, setSearchQuery] = useState('');
 
   const getLocalDateString = (d) => {
     const date = new Date(d);
@@ -206,682 +253,1250 @@ export default function DeadlineWorkflow() {
       setEndDate(dateStr);
     } else if (type === 'this_week') {
       const startOfWeek = new Date(today);
-      const day = startOfWeek.getDay() || 7; // Convert Sunday (0) to 7
-      startOfWeek.setDate(startOfWeek.getDate() - (day - 1)); // Set to Monday
+      const day = startOfWeek.getDay() || 7;
+      startOfWeek.setDate(startOfWeek.getDate() - (day - 1));
       
       const endOfWeek = new Date(startOfWeek);
-      endOfWeek.setDate(startOfWeek.getDate() + 6); // Set to Sunday
+      endOfWeek.setDate(startOfWeek.getDate() + 6);
       
       setStartDate(getLocalDateString(startOfWeek));
       setEndDate(getLocalDateString(endOfWeek));
     }
   };
 
-  // Metrics
+  // Tab & Global Metrics
   const totalCount = appeals.length;
   const pendingAcceptanceCount = appeals.filter(a => a.deadline_status === 'Pending Acceptance' || !a.deadline_status).length;
   const extensionAppealsCount = appeals.filter(a => a.deadline_status === 'Appealed').length;
   const confirmedCount = appeals.filter(a => a.deadline_status === 'Accepted').length;
   const tasksForApprovalCount = appeals.filter(a => a.step_status === 'Pending Approval').length;
 
-  // Filter items
-  const filteredItems = appeals.filter(item => {
-    if (filterTab === 'Appealed' && item.deadline_status !== 'Appealed') return false;
-    if (filterTab === 'Pending Acceptance' && item.deadline_status !== 'Pending Acceptance' && item.deadline_status) return false;
-    if (filterTab === 'Accepted' && item.deadline_status !== 'Accepted') return false;
-    if (filterTab === 'Tasks for Approval' && item.step_status !== 'Pending Approval') return false;
+  const isFilterActive = searchQuery !== '' || 
+    urgencyFilter !== 'All' || 
+    startDate !== '' || 
+    endDate !== '';
 
-    if (startDate || endDate) {
-      if (!item.original_deadline) return false;
-      const itemDate = new Date(item.original_deadline);
-      const itemDateStr = getLocalDateString(itemDate);
-      
-      if (startDate && itemDateStr < startDate) return false;
-      if (endDate && itemDateStr > endDate) return false;
-    }
+  const handleResetFilters = () => {
+    setSearchQuery('');
+    setUrgencyFilter('All');
+    setStartDate('');
+    setEndDate('');
+  };
 
-    if (searchQuery) {
-      const q = searchQuery.toLowerCase();
-      const matchesProject = item.project_title && item.project_title.toLowerCase().includes(q);
-      const matchesStep = item.step_title && item.step_title.toLowerCase().includes(q);
-      const matchesClient = item.client_name && item.client_name.toLowerCase().includes(q);
-      const matchesEmployee = item.employee_name && item.employee_name.toLowerCase().includes(q);
-      
-      if (!matchesProject && !matchesStep && !matchesClient && !matchesEmployee) {
-        return false;
+  // Filtered Collection
+  const filteredItems = useMemo(() => {
+    return appeals.filter(item => {
+      // 1. Tab filter
+      if (filterTab === 'Appealed' && item.deadline_status !== 'Appealed') return false;
+      if (filterTab === 'Pending Acceptance' && item.deadline_status !== 'Pending Acceptance' && item.deadline_status) return false;
+      if (filterTab === 'Accepted' && item.deadline_status !== 'Accepted') return false;
+      if (filterTab === 'Tasks for Approval' && item.step_status !== 'Pending Approval') return false;
+
+      // 2. Urgency filter
+      if (urgencyFilter !== 'All') {
+        const due = getProjectDueDateStatus(item.original_deadline, item.step_status);
+        if (urgencyFilter === 'Overdue' && due.status !== 'overdue') return false;
+        if (urgencyFilter === 'Today' && due.status !== 'due_today') return false;
+        if (urgencyFilter === 'Tomorrow' && due.status !== 'urgent') return false;
+        if (urgencyFilter === 'This Week' && due.status !== 'soon' && due.status !== 'due_today' && due.status !== 'urgent') return false;
+        if (urgencyFilter === 'On Track' && due.status !== 'on_track') return false;
       }
+
+      // 3. Date range filter
+      if (startDate || endDate) {
+        if (!item.original_deadline) return false;
+        const itemDate = new Date(item.original_deadline);
+        const itemDateStr = getLocalDateString(itemDate);
+        
+        if (startDate && itemDateStr < startDate) return false;
+        if (endDate && itemDateStr > endDate) return false;
+      }
+
+      // 4. Search query
+      if (searchQuery) {
+        const q = searchQuery.toLowerCase();
+        const matchesProject = item.project_title && item.project_title.toLowerCase().includes(q);
+        const matchesStep = item.step_title && item.step_title.toLowerCase().includes(q);
+        const matchesClient = item.client_name && item.client_name.toLowerCase().includes(q);
+        const matchesEmployee = item.employee_name && item.employee_name.toLowerCase().includes(q);
+        
+        if (!matchesProject && !matchesStep && !matchesClient && !matchesEmployee) {
+          return false;
+        }
+      }
+
+      return true;
+    });
+  }, [appeals, filterTab, urgencyFilter, startDate, endDate, searchQuery]);
+
+  // PDF Export
+  const handleExportPDF = () => {
+    if (filteredItems.length === 0) {
+      alert('No records to export!');
+      return;
     }
 
-    return true;
-  });
+    try {
+      const doc = new jsPDF('landscape', 'pt', 'a4');
+      doc.setFontSize(18);
+      doc.setTextColor(15, 23, 42);
+      doc.text("Adwise Sales - Deadline Workflow & Timeline Report", 40, 45);
+
+      doc.setFontSize(9);
+      doc.setTextColor(100, 116, 139);
+      doc.text(
+        `Category: ${filterTab} | Generated: ${new Date().toLocaleDateString('en-GB')} | Total Records: ${filteredItems.length}`,
+        40,
+        62
+      );
+
+      const tableColumns = [
+        "ID", "Milestone / Step", "Project", "Client", "Assignee", "Original Date", "Proposed Date", "Reason", "Status"
+      ];
+
+      const tableRows = filteredItems.map(item => {
+        const origDate = item.original_deadline ? new Date(item.original_deadline).toLocaleDateString('en-GB') : '-';
+        const propDate = item.proposed_deadline ? new Date(item.proposed_deadline).toLocaleDateString('en-GB') : '-';
+        const statusLabel = item.step_status === 'Pending Approval' ? 'In Review' : (item.deadline_status || 'Pending Acceptance');
+
+        return [
+          `#${item.step_id}`,
+          item.step_title || '-',
+          item.project_title || '-',
+          item.client_name || '-',
+          item.employee_name || 'Unassigned',
+          origDate,
+          propDate,
+          item.appeal_reason ? item.appeal_reason.slice(0, 40) + (item.appeal_reason.length > 40 ? '...' : '') : '-',
+          statusLabel
+        ];
+      });
+
+      autoTable(doc, {
+        head: [tableColumns],
+        body: tableRows,
+        startY: 75,
+        styles: { fontSize: 8, cellPadding: 4 },
+        headStyles: { fillColor: [225, 29, 72], textColor: [255, 255, 255], fontStyle: 'bold' },
+        alternateRowStyles: { fillColor: [248, 250, 252] },
+        columnStyles: {
+          0: { cellWidth: 35 },
+          1: { cellWidth: 150 },
+          2: { cellWidth: 120 },
+          3: { cellWidth: 90 },
+          4: { cellWidth: 90 },
+          5: { cellWidth: 65 },
+          6: { cellWidth: 65 },
+          7: { cellWidth: 120 },
+          8: { cellWidth: 65 }
+        }
+      });
+
+      doc.save(`deadline_workflow_${filterTab.toLowerCase().replace(/\s+/g, '_')}_${new Date().toISOString().slice(0, 10)}.pdf`);
+    } catch (err) {
+      console.error('PDF export error', err);
+      alert('Failed to generate PDF: ' + err.message);
+    }
+  };
+
+  // Excel Export
+  const handleExportExcel = () => {
+    if (filteredItems.length === 0) {
+      alert('No records to export!');
+      return;
+    }
+
+    const exportData = filteredItems.map(item => ({
+      'Step ID': item.step_id,
+      'Milestone Title': item.step_title,
+      'Project Title': item.project_title || 'N/A',
+      'Client Name': item.client_name || 'N/A',
+      'Assignee Name': item.employee_name || 'Unassigned',
+      'Assignee Role': item.employee_role || 'Staff',
+      'Original Target Deadline': item.original_deadline ? new Date(item.original_deadline).toLocaleDateString('en-GB') : 'N/A',
+      'Proposed Extension Date': item.proposed_deadline ? new Date(item.proposed_deadline).toLocaleDateString('en-GB') : 'N/A',
+      'Appeal Reason': item.appeal_reason || 'N/A',
+      'Deadline Status': item.deadline_status || 'Pending Acceptance',
+      'Step Status': item.step_status || 'Active',
+      'Deliverable URL': item.deliverable_url || 'N/A'
+    }));
+
+    const ws = XLSX.utils.json_to_sheet(exportData);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Deadlines & Approvals');
+    XLSX.writeFile(wb, `Deadline_Workflow_${new Date().toISOString().slice(0, 10)}.xlsx`);
+  };
 
   return (
-    <div className="deadline-wf-container">
-      
-      {/* Header */}
-      <div className="deadline-wf-header">
-        <div className="deadline-wf-title">
-          {filterTab === 'Tasks for Approval' ? (
-            <>
-              <h1>Tasks for Approval Center ✅</h1>
-              <p>Review and approve tasks submitted by the production team.</p>
-            </>
-          ) : (
-            <>
-              <h1>Deadline Workflow & Appeals Center ⏳</h1>
-              <p>Track, accept, request extensions, or update all project step deadlines across the agency.</p>
-            </>
-          )}
+    <div className="deadline-workflow-container modern-ui">
+      {/* 1. Page Header with Title and Shifted Right-Aligned Action Buttons */}
+      <div className="deadline-page-header">
+        <div className="header-title-area">
+          <div className="header-badge-row">
+            <h1 className="deadline-main-heading">
+              {filterTab === 'Tasks for Approval' ? 'Deliverables Approval Center' : 'Deadline Workflow & Appeals'}
+            </h1>
+            <span className="deadline-count-badge">
+              {filteredItems.length} {filteredItems.length === 1 ? 'Record' : 'Records'}
+            </span>
+            {extensionAppealsCount > 0 && (
+              <span className="deadline-appeals-pill">
+                ⚠️ {extensionAppealsCount} Extension {extensionAppealsCount === 1 ? 'Appeal' : 'Appeals'}
+              </span>
+            )}
+            {tasksForApprovalCount > 0 && isManagerRole && (
+              <span className="deadline-approval-pill">
+                📋 {tasksForApprovalCount} Awaiting Review
+              </span>
+            )}
+            {isFilterActive && (
+              <span className="filter-active-pill">Filtered Results</span>
+            )}
+          </div>
+          <p className="deadline-subheading">
+            {filterTab === 'Tasks for Approval' 
+              ? 'Review, verify, and approve completed deliverables submitted by specialists or return with revisions.'
+              : 'Track agency deliverable timelines, review extension appeals, confirm milestone commitments, and monitor schedules.'}
+          </p>
         </div>
-        <button 
-          onClick={fetchAppeals} 
-          style={{ background: '#f1f5f9', border: '1px solid #cbd5e1', color: '#334155', padding: '0.55rem 1.1rem', borderRadius: '8px', fontWeight: '600', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.4rem' }}
-        >
-          <RefreshCw size={16} /> Refresh Workflow
-        </button>
+
+        <div className="deadline-header-actions">
+          <button 
+            type="button" 
+            className="action-btn secondary-btn" 
+            onClick={fetchAppeals}
+            title="Refresh workflow records"
+          >
+            <RefreshCw size={15} className={loading ? 'spin' : ''} />
+            <span>Refresh</span>
+          </button>
+
+          <button 
+            type="button" 
+            className="action-btn export-pdf-btn" 
+            onClick={handleExportPDF}
+            title="Download PDF statement"
+          >
+            <FileText size={15} />
+            <span>PDF Statement</span>
+          </button>
+
+          <button 
+            type="button" 
+            className="action-btn excel-btn" 
+            onClick={handleExportExcel}
+            title="Download Excel spreadsheet"
+          >
+            <Download size={15} />
+            <span>Export Excel</span>
+          </button>
+
+          <button 
+            type="button" 
+            className="action-btn primary-add-btn" 
+            onClick={() => navigate('/tasks')}
+            title="Go to personal task execution workspace"
+          >
+            <CheckSquare size={16} />
+            <span>My Tasks</span>
+          </button>
+        </div>
       </div>
 
-      {/* KPI Stats - Hidden in Tasks for Approval */}
-      {filterTab !== 'Tasks for Approval' && (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1.25rem' }}>
-          <div style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '14px', padding: '1.25rem', display: 'flex', alignItems: 'center', gap: '1rem' }}>
-            <div style={{ width: '48px', height: '48px', borderRadius: '12px', background: '#e0e7ff', color: '#4338ca', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-              <Calendar size={22} />
-            </div>
-            <div>
-              <div style={{ fontSize: '1.5rem', fontWeight: '800', color: '#0f172a' }}>{totalCount}</div>
-              <div style={{ fontSize: '0.8rem', color: '#64748b', fontWeight: '600' }}>Tracked Step Deadlines</div>
-            </div>
+      {/* 2. Top Interactive KPI Counter Cards */}
+      <div className="deadline-kpi-grid">
+        <div 
+          className={`deadline-kpi-card ${filterTab === 'All' ? 'active' : ''}`}
+          onClick={() => { navigate('/deadlines?tab=all'); setFilterTab('All'); }}
+          title="View all step deadlines across agency"
+        >
+          <div className="kpi-icon-wrap total">
+            <Calendar size={18} />
           </div>
-
-          <div style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '14px', padding: '1.25rem', display: 'flex', alignItems: 'center', gap: '1rem' }}>
-            <div style={{ width: '48px', height: '48px', borderRadius: '12px', background: '#fef3c7', color: '#b45309', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-              <Clock size={22} />
-            </div>
-            <div>
-              <div style={{ fontSize: '1.5rem', fontWeight: '800', color: '#0f172a' }}>{pendingAcceptanceCount}</div>
-              <div style={{ fontSize: '0.8rem', color: '#64748b', fontWeight: '600' }}>Pending Acceptance</div>
-            </div>
-          </div>
-
-          <div style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '14px', padding: '1.25rem', display: 'flex', alignItems: 'center', gap: '1rem' }}>
-            <div style={{ width: '48px', height: '48px', borderRadius: '12px', background: '#ffe4e6', color: '#e11d48', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-              <AlertCircle size={22} />
-            </div>
-            <div>
-              <div style={{ fontSize: '1.5rem', fontWeight: '800', color: '#0f172a' }}>{extensionAppealsCount}</div>
-              <div style={{ fontSize: '0.8rem', color: '#64748b', fontWeight: '600' }}>Extension Appeals</div>
-            </div>
-          </div>
-
-          <div style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '14px', padding: '1.25rem', display: 'flex', alignItems: 'center', gap: '1rem' }}>
-            <div style={{ width: '48px', height: '48px', borderRadius: '12px', background: '#d1fae5', color: '#047857', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-              <CheckCircle2 size={22} />
-            </div>
-            <div>
-              <div style={{ fontSize: '1.5rem', fontWeight: '800', color: '#0f172a' }}>{confirmedCount}</div>
-              <div style={{ fontSize: '0.8rem', color: '#64748b', fontWeight: '600' }}>Confirmed & Aligned</div>
-            </div>
+          <div className="kpi-content">
+            <span className="kpi-label">Total Milestones</span>
+            <span className="kpi-val">{totalCount}</span>
           </div>
         </div>
-      )}
 
-      {/* Filter Tabs */}
-      <div style={{ display: 'flex', gap: '0.5rem', overflowX: 'auto', paddingBottom: '0.25rem' }}>
-        <button 
+        <div 
+          className={`deadline-kpi-card ${filterTab === 'Pending Acceptance' ? 'active' : ''}`}
           onClick={() => { navigate('/deadlines?tab=pending'); setFilterTab('Pending Acceptance'); }}
-          style={{ 
-            background: filterTab === 'Pending Acceptance' ? '#0f172a' : '#ffffff', 
-            color: filterTab === 'Pending Acceptance' ? '#ffffff' : '#64748b', 
-            border: '1px solid #cbd5e1', padding: '0.5rem 1.1rem', borderRadius: '10px', fontWeight: '600', fontSize: '0.85rem', cursor: 'pointer' 
-          }}
+          title="View milestones awaiting specialist acceptance"
         >
-          ⏳ Pending Acceptance ({pendingAcceptanceCount})
-        </button>
+          <div className="kpi-icon-wrap pending">
+            <Clock size={18} />
+          </div>
+          <div className="kpi-content">
+            <span className="kpi-label">Pending Acceptance</span>
+            <span className="kpi-val">{pendingAcceptanceCount}</span>
+          </div>
+        </div>
 
-        <button 
+        <div 
+          className={`deadline-kpi-card appeals-card ${filterTab === 'Appealed' ? 'active' : ''}`}
           onClick={() => { navigate('/deadlines?tab=appeals'); setFilterTab('Appealed'); }}
-          style={{ 
-            background: filterTab === 'Appealed' ? '#0f172a' : '#ffffff', 
-            color: filterTab === 'Appealed' ? '#ffffff' : '#64748b', 
-            border: '1px solid #cbd5e1', padding: '0.5rem 1.1rem', borderRadius: '10px', fontWeight: '600', fontSize: '0.85rem', cursor: 'pointer' 
-          }}
+          title="View deadline extension appeals submitted by specialists"
         >
-          ⚠️ Extension Appeals ({extensionAppealsCount})
-        </button>
+          <div className="kpi-icon-wrap appeals">
+            <AlertCircle size={18} />
+          </div>
+          <div className="kpi-content">
+            <span className="kpi-label">⚠️ Extension Appeals</span>
+            <span className="kpi-val text-crimson">{extensionAppealsCount}</span>
+          </div>
+        </div>
 
-        <button 
+        <div 
+          className={`deadline-kpi-card ${filterTab === 'Accepted' ? 'active' : ''}`}
           onClick={() => { navigate('/deadlines?tab=accepted'); setFilterTab('Accepted'); }}
-          style={{ 
-            background: filterTab === 'Accepted' ? '#0f172a' : '#ffffff', 
-            color: filterTab === 'Accepted' ? '#ffffff' : '#64748b', 
-            border: '1px solid #cbd5e1', padding: '0.5rem 1.1rem', borderRadius: '10px', fontWeight: '600', fontSize: '0.85rem', cursor: 'pointer' 
-          }}
+          title="View agreed and confirmed step deadlines"
         >
-          ✅ Confirmed ({confirmedCount})
+          <div className="kpi-icon-wrap confirmed">
+            <CheckCircle2 size={18} />
+          </div>
+          <div className="kpi-content">
+            <span className="kpi-label">Confirmed & Aligned</span>
+            <span className="kpi-val">{confirmedCount}</span>
+          </div>
+        </div>
+
+        {isManagerRole && (
+          <div 
+            className={`deadline-kpi-card approval-card ${filterTab === 'Tasks for Approval' ? 'active' : ''}`}
+            onClick={() => { navigate('/deadlines?tab=approval'); setFilterTab('Tasks for Approval'); }}
+            title="View submitted deliverables requiring PM / Admin approval"
+          >
+            <div className="kpi-icon-wrap approval">
+              <ShieldCheck size={18} />
+            </div>
+            <div className="kpi-content">
+              <span className="kpi-label">📋 For Approval</span>
+              <span className="kpi-val text-indigo">{tasksForApprovalCount}</span>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* 3. Workflow Segmented Tabs Navigation */}
+      <div className="deadline-segmented-tabs">
+        <button 
+          type="button"
+          className={`seg-tab-btn ${filterTab === 'Pending Acceptance' ? 'active' : ''}`}
+          onClick={() => { navigate('/deadlines?tab=pending'); setFilterTab('Pending Acceptance'); }}
+        >
+          <Clock size={15} />
+          <span>Pending Acceptance</span>
+          <span className="seg-counter">{pendingAcceptanceCount}</span>
         </button>
 
         <button 
-          onClick={() => { navigate('/deadlines?tab=all'); setFilterTab('All'); }}
-          style={{ 
-            background: filterTab === 'All' ? '#0f172a' : '#ffffff', 
-            color: filterTab === 'All' ? '#ffffff' : '#64748b', 
-            border: '1px solid #cbd5e1', padding: '0.5rem 1.1rem', borderRadius: '10px', fontWeight: '600', fontSize: '0.85rem', cursor: 'pointer' 
-          }}
+          type="button"
+          className={`seg-tab-btn ${filterTab === 'Appealed' ? 'active' : ''}`}
+          onClick={() => { navigate('/deadlines?tab=appeals'); setFilterTab('Appealed'); }}
         >
-          All Deadlines ({totalCount})
+          <AlertCircle size={15} />
+          <span>Extension Appeals</span>
+          <span className="seg-counter crimson">{extensionAppealsCount}</span>
         </button>
 
-        {(currentUser.role === 'Admin' || currentUser.role === 'Product Manager' || currentUser.role === 'PM' || currentUser.role === 'Project Manager') && (
+        <button 
+          type="button"
+          className={`seg-tab-btn ${filterTab === 'Accepted' ? 'active' : ''}`}
+          onClick={() => { navigate('/deadlines?tab=accepted'); setFilterTab('Accepted'); }}
+        >
+          <CheckCircle2 size={15} />
+          <span>Confirmed Deadlines</span>
+          <span className="seg-counter">{confirmedCount}</span>
+        </button>
+
+        <button 
+          type="button"
+          className={`seg-tab-btn ${filterTab === 'All' ? 'active' : ''}`}
+          onClick={() => { navigate('/deadlines?tab=all'); setFilterTab('All'); }}
+        >
+          <Calendar size={15} />
+          <span>All Milestones</span>
+          <span className="seg-counter">{totalCount}</span>
+        </button>
+
+        {isManagerRole && (
           <button 
+            type="button"
+            className={`seg-tab-btn ${filterTab === 'Tasks for Approval' ? 'active' : ''}`}
             onClick={() => { navigate('/deadlines?tab=approval'); setFilterTab('Tasks for Approval'); }}
-            style={{ 
-              background: filterTab === 'Tasks for Approval' ? '#0f172a' : '#ffffff', 
-              color: filterTab === 'Tasks for Approval' ? '#ffffff' : '#64748b', 
-              border: '1px solid #cbd5e1', padding: '0.5rem 1.1rem', borderRadius: '10px', fontWeight: '600', fontSize: '0.85rem', cursor: 'pointer' 
-            }}
           >
-            📋 Tasks for Approval ({tasksForApprovalCount})
+            <ShieldCheck size={15} />
+            <span>Tasks for Approval</span>
+            <span className="seg-counter indigo">{tasksForApprovalCount}</span>
           </button>
         )}
       </div>
 
-      {/* Filters (Date + Search) */}
-      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '1rem', background: '#ffffff', padding: '1rem', borderRadius: '12px', border: '1px solid #e2e8f0', marginTop: '1rem', alignItems: 'center' }}>
-        
-        {/* Search Bar */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flex: '1', minWidth: '200px' }}>
-          <div style={{ position: 'relative', width: '100%' }}>
-            <Search size={16} color="#94a3b8" style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)' }} />
+      {/* 4. Comprehensive Control Toolbar & Filter Panel */}
+      <div className="deadline-control-panel">
+        <div className="deadline-filter-bar">
+          {/* Search Box */}
+          <div className="deadline-search-box">
+            <Search size={16} className="search-icon" />
             <input 
               type="text" 
-              placeholder="Search by project, task, client, or team member..." 
+              placeholder="Search by milestone, project, client, or team member..." 
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              style={{ width: '100%', padding: '0.45rem 1rem 0.45rem 2rem', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '0.85rem' }}
             />
+            {searchQuery && (
+              <button 
+                type="button" 
+                className="search-clear-btn" 
+                onClick={() => setSearchQuery('')}
+              >
+                <X size={14} />
+              </button>
+            )}
           </div>
-        </div>
 
-        <div style={{ width: '1px', height: '24px', background: '#e2e8f0', margin: '0 0.5rem' }}></div>
+          {/* Urgency Filter */}
+          <div className="filter-item-wrapper">
+            <select 
+              className="custom-deadline-select"
+              value={urgencyFilter}
+              onChange={(e) => setUrgencyFilter(e.target.value)}
+            >
+              <option value="All">All Deadline Urgencies</option>
+              <option value="Overdue">🚨 Overdue Deadlines</option>
+              <option value="Today">⏰ Due Today</option>
+              <option value="Tomorrow">⏳ Due Tomorrow</option>
+              <option value="This Week">📅 Due This Week</option>
+              <option value="On Track">✓ On Track / Future</option>
+            </select>
+          </div>
 
-        <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
-          <span style={{ fontSize: '0.75rem', fontWeight: '700', color: '#94a3b8', textTransform: 'uppercase', marginRight: '0.25rem' }}>Quick Find:</span>
-          <button 
-            type="button"
-            onClick={() => setQuickDateFilter('today')} 
-            style={{ background: '#f8fafc', border: '1px solid #cbd5e1', color: '#334155', padding: '0.35rem 0.75rem', borderRadius: '8px', fontSize: '0.78rem', cursor: 'pointer', fontWeight: '600' }}
-          >
-            Today
-          </button>
-          <button 
-            type="button"
-            onClick={() => setQuickDateFilter('tomorrow')} 
-            style={{ background: '#f8fafc', border: '1px solid #cbd5e1', color: '#334155', padding: '0.35rem 0.75rem', borderRadius: '8px', fontSize: '0.78rem', cursor: 'pointer', fontWeight: '600' }}
-          >
-            Tomorrow
-          </button>
-          <button 
-            type="button"
-            onClick={() => setQuickDateFilter('this_week')} 
-            style={{ background: '#f8fafc', border: '1px solid #cbd5e1', color: '#334155', padding: '0.35rem 0.75rem', borderRadius: '8px', fontSize: '0.78rem', cursor: 'pointer', fontWeight: '600' }}
-          >
-            This Week
-          </button>
-        </div>
-
-        <div style={{ width: '1px', height: '24px', background: '#e2e8f0', margin: '0 0.5rem' }}></div>
-
-        <div style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-            <label style={{ fontSize: '0.8rem', color: '#64748b', fontWeight: '600' }}>Start Deadline</label>
+          {/* Date Range Picker */}
+          <div className="deadline-date-range-box">
+            <Calendar size={14} className="calendar-icon" />
+            <span className="date-label">From:</span>
             <input 
               type="date" 
               value={startDate} 
               onChange={(e) => setStartDate(e.target.value)} 
-              style={{ padding: '0.35rem 0.5rem', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '0.8rem' }}
+              className="date-input"
+              title="Filter from start date"
             />
-          </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-            <label style={{ fontSize: '0.8rem', color: '#64748b', fontWeight: '600' }}>End Deadline</label>
+            <span className="date-label">To:</span>
             <input 
               type="date" 
               value={endDate} 
               onChange={(e) => setEndDate(e.target.value)} 
-              style={{ padding: '0.35rem 0.5rem', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '0.8rem' }}
+              className="date-input"
+              title="Filter to end date"
             />
+            {(startDate || endDate) && (
+              <button 
+                type="button" 
+                onClick={() => { setStartDate(''); setEndDate(''); }}
+                className="date-clear-btn"
+                title="Clear date filter"
+              >
+                <X size={13} />
+              </button>
+            )}
           </div>
-          {(startDate || endDate) && (
+
+          {/* Quick Date Presets */}
+          <div className="quick-presets-group">
             <button 
-              onClick={() => { setStartDate(''); setEndDate(''); }}
-              style={{ background: 'none', border: 'none', color: '#ef4444', fontSize: '0.8rem', fontWeight: '600', cursor: 'pointer', textDecoration: 'underline' }}
+              type="button" 
+              className="preset-btn" 
+              onClick={() => setQuickDateFilter('today')}
             >
-              Clear Filter
+              Today
+            </button>
+            <button 
+              type="button" 
+              className="preset-btn" 
+              onClick={() => setQuickDateFilter('tomorrow')}
+            >
+              Tomorrow
+            </button>
+            <button 
+              type="button" 
+              className="preset-btn" 
+              onClick={() => setQuickDateFilter('this_week')}
+            >
+              This Week
+            </button>
+          </div>
+
+          {/* 1-Click Reset */}
+          {isFilterActive && (
+            <button 
+              type="button" 
+              className="reset-filters-btn" 
+              onClick={handleResetFilters}
+              title="Reset all filters"
+            >
+              <RotateCcw size={13} />
+              <span>Reset</span>
             </button>
           )}
+
+          {/* Dual View Toggle */}
+          <div className="view-mode-toggle" title="Switch View Mode">
+            <button 
+              type="button" 
+              className={`view-mode-btn ${viewMode === 'cards' ? 'active' : ''}`}
+              onClick={() => setViewMode('cards')}
+              title="Visual Cards Grid View"
+            >
+              <LayoutGrid size={16} />
+            </button>
+            <button 
+              type="button" 
+              className={`view-mode-btn ${viewMode === 'table' ? 'active' : ''}`}
+              onClick={() => setViewMode('table')}
+              title="Enterprise Table View"
+            >
+              <List size={16} />
+            </button>
+          </div>
         </div>
       </div>
 
-      {/* Appeals & Deadlines List Grid */}
+      {/* 5. Main Content: Cards Grid View or Table View */}
       {loading ? (
-        <div style={{ padding: '3rem', textAlign: 'center', color: '#64748b' }}>Loading step deadlines...</div>
-      ) : filteredItems.length === 0 ? (
-        <div style={{ background: '#ffffff', padding: '3.5rem', borderRadius: '16px', border: '1px solid #e2e8f0', textAlign: 'center', color: '#64748b' }}>
-          <CheckCircle2 size={44} color="#10b981" style={{ marginBottom: '0.75rem' }} />
-          <h3 style={{ margin: '0 0 0.35rem 0', color: '#0f172a' }}>All Clear! No Items Found</h3>
-          <p style={{ margin: 0, fontSize: '0.9rem' }}>No step deadlines match the selected filter category.</p>
+        <div className="deadline-loading-state">
+          <RefreshCw size={28} className="spin text-crimson" />
+          <p>Loading deadline workflow and review records...</p>
         </div>
-      ) : (
-        <div className="deadline-appeals-grid">
+      ) : filteredItems.length === 0 ? (
+        <div className="deadline-empty-state">
+          <div className="empty-icon-circle">
+            <CheckCircle2 size={36} />
+          </div>
+          <h3>All Clear! No Records Found</h3>
+          <p>No milestone deadlines match the active tab and search criteria.</p>
+          {isFilterActive && (
+            <button type="button" className="action-btn secondary-btn" onClick={handleResetFilters}>
+              <RotateCcw size={14} /> Clear All Filters
+            </button>
+          )}
+        </div>
+      ) : viewMode === 'cards' ? (
+        /* Visual Cards Grid View */
+        <div className="deadline-cards-grid">
           {filteredItems.map(item => {
             const isAppealed = item.deadline_status === 'Appealed';
             const isPending = item.deadline_status === 'Pending Acceptance' || !item.deadline_status;
             const isAccepted = item.deadline_status === 'Accepted';
+            const isApproval = item.step_status === 'Pending Approval';
+            const dueStatus = getProjectDueDateStatus(item.original_deadline, item.step_status);
 
             return (
-              <div key={item.step_id} className="appeal-card" style={{ borderLeftColor: isAppealed ? '#f59e0b' : isPending ? '#3b82f6' : '#10b981' }}>
-                
-                {/* Header */}
-                <div className="appeal-card-header">
-                  <div className="appeal-user-badge" style={{ background: isAppealed ? '#fef3c7' : isPending ? '#e0e7ff' : '#d1fae5', color: isAppealed ? '#b45309' : isPending ? '#3730a3' : '#047857' }}>
-                    <User size={14} />
-                    <span>{item.employee_name || 'Team Member'} ({item.employee_role || 'Staff'})</span>
+              <div 
+                key={item.step_id} 
+                className={`deadline-card-item ${isAppealed ? 'appealed' : isApproval ? 'approval' : isAccepted ? 'confirmed' : 'pending'}`}
+              >
+                {/* Header: User Badge & Meta */}
+                <div className="card-top-bar">
+                  <div className="user-assignee-badge">
+                    <User size={13} />
+                    <span className="user-name">{item.employee_name || 'Team Specialist'}</span>
+                    <span className="user-role">({item.employee_role || 'Specialist'})</span>
                   </div>
-                  <span style={{ fontSize: '0.75rem', color: '#94a3b8' }}>
-                    {item.appealed_at ? new Date(item.appealed_at).toLocaleDateString() : 'Active'}
+
+                  <span className="card-timestamp">
+                    {item.appealed_at ? new Date(item.appealed_at).toLocaleDateString('en-GB') : (item.created_at ? new Date(item.created_at).toLocaleDateString('en-GB') : 'Active')}
                   </span>
                 </div>
 
-                {/* Project & Step Details */}
-                <div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.25rem', flexWrap: 'wrap' }}>
-                    <h4 
+                {/* Milestone Title & Project Link */}
+                <div className="card-title-group">
+                  <div className="card-title-row">
+                    <h3 
+                      className="step-title-text"
                       onClick={() => navigate(`/projects/${item.project_id}`)}
-                      title="Click to view full project and step details"
-                      style={{ margin: 0, fontSize: '1.05rem', color: '#0f172a', cursor: 'pointer', textDecoration: 'underline' }}
+                      title="Open project details workspace"
                     >
                       {item.step_title}
-                    </h4>
-                    {item.step_status === 'Pending Approval' && (
-                      <span style={{ background: '#fef3c7', color: '#b45309', fontSize: '0.75rem', padding: '2px 8px', borderRadius: '8px', fontWeight: '700', border: '1px solid #fde68a' }}>
-                        ⏳ Deliverable Submitted (Pending Approval)
+                    </h3>
+
+                    {/* Status Badges */}
+                    {isApproval && (
+                      <span className="wf-status-badge approval">
+                        ⏳ Deliverable Submitted
                       </span>
                     )}
-                    {(() => {
-                      const hasTodos = (item.reject_todos && item.reject_todos !== '0' && item.reject_todos !== 0) || 
-                                       (item.reassign_todos && item.reassign_todos !== '0' && item.reassign_todos !== 0);
-                      if (hasTodos && item.step_status !== 'Pending Approval') {
-                        return (
-                          <span style={{ background: '#e11d48', color: 'white', fontSize: '0.7rem', padding: '2px 6px', borderRadius: '8px', fontWeight: '700', textTransform: 'uppercase' }}>
-                            Reassigned
-                          </span>
-                        );
-                      }
-                      return null;
-                    })()}
                     {isAppealed && (
-                      <span style={{ background: '#fef3c7', color: '#b45309', fontSize: '0.7rem', padding: '2px 6px', borderRadius: '8px', fontWeight: '700' }}>
+                      <span className="wf-status-badge appealed">
                         ⚠️ Extension Appealed
                       </span>
                     )}
-                    {isPending && item.step_status !== 'Pending Approval' && (
-                      <span style={{ background: '#e0e7ff', color: '#3730a3', fontSize: '0.7rem', padding: '2px 6px', borderRadius: '8px', fontWeight: '700' }}>
-                        ⏳ Pending Acceptance
+                    {isPending && !isApproval && (
+                      <span className="wf-status-badge pending">
+                        ⏳ Needs Acceptance
                       </span>
                     )}
-                    {isAccepted && item.step_status !== 'Pending Approval' && (
-                      <span style={{ background: '#d1fae5', color: '#047857', fontSize: '0.7rem', padding: '2px 6px', borderRadius: '8px', fontWeight: '700' }}>
-                        ✅ Confirmed
-                      </span>
-                    )}
-                    {(currentUser.role === 'Admin' || currentUser.role === 'Product Manager' || currentUser.role === 'PM' || currentUser.role === 'Project Manager') && item.invoice_items && item.invoice_items.length > 0 && (
-                      <span style={{ background: '#fdf4ff', color: '#c026d3', fontSize: '0.7rem', padding: '2px 6px', borderRadius: '8px', fontWeight: '700', display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
-                        🧾 Items: {item.invoice_items.map(i => i.description).join(', ')}
+                    {isAccepted && !isApproval && (
+                      <span className="wf-status-badge confirmed">
+                        ✓ Confirmed
                       </span>
                     )}
                   </div>
 
-                  <div style={{ fontSize: '0.85rem', color: '#64748b' }}>
-                    Project: <strong onClick={() => navigate(`/projects/${item.project_id}`)} style={{ color: '#4338ca', cursor: 'pointer', textDecoration: 'underline' }}>{item.project_title}</strong> {item.client_name ? `(${item.client_name})` : ''}
+                  <div className="project-breadcrumb-row">
+                    <Link to={`/projects/${item.project_id}`} className="project-link-badge">
+                      <FolderKanban size={13} />
+                      <span>{item.project_title || 'Project Workspace'}</span>
+                    </Link>
+
+                    {item.client_name && (
+                      <span className="client-chip">
+                        <User size={11} /> {item.client_name}
+                      </span>
+                    )}
+
+                    {item.invoice_items && item.invoice_items.length > 0 && isManagerRole && (
+                      <span className="invoice-items-chip">
+                        <Receipt size={11} /> {item.invoice_items.map(i => i.description).join(', ')}
+                      </span>
+                    )}
                   </div>
-
-                  {/* Deliverable Box if submitted */}
-                  {(item.deliverable_url || item.deliverable_name) && (
-                    <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '8px', padding: '0.65rem 0.85rem', marginTop: '0.65rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '0.5rem' }}>
-                      <div>
-                        <span style={{ fontSize: '0.72rem', fontWeight: '700', color: '#64748b', textTransform: 'uppercase', display: 'block' }}>Submitted Deliverable:</span>
-                        <span style={{ fontSize: '0.88rem', fontWeight: '600', color: '#0f172a' }}>{item.deliverable_name || 'Production Deliverable File/Link'}</span>
-                      </div>
-                      <a 
-                        href={item.deliverable_url?.startsWith('http') ? item.deliverable_url : `${item.deliverable_url}`} 
-                        target="_blank" 
-                        rel="noopener noreferrer"
-                        style={{ background: '#4338ca', color: '#ffffff', padding: '0.35rem 0.75rem', borderRadius: '6px', fontSize: '0.8rem', fontWeight: '600', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '0.3rem' }}
-                      >
-                        <ExternalLink size={14} /> Open Deliverable
-                      </a>
-                    </div>
-                  )}
-
-                  {item.description && (
-                    <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '8px', padding: '0.65rem 0.85rem', marginTop: '0.5rem', fontSize: '0.85rem', color: '#334155' }}>
-                      <strong style={{ display: 'block', marginBottom: '0.2rem', color: '#1e293b' }}>Task Details / Notes:</strong> 
-                      <div style={{ whiteSpace: 'pre-wrap' }}>{item.description}</div>
-                    </div>
-                  )}
-
-                  {/* Reassigned Feedback To-Dos Box */}
-                  {(() => {
-                    const todosList = (item.reject_todos && item.reject_todos !== '0' && item.reject_todos !== 0) 
-                      ? item.reject_todos 
-                      : ((item.reassign_todos && item.reassign_todos !== '0' && item.reassign_todos !== 0) ? item.reassign_todos : null);
-                    if (!todosList) return null;
-                    let parsedTodos = [];
-                    try {
-                      parsedTodos = typeof todosList === 'string' ? JSON.parse(todosList) : todosList;
-                    } catch (e) {}
-                    
-                    if (Array.isArray(parsedTodos) && parsedTodos.length > 0) {
-                      return (
-                        <div style={{ marginTop: '0.65rem', padding: '0.75rem 1rem', background: '#fff1f2', border: '1px solid #fecaca', borderRadius: '8px', display: 'flex', flexDirection: 'column', gap: '0.4rem', width: '100%' }}>
-                          <strong style={{ fontSize: '0.82rem', color: '#e11d48', display: 'flex', alignItems: 'center', gap: '0.35rem', textTransform: 'uppercase' }}>
-                            ⚠️ Reassignment Feedback & Change Requests:
-                          </strong>
-                          <ul style={{ margin: 0, paddingLeft: '1.25rem', display: 'flex', flexDirection: 'column', gap: '0.35rem', color: '#4c1d95', fontSize: '0.85rem' }}>
-                            {parsedTodos.map((todo, idx) => (
-                              <li key={idx} style={{ lineHeight: '1.4' }}>
-                                <span>{todo.text}</span>
-                                {todo.file_url && (
-                                  <div style={{ marginTop: '0.2rem' }}>
-                                    <a href={`http://localhost:5000${todo.file_url}`} target="_blank" rel="noopener noreferrer" style={{ display: 'inline-flex', alignItems: 'center', gap: '0.2rem', fontSize: '0.75rem', color: '#2563eb', textDecoration: 'none', background: '#eff6ff', padding: '0.15rem 0.45rem', borderRadius: '4px', border: '1px solid #bfdbfe' }}>
-                                      <ExternalLink size={11} /> View Attached File
-                                    </a>
-                                  </div>
-                                )}
-                              </li>
-                            ))}
-                          </ul>
-                        </div>
-                      );
-                    }
-                    return null;
-                  })()}
                 </div>
 
-                {/* Deadline Comparison Box - Hidden in Tasks for Approval */}
-                {filterTab !== 'Tasks for Approval' && (
-                  <div className="appeal-date-comparison">
-                    <div className="date-box">
-                      <span className="date-box-lbl">Target Step Deadline</span>
-                      <span className="date-box-val">
-                        {item.original_deadline ? new Date(item.original_deadline).toLocaleDateString() : 'No Date Set'}
-                      </span>
+                {/* Submitted Deliverable Banner */}
+                {(item.deliverable_url || item.deliverable_name) && (
+                  <div className="deliverable-banner-card">
+                    <div className="banner-left">
+                      <span className="banner-label">Submitted Package</span>
+                      <span className="banner-name">{item.deliverable_name || 'Production Output'}</span>
+                    </div>
+                    <a 
+                      href={item.deliverable_url?.startsWith('http') ? item.deliverable_url : `${item.deliverable_url}`} 
+                      target="_blank" 
+                      rel="noopener noreferrer"
+                      className="view-deliverable-btn"
+                    >
+                      <span>Open Link</span>
+                      <ExternalLink size={12} />
+                    </a>
+                  </div>
+                )}
+
+                {/* Task Details / Description */}
+                {item.description && (
+                  <div className="card-scope-box">
+                    <span className="scope-label">Milestone Scope:</span>
+                    <p className="scope-text">{item.description}</p>
+                  </div>
+                )}
+
+                {/* Reassignment / Feedback To-Dos */}
+                {(() => {
+                  const todosList = (item.reject_todos && item.reject_todos !== '0' && item.reject_todos !== 0) 
+                    ? item.reject_todos 
+                    : ((item.reassign_todos && item.reassign_todos !== '0' && item.reassign_todos !== 0) ? item.reassign_todos : null);
+                  if (!todosList) return null;
+                  let parsedTodos = [];
+                  try {
+                    parsedTodos = typeof todosList === 'string' ? JSON.parse(todosList) : todosList;
+                  } catch (e) {
+                    if (typeof todosList === 'string') parsedTodos = [{ text: todosList }];
+                  }
+                  
+                  if (Array.isArray(parsedTodos) && parsedTodos.length > 0) {
+                    return (
+                      <div className="reassignment-feedback-box">
+                        <span className="feedback-title">⚠️ Reassignment Feedback & Changes:</span>
+                        <ul className="feedback-list">
+                          {parsedTodos.map((todo, idx) => (
+                            <li key={idx}>
+                              <span>{todo.text || todo}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    );
+                  }
+                  return null;
+                })()}
+
+                {/* Deadline Comparison Block */}
+                {!isApproval && (
+                  <div className="deadline-comparison-card">
+                    <div className="date-block">
+                      <span className="date-block-label">Target Step Deadline</span>
+                      <div className="date-block-row">
+                        <Clock size={13} style={{ color: dueStatus.color }} />
+                        <span className="date-val">
+                          {item.original_deadline ? new Date(item.original_deadline).toLocaleDateString('en-GB') : 'No Date Set'}
+                        </span>
+                      </div>
                     </div>
 
                     {isAppealed && (
                       <>
-                        <ArrowRight size={18} color="#94a3b8" />
-
-                        <div className="date-box">
-                          <span className="date-box-lbl">Proposed Extension</span>
-                          <span className="date-box-val proposed">
-                            {item.proposed_deadline ? new Date(item.proposed_deadline).toLocaleDateString() : 'N/A'}
+                        <ArrowRight size={16} className="arrow-divider" />
+                        <div className="date-block proposed">
+                          <span className="date-block-label">Proposed Extension</span>
+                          <span className="date-val proposed">
+                            {item.proposed_deadline ? new Date(item.proposed_deadline).toLocaleDateString('en-GB') : 'N/A'}
                           </span>
                         </div>
                       </>
                     )}
+
+                    <span 
+                      className="due-urgency-pill"
+                      style={{
+                        color: dueStatus.color,
+                        backgroundColor: dueStatus.bg,
+                        borderColor: dueStatus.border
+                      }}
+                    >
+                      {dueStatus.badgeText}
+                    </span>
                   </div>
                 )}
 
-                {/* Inline Edit Date Control */}
+                {/* Reason for Appeal Box */}
+                {isAppealed && item.appeal_reason && (
+                  <div className="appeal-justification-box">
+                    <span className="justification-title">💬 Justification for Extension:</span>
+                    <p className="justification-text">{item.appeal_reason}</p>
+                  </div>
+                )}
+
+                {/* Direct Set Date Inline Input */}
                 {editingDateStepId === item.step_id && (
-                  <div style={{ background: '#f8fafc', padding: '0.75rem', borderRadius: '8px', border: '1px solid #cbd5e1', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                  <div className="inline-set-date-box">
                     <input 
                       type="date"
                       value={editingDateValue}
                       onChange={(e) => setEditingDateValue(e.target.value)}
-                      style={{ padding: '0.4rem 0.6rem', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '0.85rem', flex: 1 }}
+                      className="date-input"
                     />
                     <button 
+                      type="button" 
+                      className="action-btn primary-add-btn small"
                       onClick={() => handleSaveDirectDate(item.step_id)}
-                      style={{ background: '#4338ca', color: '#ffffff', border: 'none', padding: '0.4rem 0.8rem', borderRadius: '6px', fontSize: '0.8rem', fontWeight: '700', cursor: 'pointer' }}
+                      disabled={processingId === item.step_id}
                     >
                       Save
                     </button>
                     <button 
+                      type="button" 
+                      className="action-btn secondary-btn small"
                       onClick={() => setEditingDateStepId(null)}
-                      style={{ background: 'none', border: 'none', color: '#64748b', fontSize: '0.8rem', cursor: 'pointer' }}
                     >
                       Cancel
                     </button>
                   </div>
                 )}
 
-                {/* Reason Text Box */}
-                {isAppealed && item.appeal_reason && (
-                  <div className="appeal-reason-box">
-                    <strong>💬 Reason for Appeal:</strong>
-                    <p style={{ margin: '0.25rem 0 0 0', whiteSpace: 'pre-wrap' }}>{item.appeal_reason}</p>
-                  </div>
-                )}
-
-                {/* Actions Footer */}
-                <div className="appeal-actions" style={{ flexWrap: 'wrap', gap: '0.4rem' }}>
-                  {filterTab === 'Tasks for Approval' && (currentUser.role === 'Admin' || currentUser.role === 'Product Manager' || currentUser.role === 'PM' || currentUser.role === 'Project Manager') && (
+                {/* Card Action Footer */}
+                <div className="card-actions-footer">
+                  {/* Approval Actions (For Managers/Admins in Approval Tab) */}
+                  {isApproval && isManagerRole && (
                     <>
                       <button 
                         type="button"
+                        className="btn-approve-action"
                         disabled={processingId === item.step_id}
                         onClick={() => handleApproveTask(item.step_id, item.project_id)}
-                        style={{ background: '#10b981', color: 'white', border: 'none', padding: '0.45rem 0.85rem', borderRadius: '8px', fontSize: '0.82rem', fontWeight: '700', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.35rem' }}
+                        title="Approve deliverable and mark milestone as completed"
                       >
-                        <CheckCircle2 size={15} /> Approve Task
+                        <CheckCircle2 size={15} />
+                        <span>Approve Deliverable</span>
                       </button>
 
                       <button 
                         type="button"
+                        className="btn-reject-action"
                         disabled={processingId === item.step_id}
-                        onClick={() => handleRejectTask(item.step_id, item.project_id)}
-                        style={{ background: '#ef4444', color: 'white', border: 'none', padding: '0.45rem 0.85rem', borderRadius: '8px', fontSize: '0.82rem', fontWeight: '700', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.35rem' }}
+                        onClick={() => handleOpenRevisionModal(item)}
+                        title="Return deliverable with revision instructions"
                       >
-                        <XCircle size={15} /> Request Revision
+                        <XCircle size={15} />
+                        <span>Request Revision</span>
                       </button>
                     </>
                   )}
-                  {isAppealed && (currentUser.role === 'Admin' || currentUser.role === 'Product Manager' || currentUser.role === 'PM' || currentUser.role === 'Project Manager') && (
+
+                  {/* Extension Appeal Review Actions (For Managers/Admins) */}
+                  {isAppealed && isManagerRole && (
                     <>
                       <button 
-                        className="btn-approve-appeal"
+                        type="button"
+                        className="btn-approve-action"
                         disabled={processingId === item.step_id}
                         onClick={() => handleReviewAppeal(item.step_id, 'Approve')}
+                        title="Approve extension and update deadline"
                       >
-                        <CheckCircle2 size={15} /> Approve Extension
-                      </button>
-
-                      <button 
-                        className="btn-reject-appeal"
-                        disabled={processingId === item.step_id}
-                        onClick={() => handleReviewAppeal(item.step_id, 'Reject')}
-                      >
-                        <XCircle size={15} /> Keep Original Date
-                      </button>
-                    </>
-                  )}
-
-                  {isPending && (
-                    <>
-                      <button 
-                        className="btn-approve-appeal"
-                        disabled={processingId === item.step_id}
-                        onClick={() => handleConfirmDeadline(item.step_id)}
-                        style={{ background: '#10b981', padding: '0.45rem 0.8rem', fontSize: '0.8rem' }}
-                      >
-                        <CheckCircle2 size={15} /> Accept
+                        <CheckCircle2 size={15} />
+                        <span>Approve Extension</span>
                       </button>
 
                       <button 
                         type="button"
-                        onClick={() => handleOpenAppealModal(item)}
-                        style={{ background: '#f59e0b', color: 'white', border: 'none', padding: '0.45rem 0.8rem', borderRadius: '8px', fontSize: '0.8rem', fontWeight: '700', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.3rem' }}
+                        className="btn-reject-action"
+                        disabled={processingId === item.step_id}
+                        onClick={() => handleReviewAppeal(item.step_id, 'Reject')}
+                        title="Reject appeal and keep original target date"
                       >
-                        <Clock size={15} /> Appeal Extension
+                        <XCircle size={15} />
+                        <span>Keep Original</span>
                       </button>
                     </>
                   )}
 
-                  {isAccepted && (
+                  {/* Specialist Pending Acceptance Actions */}
+                  {isPending && !isApproval && (
+                    <>
+                      <button 
+                        type="button"
+                        className="btn-confirm-action"
+                        disabled={processingId === item.step_id}
+                        onClick={() => handleConfirmDeadline(item.step_id)}
+                        title="Confirm and accept this target deadline (Auto-accepts after 2 hours of inactivity)"
+                      >
+                        <Check size={14} />
+                        <span>Accept Deadline</span>
+                      </button>
+
+                      <button 
+                        type="button"
+                        className="btn-appeal-action"
+                        onClick={() => handleOpenAppealModal(item)}
+                        title="Appeal for an extension with reason"
+                      >
+                        <Clock size={14} />
+                        <span>Appeal</span>
+                      </button>
+                    </>
+                  )}
+
+                  {/* Confirmed State Actions */}
+                  {isAccepted && !isApproval && (
                     <button 
                       type="button"
+                      className="btn-appeal-action"
                       onClick={() => handleOpenAppealModal(item)}
-                      style={{ background: '#f1f5f9', border: '1px solid #cbd5e1', color: '#64748b', padding: '0.45rem 0.8rem', borderRadius: '8px', fontSize: '0.8rem', fontWeight: '600', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.3rem' }}
+                      title="Request an extension if timeline slipped"
                     >
-                      <Clock size={15} /> Request Extension
+                      <Clock size={14} />
+                      <span>Request Extension</span>
                     </button>
                   )}
 
-                  {(currentUser.role === 'Admin' || currentUser.role === 'Product Manager' || currentUser.role === 'PM' || currentUser.role === 'Project Manager') && (
+                  {/* Admin/PM Set Date Override */}
+                  {isManagerRole && (
                     <button 
                       type="button"
+                      className="action-btn secondary-btn small"
                       onClick={() => {
                         setEditingDateStepId(item.step_id);
                         setEditingDateValue(item.original_deadline ? item.original_deadline.split('T')[0] : '');
                       }}
-                      style={{ background: '#f1f5f9', color: '#334155', border: '1px solid #cbd5e1', padding: '0.45rem 0.7rem', borderRadius: '8px', fontSize: '0.8rem', fontWeight: '600', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.3rem' }}
+                      title="Directly set milestone deadline"
                     >
-                      <Edit3 size={14} /> Set Date
+                      <Edit3 size={13} />
+                      <span>Set Date</span>
                     </button>
                   )}
 
+                  {/* Workspace Link */}
                   <button 
                     type="button"
+                    className="action-btn secondary-btn small"
                     onClick={() => navigate(`/projects/${item.project_id}`)}
-                    style={{ background: '#f8fafc', color: '#4338ca', border: '1px solid #c7d2fe', padding: '0.45rem 0.75rem', borderRadius: '8px', fontSize: '0.8rem', fontWeight: '700', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.3rem' }}
+                    title="Open project details"
                   >
-                    <ExternalLink size={14} /> Details
+                    <ExternalLink size={13} />
+                    <span>Workspace</span>
                   </button>
                 </div>
-
               </div>
             );
           })}
         </div>
+      ) : (
+        /* Enterprise High-Density Table View */
+        <div className="deadline-table-card">
+          <div className="table-responsive">
+            <table className="enterprise-deadline-table">
+              <thead>
+                <tr>
+                  <th style={{ paddingLeft: '1.25rem', width: '26%' }}>Milestone & Scope</th>
+                  <th style={{ width: '18%' }}>Project & Client</th>
+                  <th style={{ width: '14%' }}>Assignee</th>
+                  <th style={{ width: '14%' }}>Target Deadline</th>
+                  <th style={{ width: '14%' }}>Proposed / Urgency</th>
+                  <th style={{ width: '14%' }}>Status</th>
+                  <th style={{ textAlign: 'right', paddingRight: '1.25rem', width: '18%' }}>Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filteredItems.map(item => {
+                  const isAppealed = item.deadline_status === 'Appealed';
+                  const isPending = item.deadline_status === 'Pending Acceptance' || !item.deadline_status;
+                  const isAccepted = item.deadline_status === 'Accepted';
+                  const isApproval = item.step_status === 'Pending Approval';
+                  const dueStatus = getProjectDueDateStatus(item.original_deadline, item.step_status);
+
+                  return (
+                    <tr key={item.step_id} className="deadline-table-row">
+                      {/* Milestone Title */}
+                      <td style={{ paddingLeft: '1.25rem' }}>
+                        <div className="table-step-info">
+                          <span 
+                            className="table-step-title" 
+                            onClick={() => navigate(`/projects/${item.project_id}`)}
+                          >
+                            {item.step_title}
+                          </span>
+                          <span className="table-step-id">#{item.step_id}</span>
+                        </div>
+                      </td>
+
+                      {/* Project & Client */}
+                      <td>
+                        <div className="table-project-col">
+                          <Link to={`/projects/${item.project_id}`} className="table-proj-link">
+                            <FolderKanban size={13} />
+                            <span>{item.project_title || 'Project'}</span>
+                          </Link>
+                          {item.client_name && (
+                            <span className="table-client-name">{item.client_name}</span>
+                          )}
+                        </div>
+                      </td>
+
+                      {/* Assignee */}
+                      <td>
+                        <div className="table-assignee-col">
+                          <span className="assignee-name">{item.employee_name || 'Unassigned'}</span>
+                          <span className="assignee-role">{item.employee_role || 'Staff'}</span>
+                        </div>
+                      </td>
+
+                      {/* Target Deadline */}
+                      <td>
+                        <div className="table-deadline-col">
+                          <div className="date-row">
+                            <Clock size={12} style={{ color: dueStatus.color }} />
+                            <span>{item.original_deadline ? new Date(item.original_deadline).toLocaleDateString('en-GB') : '-'}</span>
+                          </div>
+                          <span 
+                            className="due-urgency-pill micro"
+                            style={{
+                              color: dueStatus.color,
+                              backgroundColor: dueStatus.bg,
+                              borderColor: dueStatus.border
+                            }}
+                          >
+                            {dueStatus.badgeText}
+                          </span>
+                        </div>
+                      </td>
+
+                      {/* Proposed / Extra */}
+                      <td>
+                        {isAppealed ? (
+                          <div className="table-proposed-col">
+                            <span className="proposed-date">
+                              {item.proposed_deadline ? new Date(item.proposed_deadline).toLocaleDateString('en-GB') : '-'}
+                            </span>
+                            {item.appeal_reason && (
+                              <span className="proposed-reason-snippet" title={item.appeal_reason}>
+                                {item.appeal_reason.slice(0, 30)}...
+                              </span>
+                            )}
+                          </div>
+                        ) : (
+                          <span className="text-muted">-</span>
+                        )}
+                      </td>
+
+                      {/* Workflow Status */}
+                      <td>
+                        {isApproval ? (
+                          <span className="wf-status-badge approval">In Review</span>
+                        ) : isAppealed ? (
+                          <span className="wf-status-badge appealed">Appealed</span>
+                        ) : isAccepted ? (
+                          <span className="wf-status-badge confirmed">Confirmed</span>
+                        ) : (
+                          <span className="wf-status-badge pending">Pending</span>
+                        )}
+                      </td>
+
+                      {/* Actions */}
+                      <td style={{ textAlign: 'right', paddingRight: '1.25rem' }}>
+                        <div className="table-actions-row">
+                          {isApproval && isManagerRole && (
+                            <>
+                              <button 
+                                type="button" 
+                                className="row-action-btn approve"
+                                onClick={() => handleApproveTask(item.step_id, item.project_id)}
+                                title="Approve Task Deliverable"
+                              >
+                                <CheckCircle2 size={13} />
+                              </button>
+                              <button 
+                                type="button" 
+                                className="row-action-btn reject"
+                                onClick={() => handleOpenRevisionModal(item)}
+                                title="Request Revision"
+                              >
+                                <XCircle size={13} />
+                              </button>
+                            </>
+                          )}
+
+                          {isAppealed && isManagerRole && (
+                            <>
+                              <button 
+                                type="button" 
+                                className="row-action-btn approve"
+                                onClick={() => handleReviewAppeal(item.step_id, 'Approve')}
+                                title="Approve Extension Appeal"
+                              >
+                                <CheckCircle2 size={13} />
+                              </button>
+                              <button 
+                                type="button" 
+                                className="row-action-btn reject"
+                                onClick={() => handleReviewAppeal(item.step_id, 'Reject')}
+                                title="Keep Original Date"
+                              >
+                                <XCircle size={13} />
+                              </button>
+                            </>
+                          )}
+
+                          {isPending && !isApproval && (
+                            <button 
+                              type="button" 
+                              className="btn-confirm-action micro"
+                              onClick={() => handleConfirmDeadline(item.step_id)}
+                              title="Accept Deadline"
+                            >
+                              <Check size={12} /> Accept
+                            </button>
+                          )}
+
+                          <button 
+                            type="button" 
+                            className="row-action-btn view"
+                            onClick={() => navigate(`/projects/${item.project_id}`)}
+                            title="View Project Workspace"
+                          >
+                            <ExternalLink size={13} />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
       )}
 
-      {/* EXTENSION APPEAL MODAL */}
+      {/* 6. Senior-Level Extension Appeal Modal */}
       {appealModalStep && (
-        <div className="modal-overlay" style={{ zIndex: 3000 }}>
-          <div className="deliverable-modal-content">
-            
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                <Clock size={22} color="#f59e0b" />
-                <h3 style={{ margin: 0, fontSize: '1.2rem', color: '#0f172a' }}>Appeal Deadline Extension</h3>
+        <div className="modal-overlay" onClick={() => setAppealModalStep(null)}>
+          <div className="modal-content deadline-appeal-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <div className="modal-header-text">
+                <h2>Appeal Milestone Deadline</h2>
+                <p>Request an extension with a proposed completion date and business justification</p>
               </div>
               <button 
+                type="button" 
+                className="btn-close" 
                 onClick={() => setAppealModalStep(null)}
-                style={{ background: 'none', border: 'none', color: '#64748b', cursor: 'pointer', fontSize: '1.2rem' }}
               >
-                ✕
+                <X size={20} />
               </button>
             </div>
 
-            <p style={{ fontSize: '0.88rem', color: '#64748b', margin: '0 0 0.25rem 0' }}>
-              Step: <strong style={{ color: '#1e293b' }}>{appealModalStep.step_title}</strong>
-            </p>
-            <p style={{ fontSize: '0.82rem', color: '#94a3b8', margin: '0 0 1.25rem 0' }}>
-              Current Deadline: <strong>{appealModalStep.original_deadline ? new Date(appealModalStep.original_deadline).toLocaleDateString() : 'Unspecified'}</strong>
-            </p>
+            <form onSubmit={handleSubmitAppeal} className="appeal-modal-form">
+              <div className="appeal-summary-banner">
+                <span className="banner-step-title">{appealModalStep.step_title}</span>
+                <span className="banner-current-date">
+                  Current Target: {appealModalStep.original_deadline ? new Date(appealModalStep.original_deadline).toLocaleDateString('en-GB') : 'Unspecified'}
+                </span>
+              </div>
 
-            <form onSubmit={handleSubmitAppeal} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-              
-              <div>
-                <label style={{ display: 'block', fontSize: '0.82rem', fontWeight: '700', color: '#475569', marginBottom: '0.35rem', letterSpacing: '0.03em' }}>
-                  PROPOSED NEW DEADLINE DATE *
+              <div className="form-group">
+                <label className="form-label">
+                  Proposed New Deadline Date <span className="req-star">*</span>
                 </label>
                 <input 
                   type="date"
                   required
                   value={appealForm.proposed_deadline ? appealForm.proposed_deadline.split('T')[0] : ''}
                   onChange={(e) => setAppealForm({ ...appealForm, proposed_deadline: e.target.value })}
-                  style={{ width: '100%', padding: '0.6rem 0.8rem', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '0.9rem' }}
+                  className="form-input"
                 />
-                
-                {/* Quick Date Presets */}
-                <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.45rem', alignItems: 'center' }}>
-                  <span style={{ fontSize: '0.75rem', color: '#64748b', fontWeight: '600' }}>Quick Add:</span>
+
+                {/* Quick Add Presets */}
+                <div className="quick-add-row">
+                  <span className="quick-add-label">Quick Add:</span>
                   <button 
                     type="button"
+                    className="preset-btn"
                     onClick={() => {
                       const base = appealModalStep?.original_deadline ? new Date(appealModalStep.original_deadline) : new Date();
                       base.setDate(base.getDate() + 2);
                       setAppealForm(prev => ({ ...prev, proposed_deadline: base.toISOString().split('T')[0] }));
                     }}
-                    style={{ background: '#f1f5f9', border: '1px solid #cbd5e1', color: '#334155', padding: '0.2rem 0.55rem', borderRadius: '6px', fontSize: '0.75rem', cursor: 'pointer', fontWeight: '600' }}
                   >
                     + 2 Days
                   </button>
                   <button 
                     type="button"
+                    className="preset-btn"
                     onClick={() => {
                       const base = appealModalStep?.original_deadline ? new Date(appealModalStep.original_deadline) : new Date();
                       base.setDate(base.getDate() + 5);
                       setAppealForm(prev => ({ ...prev, proposed_deadline: base.toISOString().split('T')[0] }));
                     }}
-                    style={{ background: '#f1f5f9', border: '1px solid #cbd5e1', color: '#334155', padding: '0.2rem 0.55rem', borderRadius: '6px', fontSize: '0.75rem', cursor: 'pointer', fontWeight: '600' }}
                   >
                     + 5 Days
                   </button>
                   <button 
                     type="button"
+                    className="preset-btn"
                     onClick={() => {
                       const base = appealModalStep?.original_deadline ? new Date(appealModalStep.original_deadline) : new Date();
                       base.setDate(base.getDate() + 7);
                       setAppealForm(prev => ({ ...prev, proposed_deadline: base.toISOString().split('T')[0] }));
                     }}
-                    style={{ background: '#f1f5f9', border: '1px solid #cbd5e1', color: '#334155', padding: '0.2rem 0.55rem', borderRadius: '6px', fontSize: '0.75rem', cursor: 'pointer', fontWeight: '600' }}
                   >
                     + 1 Week
                   </button>
                 </div>
               </div>
 
-              <div>
-                <label style={{ display: 'block', fontSize: '0.82rem', fontWeight: '700', color: '#475569', marginBottom: '0.35rem', letterSpacing: '0.03em' }}>
-                  REASON FOR EXTENSION APPEAL *
+              <div className="form-group">
+                <label className="form-label">
+                  Reason / Justification for Appeal <span className="req-star">*</span>
                 </label>
                 <textarea 
                   required
                   rows="3"
                   value={appealForm.reason}
                   onChange={(e) => setAppealForm({ ...appealForm, reason: e.target.value })}
-                  placeholder="Explain why extra time is required (e.g. Awaiting client branding assets, extra revision cycle needed)..."
-                  style={{ width: '100%', padding: '0.6rem 0.8rem', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '0.88rem', resize: 'vertical' }}
-                ></textarea>
+                  placeholder="Explain why extra time is required (e.g. Awaiting client assets, extra revision cycle needed)..."
+                  className="form-textarea"
+                />
               </div>
 
-              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.75rem', marginTop: '0.75rem' }}>
+              <div className="modal-footer-actions">
                 <button 
                   type="button"
+                  className="action-btn secondary-btn"
                   onClick={() => setAppealModalStep(null)}
-                  style={{ background: 'none', border: 'none', color: '#64748b', fontWeight: '600', cursor: 'pointer' }}
                 >
                   Cancel
                 </button>
                 <button 
                   type="submit"
+                  className="action-btn primary-add-btn"
                   disabled={submittingAppeal}
-                  style={{ background: '#f59e0b', color: '#ffffff', border: 'none', padding: '0.6rem 1.25rem', borderRadius: '8px', fontWeight: '700', fontSize: '0.88rem', cursor: 'pointer' }}
                 >
-                  {submittingAppeal ? 'Submitting...' : 'Submit Appeal'}
+                  {submittingAppeal ? (
+                    <>
+                      <RefreshCw size={15} className="spin" />
+                      <span>Submitting Appeal...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Clock size={15} />
+                      <span>Submit Extension Appeal</span>
+                    </>
+                  )}
                 </button>
               </div>
-
             </form>
-
           </div>
         </div>
       )}
 
+      {/* 7. Senior-Level Rejection / Revision Request Modal */}
+      {revisionModal.isOpen && (
+        <div className="modal-overlay" onClick={() => setRevisionModal({ isOpen: false, stepId: null, projectId: null, stepTitle: '', feedback: '' })}>
+          <div className="modal-content deadline-revision-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <div className="modal-header-text">
+                <h2>Request Deliverable Revision</h2>
+                <p>Provide actionable feedback for the production specialist to implement</p>
+              </div>
+              <button 
+                type="button" 
+                className="btn-close" 
+                onClick={() => setRevisionModal({ isOpen: false, stepId: null, projectId: null, stepTitle: '', feedback: '' })}
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            <form onSubmit={handleSubmitRevision} className="revision-modal-form">
+              <div className="revision-step-banner">
+                <span className="banner-label">Target Milestone</span>
+                <h4 className="banner-title">{revisionModal.stepTitle}</h4>
+              </div>
+
+              <div className="form-group">
+                <label className="form-label">
+                  Revision Feedback & Required Corrections <span className="req-star">*</span>
+                </label>
+                <textarea 
+                  required
+                  rows="4"
+                  value={revisionModal.feedback}
+                  onChange={(e) => setRevisionModal({ ...revisionModal, feedback: e.target.value })}
+                  placeholder="Describe specific changes needed (e.g. Correct font formatting, recalculate line items, re-export in high-res)..."
+                  className="form-textarea"
+                />
+                <span className="field-hint">This note will be delivered to the specialist's portal and WhatsApp notification feed.</span>
+              </div>
+
+              <div className="modal-footer-actions">
+                <button 
+                  type="button"
+                  className="action-btn secondary-btn"
+                  onClick={() => setRevisionModal({ isOpen: false, stepId: null, projectId: null, stepTitle: '', feedback: '' })}
+                >
+                  Cancel
+                </button>
+                <button 
+                  type="submit"
+                  className="action-btn reject-submit-btn"
+                  disabled={processingId === revisionModal.stepId}
+                >
+                  {processingId === revisionModal.stepId ? (
+                    <>
+                      <RefreshCw size={15} className="spin" />
+                      <span>Sending Revisions...</span>
+                    </>
+                  ) : (
+                    <>
+                      <XCircle size={15} />
+                      <span>Request Revision & Return</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

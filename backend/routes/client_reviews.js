@@ -3,6 +3,17 @@ const router = express.Router();
 const db = require('../db');
 const multer = require('multer');
 const path = require('path');
+const { sendWhatsAppMessage, notifyManagersWhatsApp } = require('../utils/whatsapp');
+const {
+  getPortalBaseUrl,
+  getCrmBaseUrl,
+  summarizeRevisionWithAI,
+  getDeliverySubmittedTemplate,
+  getManagerRevisionSubmittedTemplate,
+  getClientRevisionReceivedTemplate,
+  getManagerDeliveryApprovedTemplate,
+  getClientApprovalRecordedTemplate
+} = require('../utils/whatsappTemplates');
 
 // Configure multer for file uploads
 const storage = multer.diskStorage({
@@ -29,15 +40,23 @@ router.post('/projects/:project_id', upload.single('file'), async (req, res) => 
       [req.params.project_id, title, description, file_url, deadline || null]
     );
 
-    // Get project title for notification
+    // Get project and client for notification
     const [[project]] = await db.query('SELECT title, client_id FROM projects WHERE id = ?', [req.params.project_id]);
     if (project && project.client_id) {
-      const [[client]] = await db.query('SELECT user_id FROM clients WHERE id = ?', [project.client_id]);
+      const [[client]] = await db.query('SELECT user_id, full_name, business_name, whatsapp_number FROM clients WHERE id = ?', [project.client_id]);
       if (client && client.user_id) {
         await db.query(
           'INSERT INTO notifications (user_id, message, type, link) VALUES (?, ?, ?, ?)',
           [client.user_id, `New submission to review: "${title}" for project ${project.title}`, 'document', `/client-portal?id=${req.params.project_id}`]
         );
+      }
+      if (client && client.whatsapp_number) {
+        const waText = getDeliverySubmittedTemplate({
+          clientName: client.full_name || client.business_name,
+          taskName: title || project.title,
+          portalLink: `${getPortalBaseUrl()}/client-portal?id=${req.params.project_id}`
+        });
+        sendWhatsAppMessage(client.whatsapp_number, waText).catch(console.error);
       }
     }
 
@@ -78,22 +97,81 @@ router.post('/:review_id/respond', upload.array('feedback_files', 5), async (req
       [status, feedback_todos || null, JSON.stringify(feedbackAttachments), req.params.review_id]
     );
 
-    // Notify project managers
+    // Notify project managers & clients via Portal and WhatsApp
     const [[review]] = await db.query('SELECT project_id, title FROM client_reviews WHERE id = ?', [req.params.review_id]);
     if (review) {
-      const [[project]] = await db.query('SELECT title, pm_id, production_id FROM projects WHERE id = ?', [review.project_id]);
+      const [[project]] = await db.query(
+        `SELECT p.id, p.title, p.pm_id, p.production_id, c.full_name as client_name, c.business_name, c.whatsapp_number as client_whatsapp 
+         FROM projects p 
+         LEFT JOIN clients c ON p.client_id = c.id 
+         WHERE p.id = ?`, 
+        [review.project_id]
+      );
       if (project) {
+        const clientDisplayName = project.client_name || project.business_name || 'Client';
         const [managers] = await db.query("SELECT id FROM users WHERE role IN ('Admin', 'Product Manager')");
-        const userIds = new Set();
+        const userIds = new Set(managers.map(m => m.id));
         if (project.pm_id) userIds.add(project.pm_id);
         if (project.production_id) userIds.add(project.production_id);
-        managers.forEach(m => userIds.add(m.id));
 
+        // In-app notifications
         for (const uid of userIds) {
           await db.query(
             'INSERT INTO notifications (user_id, message, type, link) VALUES (?, ?, ?, ?)',
             [uid, `Client ${status === 'Approved' ? 'approved' : 'requested revision for'} "${review.title}" on ${project.title}`, status === 'Approved' ? 'step_approved' : 'step_rejected', `/projects?id=${review.project_id}`]
           );
+        }
+
+        // WhatsApp dispatch
+        if (status === 'Revision Requested') {
+          // Parse feedback text
+          let rawFeedback = '';
+          if (feedback_todos) {
+            try {
+              const parsed = typeof feedback_todos === 'string' ? JSON.parse(feedback_todos) : feedback_todos;
+              if (Array.isArray(parsed)) rawFeedback = parsed.map(p => p.text || p).join('\n');
+              else rawFeedback = String(feedback_todos);
+            } catch(e) { rawFeedback = String(feedback_todos); }
+          }
+          const aiSummary = await summarizeRevisionWithAI(rawFeedback || review.title);
+
+          // 1. Template 2: Manager — Revision Submitted
+          const managerMsg = getManagerRevisionSubmittedTemplate({
+            clientName: clientDisplayName,
+            taskName: review.title,
+            projectName: project.title,
+            revisionSummary: aiSummary,
+            crmLink: `${getCrmBaseUrl()}/projects/${project.id}`
+          });
+          await notifyManagersWhatsApp(Array.from(userIds), managerMsg);
+
+          // 2. Template 3: When Client Submits Revision
+          if (project.client_whatsapp) {
+            const clientMsg = getClientRevisionReceivedTemplate({
+              clientName: clientDisplayName,
+              taskName: review.title,
+              portalLink: `${getPortalBaseUrl()}/client-portal?id=${project.id}`
+            });
+            await sendWhatsAppMessage(project.client_whatsapp, clientMsg);
+          }
+        } else if (status === 'Approved') {
+          // 1. Template 4: Manager — Delivery Approved
+          const managerMsg = getManagerDeliveryApprovedTemplate({
+            clientName: clientDisplayName,
+            taskName: review.title,
+            projectName: project.title,
+            crmLink: `${getCrmBaseUrl()}/projects/${project.id}`
+          });
+          await notifyManagersWhatsApp(Array.from(userIds), managerMsg);
+
+          // 2. Template 5: When Client Approves
+          if (project.client_whatsapp) {
+            const clientMsg = getClientApprovalRecordedTemplate({
+              clientName: clientDisplayName,
+              taskName: review.title
+            });
+            await sendWhatsAppMessage(project.client_whatsapp, clientMsg);
+          }
         }
       }
     }

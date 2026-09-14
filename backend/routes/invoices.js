@@ -1,7 +1,8 @@
 const express = require('express');
 const router = express.Router();
 const db = require('../db');
-const { notifyClientWhatsApp } = require('../utils/whatsapp');
+const { notifyClientWhatsApp, sendWhatsAppMessage } = require('../utils/whatsapp');
+const { getClientInvoiceDueTemplate } = require('../utils/whatsappTemplates');
 
 // Get all invoices with linked client and project info (filtered for non-admins)
 router.get('/', async (req, res) => {
@@ -11,6 +12,7 @@ router.get('/', async (req, res) => {
     let query = `
       SELECT i.*, 
              c.full_name as client_name, 
+             c.business_name,
              p.title as project_title,
              u.name as agent_name
       FROM invoices i
@@ -108,15 +110,29 @@ router.post('/', async (req, res) => {
     await connection.commit();
 
     try {
-      const [[client]] = await connection.query('SELECT user_id FROM clients WHERE id = ?', [client_id]);
-      if (client && client.user_id) {
+      const [[clientData]] = await connection.query('SELECT user_id, full_name, business_name, whatsapp_number FROM clients WHERE id = ?', [client_id]);
+      if (clientData && clientData.user_id) {
         await connection.query(
           'INSERT INTO notifications (user_id, message, type, link) VALUES (?, ?, ?, ?)',
-          [client.user_id, `New invoice ${finalInvoiceNumber} created for amount ${totalAmount}`, 'invoice_created', '']
+          [clientData.user_id, `New invoice ${finalInvoiceNumber} created for amount ${totalAmount}`, 'invoice_created', '']
         );
       }
-      await notifyClientWhatsApp(client_id, `*Invoice Created* 🧾\n\nInvoice *${finalInvoiceNumber}* for amount *${totalAmount}* has been generated.\n\n_Please check your portal for details._`);
-    } catch(err) { console.error(err); }
+      if (clientData && clientData.whatsapp_number) {
+        const clientName = clientData.full_name || clientData.business_name || 'Valued Client';
+        const formattedDueDate = due_date 
+          ? new Date(due_date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) 
+          : 'Due on Receipt';
+        const formattedAmount = Number(totalAmount).toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 2 });
+
+        const invoiceMsg = getClientInvoiceDueTemplate({
+          clientName,
+          invoiceNumber: finalInvoiceNumber,
+          amount: formattedAmount,
+          dueDate: formattedDueDate
+        });
+        await sendWhatsAppMessage(clientData.whatsapp_number, invoiceMsg);
+      }
+    } catch(err) { console.error('[Invoice WhatsApp Notification Error]:', err); }
 
     res.status(201).json({ id: invoiceId, message: 'Invoice created successfully' });
   } catch (error) {
@@ -439,9 +455,20 @@ router.delete('/:id', async (req, res) => {
   try {
     await connection.beginTransaction();
 
+    // Fetch invoice details before deleting to remove corresponding ledger entries
+    const [[invoice]] = await connection.query('SELECT invoice_number FROM invoices WHERE id = ?', [invoiceId]);
+
     // Delete related items and payments
     await connection.query('DELETE FROM invoice_items WHERE invoice_id = ?', [invoiceId]);
     await connection.query('DELETE FROM invoice_payments WHERE invoice_id = ?', [invoiceId]);
+
+    // Delete corresponding receipt expenses from ledger
+    if (invoice && invoice.invoice_number) {
+      await connection.query(
+        'DELETE FROM expenses WHERE description LIKE ?',
+        [`Payment for Invoice #${invoice.invoice_number}%`]
+      );
+    }
     
     // Delete the invoice itself
     const [result] = await connection.query('DELETE FROM invoices WHERE id = ?', [invoiceId]);
@@ -451,7 +478,7 @@ router.delete('/:id', async (req, res) => {
     }
 
     await connection.commit();
-    res.json({ message: 'Invoice deleted successfully' });
+    res.json({ message: 'Invoice and associated ledger entries deleted successfully' });
   } catch (error) {
     await connection.rollback();
     if (error.message === 'Invoice not found') {
@@ -464,4 +491,46 @@ router.delete('/:id', async (req, res) => {
   }
 });
 
+// Send / Resend Invoice Due WhatsApp Notification on demand
+router.post('/:id/send-whatsapp', async (req, res) => {
+  try {
+    const [[invoice]] = await db.query(
+      `SELECT i.*, c.full_name as client_name, c.business_name, c.whatsapp_number as client_whatsapp 
+       FROM invoices i 
+       JOIN clients c ON i.client_id = c.id 
+       WHERE i.id = ?`, 
+      [req.params.id]
+    );
+
+    if (!invoice) return res.status(404).json({ error: 'Invoice not found' });
+    if (!invoice.client_whatsapp) {
+      return res.status(400).json({ error: 'Client does not have a valid WhatsApp number on file.' });
+    }
+
+    const clientName = invoice.client_name || invoice.business_name || 'Valued Client';
+    const formattedDueDate = invoice.due_date 
+      ? new Date(invoice.due_date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) 
+      : 'Due on Receipt';
+    const formattedAmount = Number(invoice.amount || 0).toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 2 });
+
+    const message = getClientInvoiceDueTemplate({
+      clientName,
+      invoiceNumber: invoice.invoice_number,
+      amount: formattedAmount,
+      dueDate: formattedDueDate
+    });
+
+    const success = await sendWhatsAppMessage(invoice.client_whatsapp, message);
+    if (!success) {
+      return res.status(502).json({ error: 'Failed to dispatch message via Evolution API. Please check WhatsApp settings.' });
+    }
+
+    res.json({ message: `WhatsApp invoice alert sent to ${clientName} (${invoice.client_whatsapp}) successfully!` });
+  } catch (error) {
+    console.error('send-whatsapp invoice error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 module.exports = router;
+

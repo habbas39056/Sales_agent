@@ -71,10 +71,10 @@ export default function Login() {
     <div className="login-container">
       <div className="login-left">
         <div className="brand-section">
-          <div className="logo-container" style={{ display: 'flex', justifyContent: 'center', marginBottom: '1.5rem' }}>
-            <img src="/logo.png" alt="Adwise Labs Logo" style={{ maxWidth: '220px', height: 'auto' }} />
+          <div className="logo-container" style={{ display: 'flex', justifyContent: 'center', marginBottom: '1.25rem' }}>
+            <img src="/logo.webp" alt="Adwise Labs Logo" style={{ width: '100%', maxWidth: '240px', height: 'auto', display: 'block', maxHeight: '56px', objectFit: 'contain' }} />
           </div>
-          <p className="platform-name">AdwiseSales AMS Platform</p>
+          <p className="platform-name">AdwiseSales AMS • Operations Platform</p>
           
           <div className="contact-box">
             <div className="contact-item">

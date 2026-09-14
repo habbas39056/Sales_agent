@@ -3,7 +3,17 @@ const router = express.Router();
 const db = require('../db');
 const multer = require('multer');
 const path = require('path');
-const { notifyUserWhatsApp, notifyClientWhatsApp } = require('../utils/whatsapp');
+const { notifyUserWhatsApp, notifyClientWhatsApp, notifyManagersWhatsApp, sendWhatsAppMessage } = require('../utils/whatsapp');
+const {
+  getPortalBaseUrl,
+  getCrmBaseUrl,
+  summarizeRevisionWithAI,
+  getDeliverySubmittedTemplate,
+  getManagerRevisionSubmittedTemplate,
+  getClientRevisionReceivedTemplate,
+  getManagerDeliveryApprovedTemplate,
+  getClientApprovalRecordedTemplate
+} = require('../utils/whatsappTemplates');
 
 // Configure multer for file uploads
 const storage = multer.diskStorage({
@@ -178,8 +188,20 @@ router.get('/', async (req, res) => {
       const projectSteps = allSteps.filter(s => s.project_id === r.id);
       const userSteps = user_id ? projectSteps.filter(s => s.assignee_id == user_id) : projectSteps;
       const assignedNames = members.map(m => m.name).join(', ');
+
+      // Auto-compute effective status so UI accurately reflects step completion
+      let effectiveStatus = r.status || 'Assigned';
+      if (r.status !== 'On Hold' && r.status !== 'Commission Released' && r.status !== 'Pending') {
+        if (r.status === 'Completed' || (r.dyn_total_steps > 0 && r.dyn_completed_steps === r.dyn_total_steps)) {
+          effectiveStatus = 'Completed';
+        } else if (r.dyn_completed_steps > 0 && (effectiveStatus === 'Assigned' || !effectiveStatus)) {
+          effectiveStatus = 'In Progress';
+        }
+      }
+
       return {
         ...r,
+        status: effectiveStatus,
         total_steps: r.dyn_total_steps,
         completed_steps: r.dyn_completed_steps,
         assigned_members: members,
@@ -204,6 +226,7 @@ router.get('/management/overview', async (req, res) => {
         p.id,
         p.title,
         p.start_date,
+        p.due_date,
         p.locked_deadline,
         p.status,
         p.remarks,
@@ -279,7 +302,7 @@ router.get('/management/overview', async (req, res) => {
         balance: inv ? inv.balance : null,
         invoice_due_date: inv ? inv.due_date : null,
         invoice_status: inv ? inv.status : null,
-        project_due_date: r.locked_deadline,
+        project_due_date: r.due_date || r.locked_deadline,
         status: autoStatus,
         remarks: r.remarks || '',
         created_at: r.created_at
@@ -352,7 +375,7 @@ router.get('/:id', async (req, res) => {
 
 // Create a project
 router.post('/', async (req, res) => {
-  const { title, description, client_id, pm_id, team_member_ids, revision_cycles_included, service_type, total_steps, completed_steps, terms_and_conditions, invoice_id } = req.body;
+  const { title, description, client_id, pm_id, team_member_ids, revision_cycles_included, service_type, total_steps, completed_steps, terms_and_conditions, invoice_id, due_date, status } = req.body;
   try {
     let memberIds = Array.isArray(team_member_ids) ? team_member_ids : [];
     if (typeof team_member_ids === 'string') {
@@ -364,9 +387,11 @@ router.post('/', async (req, res) => {
     let st = service_type;
     if (Array.isArray(st)) st = JSON.stringify(st);
 
+    const cleanDueDate = due_date || null;
+
     const [result] = await db.query(
-      'INSERT INTO projects (title, description, client_id, pm_id, revision_cycles_included, revision_cycles_remaining, service_type, total_steps, completed_steps, terms_and_conditions) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-      [title, description, client_id, primaryPmId, revision_cycles_included || 0, revision_cycles_included || 0, st, total_steps || 0, completed_steps || 0, terms_and_conditions || '']
+      'INSERT INTO projects (title, description, client_id, pm_id, revision_cycles_included, revision_cycles_remaining, service_type, total_steps, completed_steps, terms_and_conditions, due_date, locked_deadline, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+      [title, description, client_id, primaryPmId, revision_cycles_included || 0, revision_cycles_included || 0, st, total_steps || 0, completed_steps || 0, terms_and_conditions || '', cleanDueDate, cleanDueDate, status || 'Assigned']
     );
     const newProjectId = result.insertId;
 
@@ -414,7 +439,7 @@ router.post('/', async (req, res) => {
 // Update a project
 router.put('/:id', async (req, res) => {
   const projectId = req.params.id;
-  const { title, description, client_id, pm_id, team_member_ids, service_type, revision_cycles_included, terms_and_conditions } = req.body;
+  const { title, description, client_id, pm_id, team_member_ids, service_type, revision_cycles_included, terms_and_conditions, due_date, status } = req.body;
   try {
     let memberIds = Array.isArray(team_member_ids) ? team_member_ids : null;
     if (typeof team_member_ids === 'string') {
@@ -426,10 +451,16 @@ router.put('/:id', async (req, res) => {
     let st = service_type;
     if (Array.isArray(st)) st = JSON.stringify(st);
 
-    await db.query(
-      'UPDATE projects SET title = ?, description = ?, client_id = ?, pm_id = ?, service_type = ?, revision_cycles_included = ?, terms_and_conditions = ? WHERE id = ?',
-      [title, description, client_id, primaryPmId, st, revision_cycles_included || 0, terms_and_conditions || '', projectId]
-    );
+    const cleanDueDate = due_date || null;
+
+    const updateSql = status
+      ? 'UPDATE projects SET title = ?, description = ?, client_id = ?, pm_id = ?, service_type = ?, revision_cycles_included = ?, terms_and_conditions = ?, due_date = ?, locked_deadline = COALESCE(?, locked_deadline), status = ? WHERE id = ?'
+      : 'UPDATE projects SET title = ?, description = ?, client_id = ?, pm_id = ?, service_type = ?, revision_cycles_included = ?, terms_and_conditions = ?, due_date = ?, locked_deadline = COALESCE(?, locked_deadline) WHERE id = ?';
+    const updateParams = status
+      ? [title, description, client_id, primaryPmId, st, revision_cycles_included || 0, terms_and_conditions || '', cleanDueDate, cleanDueDate, status, projectId]
+      : [title, description, client_id, primaryPmId, st, revision_cycles_included || 0, terms_and_conditions || '', cleanDueDate, cleanDueDate, projectId];
+
+    await db.query(updateSql, updateParams);
 
     if (memberIds !== null) {
       await db.query('DELETE FROM project_members WHERE project_id = ?', [projectId]);
@@ -702,6 +733,25 @@ router.put('/:id/steps/:step_id', async (req, res) => {
             }
           } else if (status === 'Pending Approval') {
             await notifyManagers(req.params.id, `Deliverable submitted for step "${step.title}" and is pending your approval.`, 'step_pending', `/projects/${req.params.id}`);
+            try {
+              const [[projectInfo]] = await db.query(
+                `SELECT p.id, p.title, c.full_name as client_name, c.business_name, c.whatsapp_number as client_whatsapp 
+                 FROM projects p 
+                 LEFT JOIN clients c ON p.client_id = c.id 
+                 WHERE p.id = ?`, 
+                [req.params.id]
+              );
+              if (projectInfo && projectInfo.client_whatsapp) {
+                const waText = getDeliverySubmittedTemplate({
+                  clientName: projectInfo.client_name || projectInfo.business_name,
+                  taskName: deliverable_name || step.title,
+                  portalLink: `${getPortalBaseUrl()}/client-portal?id=${projectInfo.id}`
+                });
+                await sendWhatsAppMessage(projectInfo.client_whatsapp, waText);
+              }
+            } catch (waErr) {
+              console.error('[Step Pending Delivery WhatsApp Error]:', waErr.message);
+            }
           }
         }
       }
@@ -950,7 +1000,7 @@ router.post('/:id/accept-terms', async (req, res) => {
 router.post('/:id/lock-deadline', async (req, res) => {
   const { deadline } = req.body;
   try {
-    await db.query('UPDATE projects SET locked_deadline = ?, status = "Deadline Confirmed" WHERE id = ?', [deadline, req.params.id]);
+    await db.query('UPDATE projects SET locked_deadline = ?, due_date = COALESCE(?, due_date), status = "Deadline Confirmed" WHERE id = ?', [deadline, deadline, req.params.id]);
     res.json({ message: 'Deadline locked' });
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -963,20 +1013,83 @@ router.post('/:id/submit-delivery', async (req, res) => {
   try {
     await db.query('INSERT INTO deliverables (project_id, file_url, file_name, submitted_by) VALUES (?, ?, ?, ?)', [req.params.id, file_url, file_name, user_id]);
     await db.query('UPDATE projects SET status = "Submitted for Review" WHERE id = ?', [req.params.id]);
-    // TODO: WhatsApp Notification
+    
+    // Dispatch WhatsApp Delivery Submitted Template to Client / Group
+    try {
+      const [[projectInfo]] = await db.query(
+        `SELECT p.id, p.title, c.full_name as client_name, c.business_name, c.whatsapp_number as client_whatsapp 
+         FROM projects p 
+         LEFT JOIN clients c ON p.client_id = c.id 
+         WHERE p.id = ?`, 
+        [req.params.id]
+      );
+      if (projectInfo && projectInfo.client_whatsapp) {
+        const waText = getDeliverySubmittedTemplate({
+          clientName: projectInfo.client_name || projectInfo.business_name,
+          taskName: file_name || projectInfo.title,
+          portalLink: `${getPortalBaseUrl()}/client-portal?id=${projectInfo.id}`
+        });
+        await sendWhatsAppMessage(projectInfo.client_whatsapp, waText);
+      }
+      await notifyInternalTeam(req.params.id, `Deliverable "${file_name || 'Delivery'}" submitted for project ${projectInfo?.title || ''}.`, 'delivery_submitted', `/projects/${req.params.id}`, user_id);
+    } catch (notifErr) {
+      console.error('[Delivery WhatsApp Notification Error]:', notifErr.message);
+    }
+
     res.json({ message: 'Delivery submitted' });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
 });
 
-// Removed multer config as it was moved to the top
-
 // Client Approve Step
 router.post('/:id/steps/:stepId/client-approve', async (req, res) => {
   const connection = await db.getConnection();
   try {
     await connection.query('UPDATE project_steps SET status = "Completed", completed_at = NOW() WHERE id = ?', [req.params.stepId]);
+
+    // Dispatch WhatsApp Templates: Manager Delivery Approved & Client Approval Recorded
+    try {
+      const [[stepInfo]] = await connection.query(
+        `SELECT ps.title as step_title, p.id as project_id, p.title as project_title, p.pm_id, p.production_id, 
+                c.full_name as client_name, c.business_name, c.whatsapp_number as client_whatsapp 
+         FROM project_steps ps 
+         JOIN projects p ON ps.project_id = p.id 
+         LEFT JOIN clients c ON p.client_id = c.id 
+         WHERE ps.id = ?`, 
+        [req.params.stepId]
+      );
+
+      if (stepInfo) {
+        const clientDisplayName = stepInfo.client_name || stepInfo.business_name || 'Client';
+
+        // 1. Template 4: Manager — Delivery Approved (Sent to PM, Production lead & Admins)
+        const managerMsg = getManagerDeliveryApprovedTemplate({
+          clientName: clientDisplayName,
+          taskName: stepInfo.step_title,
+          projectName: stepInfo.project_title,
+          crmLink: `${getCrmBaseUrl()}/projects/${stepInfo.project_id}`
+        });
+
+        const [managers] = await connection.query("SELECT id, whatsapp_number FROM users WHERE role IN ('Admin', 'Product Manager')");
+        const managerIds = new Set(managers.map(m => m.id));
+        if (stepInfo.pm_id) managerIds.add(stepInfo.pm_id);
+        if (stepInfo.production_id) managerIds.add(stepInfo.production_id);
+        await notifyManagersWhatsApp(Array.from(managerIds), managerMsg);
+
+        // 2. Template 5: When Client Approves (Sent to Client)
+        if (stepInfo.client_whatsapp) {
+          const clientMsg = getClientApprovalRecordedTemplate({
+            clientName: clientDisplayName,
+            taskName: stepInfo.step_title
+          });
+          await sendWhatsAppMessage(stepInfo.client_whatsapp, clientMsg);
+        }
+      }
+    } catch (waErr) {
+      console.error('[Step Approve WhatsApp Notification Error]:', waErr.message);
+    }
+
     res.json({ message: 'Step approved' });
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -1001,7 +1114,13 @@ router.post('/:id/request-revision', upload.array('images', 5), async (req, res)
   const connection = await db.getConnection();
   try {
     await connection.beginTransaction();
-    const [[project]] = await connection.query('SELECT * FROM projects WHERE id = ?', [req.params.id]);
+    const [[project]] = await connection.query(
+      `SELECT p.*, c.full_name as client_name, c.business_name, c.whatsapp_number as client_whatsapp 
+       FROM projects p 
+       LEFT JOIN clients c ON p.client_id = c.id 
+       WHERE p.id = ?`, 
+      [req.params.id]
+    );
     
     let is_paid = false;
     let cost = 0;
@@ -1016,6 +1135,48 @@ router.post('/:id/request-revision', upload.array('images', 5), async (req, res)
     await connection.query('INSERT INTO revisions (project_id, title, description, is_paid, cost, step_id, image_url) VALUES (?, ?, ?, ?, ?, ?, ?)', 
       [req.params.id, title, description, is_paid, cost, step_id || null, image_url || null]);
     await connection.commit();
+
+    // Dispatch WhatsApp Templates: Manager Revision Submitted (with AI Summary) & Client Revision Received
+    try {
+      let taskTitle = title || project.title;
+      if (step_id) {
+        const [[stepRow]] = await connection.query('SELECT title FROM project_steps WHERE id = ?', [step_id]);
+        if (stepRow?.title) taskTitle = stepRow.title;
+      }
+
+      const clientDisplayName = project.client_name || project.business_name || 'Client';
+
+      // Generate AI summary of revision feedback
+      const aiSummary = await summarizeRevisionWithAI(description);
+
+      // 1. Template 2: Manager — Revision Submitted (To PM, Production & Admins)
+      const managerMsg = getManagerRevisionSubmittedTemplate({
+        clientName: clientDisplayName,
+        taskName: taskTitle,
+        projectName: project.title,
+        revisionSummary: aiSummary,
+        crmLink: `${getCrmBaseUrl()}/projects/${project.id}`
+      });
+
+      const [managers] = await connection.query("SELECT id, whatsapp_number FROM users WHERE role IN ('Admin', 'Product Manager')");
+      const managerIds = new Set(managers.map(m => m.id));
+      if (project.pm_id) managerIds.add(project.pm_id);
+      if (project.production_id) managerIds.add(project.production_id);
+      await notifyManagersWhatsApp(Array.from(managerIds), managerMsg);
+
+      // 2. Template 3: When Client Submits Revision (Confirmation to Client)
+      if (project.client_whatsapp) {
+        const clientMsg = getClientRevisionReceivedTemplate({
+          clientName: clientDisplayName,
+          taskName: taskTitle,
+          portalLink: `${getPortalBaseUrl()}/client-portal?id=${project.id}`
+        });
+        await sendWhatsAppMessage(project.client_whatsapp, clientMsg);
+      }
+    } catch (waErr) {
+      console.error('[Revision WhatsApp Notification Error]:', waErr.message);
+    }
+
     res.json({ message: 'Revision requested', is_paid, cost, image_url });
   } catch (error) {
     await connection.rollback();
@@ -1032,6 +1193,47 @@ router.post('/:id/approve', async (req, res) => {
     await connection.beginTransaction();
     await connection.query('UPDATE projects SET status = "Completed" WHERE id = ?', [req.params.id]);
     await connection.commit();
+
+    // Dispatch WhatsApp Templates: Manager Delivery Approved & Client Approval Recorded
+    try {
+      const [[projectInfo]] = await connection.query(
+        `SELECT p.id, p.title, p.pm_id, p.production_id, c.full_name as client_name, c.business_name, c.whatsapp_number as client_whatsapp 
+         FROM projects p 
+         LEFT JOIN clients c ON p.client_id = c.id 
+         WHERE p.id = ?`, 
+        [req.params.id]
+      );
+
+      if (projectInfo) {
+        const clientDisplayName = projectInfo.client_name || projectInfo.business_name || 'Client';
+
+        // 1. Template 4: Manager — Delivery Approved
+        const managerMsg = getManagerDeliveryApprovedTemplate({
+          clientName: clientDisplayName,
+          taskName: projectInfo.title,
+          projectName: projectInfo.title,
+          crmLink: `${getCrmBaseUrl()}/projects/${projectInfo.id}`
+        });
+
+        const [managers] = await connection.query("SELECT id, whatsapp_number FROM users WHERE role IN ('Admin', 'Product Manager')");
+        const managerIds = new Set(managers.map(m => m.id));
+        if (projectInfo.pm_id) managerIds.add(projectInfo.pm_id);
+        if (projectInfo.production_id) managerIds.add(projectInfo.production_id);
+        await notifyManagersWhatsApp(Array.from(managerIds), managerMsg);
+
+        // 2. Template 5: When Client Approves
+        if (projectInfo.client_whatsapp) {
+          const clientMsg = getClientApprovalRecordedTemplate({
+            clientName: clientDisplayName,
+            taskName: projectInfo.title
+          });
+          await sendWhatsAppMessage(projectInfo.client_whatsapp, clientMsg);
+        }
+      }
+    } catch (waErr) {
+      console.error('[Project Approve WhatsApp Notification Error]:', waErr.message);
+    }
+
     res.json({ message: 'Project marked as completed' });
   } catch (error) {
     await connection.rollback();

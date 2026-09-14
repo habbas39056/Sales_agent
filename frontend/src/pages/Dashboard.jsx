@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Search, ChevronDown, ShoppingCart, Users, Package, Banknote, MoreHorizontal, AlertTriangle, Clock, ArrowRight } from 'lucide-react';
+import { Search, ChevronDown, ShoppingCart, Users, Package, Banknote, MoreHorizontal, AlertTriangle, Clock, ArrowRight, FileText } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
@@ -550,9 +550,9 @@ export default function Dashboard() {
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
                 <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{fill: '#94a3b8', fontSize: 12}} dy={10} />
                 <YAxis axisLine={false} tickLine={false} tick={{fill: '#94a3b8', fontSize: 12}} tickFormatter={(val) => `${val/1000}k`} />
-                <RechartsTooltip cursor={{fill: '#f8fafc'}} contentStyle={{borderRadius: '12px', border: 'none', boxShadow: '0 10px 25px rgba(0,0,0,0.1)'}} />
-                <Bar dataKey="Sales" fill="#f1f5f9" radius={[6, 6, 6, 6]} barSize={40} />
-                <Bar dataKey="Revenue" fill="#8b5cf6" radius={[6, 6, 6, 6]} barSize={40} />
+                <RechartsTooltip cursor={{fill: '#f8fafc'}} contentStyle={{borderRadius: '12px', border: '1px solid #e2e8f0', boxShadow: '0 10px 25px rgba(0,0,0,0.08)'}} />
+                <Bar dataKey="Sales" name="Sales Invoiced" fill="#e2e8f0" radius={[6, 6, 0, 0]} barSize={32} />
+                <Bar dataKey="Revenue" name="Revenue Collected" fill="#e11d48" radius={[6, 6, 0, 0]} barSize={32} />
               </BarChart>
             </ResponsiveContainer>
           </div>
@@ -578,8 +578,8 @@ export default function Dashboard() {
                   dataKey="value"
                   stroke="none"
                 >
-                  <Cell fill="#f59e0b" />
-                  <Cell fill="#fef3c7" />
+                  <Cell fill="#e11d48" />
+                  <Cell fill="#ffe4e6" />
                 </Pie>
               </PieChart>
             </ResponsiveContainer>
@@ -646,7 +646,7 @@ export default function Dashboard() {
                   <td><input type="checkbox" /></td>
                   <td>
                     <div className="info-cell">
-                      <div className="info-icon"></div>
+                      <div className="info-icon"><FileText size={16} color="#e11d48" /></div>
                       <span>{inv.client_name ? `Invoice for ${inv.client_name}` : 'Project Invoice'}</span>
                     </div>
                   </td>

@@ -4,6 +4,8 @@
   "description": "",
   "main": "index.js",
   "scripts": {
+    "start": "node backend/index.js",
+    "db:update": "node backend/update_live_db.js",
     "start:backend": "cd backend && npx nodemon index.js",
     "start:frontend": "cd frontend && npm run dev",
     "fullstack": "concurrently \"npm run start:backend\" \"npm run start:frontend\"",

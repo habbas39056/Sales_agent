@@ -299,8 +299,8 @@ export default function ClientPortal() {
     <div className="app-container">
       {/* Admin-like Sidebar Navigation */}
       <aside className="sidebar client-portal-sidebar">
-        <div className="sidebar-brand" style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', padding: '2rem 1.5rem 1rem 1.5rem' }}>
-          <img src="/logo.png" alt="Adwise Labs Logo" style={{ width: '100%', maxWidth: '240px', height: 'auto', display: 'block', margin: '0 auto' }} />
+        <div className="sidebar-brand" style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', padding: '1.25rem 1.25rem 1.25rem 1.25rem' }}>
+          <img src="/logo.webp" alt="Adwise Labs" style={{ width: '100%', maxWidth: '210px', height: 'auto', display: 'block', maxHeight: '46px', objectFit: 'contain' }} />
         </div>
 
         <div className="sidebar-menu-title">Portal Menu</div>
@@ -1386,7 +1386,7 @@ export default function ClientPortal() {
               <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '2rem' }}>
                 <div style={{ flex: 1 }}>
                   <div style={{ marginBottom: '1.5rem' }}>
-                    <img src="/Adwise-Labs-Primary-Logo.png" alt="Adwise Labs Logo" style={{ maxWidth: '220px', height: 'auto', display: 'block' }} />
+                    <img src="/logo.webp" alt="Adwise Labs Logo" style={{ maxWidth: '220px', height: 'auto', display: 'block' }} />
                   </div>
                   <h2 style={{ fontSize: '1.2rem', marginBottom: '1.5rem' }}>Invoice {previewInvoice.invoice_number}</h2>
                   
@@ -1459,7 +1459,7 @@ export default function ClientPortal() {
               {termsAndConditions && (
                 <div className="terms-page-break">
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem', borderBottom: '2px solid #0f172a', paddingBottom: '1rem' }}>
-                    <img src="/Adwise-Labs-Primary-Logo.png" alt="Adwise Labs Logo" style={{ maxWidth: '180px', height: 'auto' }} />
+                    <img src="/logo.webp" alt="Adwise Labs Logo" style={{ maxWidth: '180px', height: 'auto' }} />
                     <h2 style={{ fontSize: '1.3rem', color: '#0f172a', margin: 0, textTransform: 'uppercase', letterSpacing: '1px' }}>Terms & Conditions</h2>
                   </div>
                   

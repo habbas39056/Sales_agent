@@ -1,69 +1,228 @@
 .client-profile-container {
   display: flex;
   flex-direction: column;
-  gap: 1.5rem;
+  gap: 1.25rem;
+  padding-bottom: 2rem;
 }
 
 .profile-header {
-  margin-bottom: 0.5rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 1rem;
+  margin-bottom: 0.25rem;
 }
 
 .back-link {
-  display: flex;
+  display: inline-flex;
   align-items: center;
-  gap: 0.5rem;
-  color: var(--text-secondary);
+  gap: 0.45rem;
+  color: #64748b;
   text-decoration: none;
-  font-weight: 500;
-  transition: color 0.2s;
+  font-weight: 600;
+  font-size: 0.85rem;
+  transition: color 0.15s;
 }
 
 .back-link:hover {
-  color: var(--primary-color);
+  color: #e11d48;
+}
+
+.profile-top-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.profile-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.5rem 0.85rem;
+  border-radius: 8px;
+  font-size: 0.82rem;
+  font-weight: 600;
+  text-decoration: none;
+  border: none;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.profile-btn.whatsapp {
+  background: #ecfdf5;
+  color: #059669;
+  border: 1px solid #a7f3d0;
+}
+
+.profile-btn.whatsapp:hover {
+  background: #d1fae5;
+  color: #047857;
+}
+
+.profile-btn.email {
+  background: #f8fafc;
+  color: #334155;
+  border: 1px solid #e2e8f0;
+}
+
+.profile-btn.email:hover {
+  background: #f1f5f9;
+  color: #0f172a;
+}
+
+.profile-btn.secondary {
+  background: #ffffff;
+  color: #334155;
+  border: 1px solid #cbd5e1;
+}
+
+.profile-btn.secondary:hover {
+  background: #f8fafc;
+  border-color: #94a3b8;
+}
+
+.profile-btn.primary {
+  background: #e11d48;
+  color: #ffffff;
+  box-shadow: 0 2px 4px rgba(225, 29, 72, 0.2);
+}
+
+.profile-btn.primary:hover {
+  background: #be123c;
+  box-shadow: 0 4px 8px rgba(225, 29, 72, 0.3);
+}
+
+.profile-card {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 14px;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.03);
+  padding: 1.5rem 1.75rem;
 }
 
 .profile-main {
   display: flex;
   align-items: center;
-  gap: 2rem;
-  padding: 1rem 0;
+  gap: 1.5rem;
 }
 
 .profile-avatar {
-  width: 100px;
-  height: 100px;
-  border-radius: 50%;
+  width: 72px;
+  height: 72px;
+  border-radius: 12px;
   object-fit: cover;
-  border: 4px solid var(--bg-color);
+  border: 2px solid #e2e8f0;
+  flex-shrink: 0;
 }
 
 .profile-avatar.placeholder {
-  background-color: #e2e8f0;
-  color: #64748b;
+  background: #e11d48;
+  color: #ffffff;
   display: flex;
   align-items: center;
   justify-content: center;
+  font-size: 1.5rem;
+  font-weight: 700;
 }
 
-.profile-info h1 {
-  margin: 0 0 1rem 0;
-  font-size: 2rem;
-  color: var(--text-primary);
+.profile-info {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  min-width: 0;
+}
+
+.profile-title-badge-row {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.profile-title-badge-row h1 {
+  margin: 0;
+  font-size: 1.5rem;
+  color: #0f172a;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+.profile-sub-title {
+  font-size: 0.82rem;
+  color: #64748b;
+  font-weight: 500;
+}
+
+.profile-id-chip {
+  background: #f1f5f9;
+  color: #475569;
+  font-size: 0.72rem;
+  font-weight: 600;
+  padding: 0.15rem 0.5rem;
+  border-radius: 6px;
+  border: 1px solid #e2e8f0;
 }
 
 .profile-meta {
   display: flex;
   flex-wrap: wrap;
-  gap: 1.5rem;
+  gap: 1.25rem;
 }
 
 .meta-item {
-  display: flex;
+  display: inline-flex;
   align-items: center;
-  gap: 0.5rem;
-  color: var(--text-secondary);
-  font-size: 0.95rem;
+  gap: 0.4rem;
+  color: #64748b;
+  font-size: 0.84rem;
   font-weight: 500;
+}
+
+/* Profile KPI Grid */
+.profile-kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 1rem;
+}
+
+.profile-kpi-card {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 1rem 1.25rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.02);
+}
+
+.profile-kpi-card .kpi-label {
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: #64748b;
+}
+
+.profile-kpi-card .kpi-value {
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: #0f172a;
+}
+
+.profile-kpi-card .kpi-value.green-text {
+  color: #059669;
+}
+
+.profile-kpi-card .kpi-value.rose-text {
+  color: #e11d48;
+}
+
+.profile-kpi-card .kpi-subtext {
+  font-size: 0.72rem;
+  color: #94a3b8;
 }
 
 .profile-tabs {

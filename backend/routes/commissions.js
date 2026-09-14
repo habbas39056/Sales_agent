@@ -245,10 +245,13 @@ router.get('/breakdown', async (req, res) => {
         0 as invoice_total_amount,
         0 as invoice_paid_amount,
         0 as installments_count,
-        FALSE as is_sales_commission
+        FALSE as is_sales_commission,
+        cl.full_name as client_name,
+        cl.business_name as business_name
       FROM commissions c
       JOIN users u ON c.user_id = u.id
       JOIN projects p ON c.project_id = p.id
+      LEFT JOIN clients cl ON p.client_id = cl.id
       LEFT JOIN project_steps ps ON c.step_id = ps.id
       WHERE 1=1
     `;
@@ -276,10 +279,13 @@ router.get('/breakdown', async (req, res) => {
         0 as invoice_total_amount,
         0 as invoice_paid_amount,
         0 as installments_count,
-        FALSE as is_sales_commission
+        FALSE as is_sales_commission,
+        cl.full_name as client_name,
+        cl.business_name as business_name
       FROM project_steps ps
       JOIN users u ON ps.assignee_id = u.id
       JOIN projects p ON ps.project_id = p.id
+      LEFT JOIN clients cl ON p.client_id = cl.id
       WHERE ps.commission_released = FALSE
     `;
     const pendingParams = [];
@@ -307,6 +313,7 @@ router.get('/breakdown', async (req, res) => {
         NULL as invoice_item_ids,
         i.invoice_number,
         c.full_name as client_name,
+        c.business_name as business_name,
         ip.payment_method,
         ip.bank,
         ip.notes as payment_notes
@@ -342,7 +349,8 @@ router.get('/breakdown', async (req, res) => {
         'Pending' as status,
         NULL as invoice_item_ids,
         i.invoice_number,
-        c.full_name as client_name
+        c.full_name as client_name,
+        c.business_name as business_name
       FROM invoices i
       JOIN users u ON i.agent_id = u.id
       LEFT JOIN clients c ON i.client_id = c.id
@@ -526,6 +534,19 @@ router.get('/breakdown', async (req, res) => {
         const [projInvs] = await db.query('SELECT id, invoice_number FROM invoices WHERE project_id = ?', [row.project_id]);
         if (projInvs.length > 0) {
           row.invoice_numbers = projInvs.map(i => i.invoice_number);
+        }
+      }
+
+      if ((!row.client_name || !row.business_name) && row.project_id) {
+        const [[projClient]] = await db.query(`
+          SELECT c.full_name as client_name, c.business_name
+          FROM projects p
+          LEFT JOIN clients c ON p.client_id = c.id
+          WHERE p.id = ?
+        `, [row.project_id]);
+        if (projClient) {
+          if (!row.client_name) row.client_name = projClient.client_name;
+          if (!row.business_name) row.business_name = projClient.business_name;
         }
       }
     }

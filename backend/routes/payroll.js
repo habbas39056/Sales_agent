@@ -147,11 +147,20 @@ router.get('/', async (req, res) => {
       [targetMonth]
     );
 
-    // Account Balances Calculation from Cashbook/Expenses
+    // Account Balances Calculation from Cashbook/Expenses & Banks
+    const [banks] = await db.query('SELECT * FROM banks');
     const [allExpenses] = await db.query('SELECT mode, bank, receipt_amount, payment_amount FROM expenses');
-    let cashInHand = 0;
-    let totalNetBalance = 0;
+
     const bankTotals = {};
+    let totalOpeningBalance = 0;
+    banks.forEach(b => {
+      const op = parseFloat(b.opening_balance || 0);
+      bankTotals[b.name] = op;
+      totalOpeningBalance += op;
+    });
+
+    let cashInHand = 0;
+    let totalNetBalance = totalOpeningBalance;
 
     allExpenses.forEach(exp => {
       const net = Number(exp.receipt_amount || 0) - Number(exp.payment_amount || 0);
@@ -164,7 +173,7 @@ router.get('/', async (req, res) => {
 
       if (exp.bank && exp.bank.trim() !== '') {
         const bName = exp.bank.trim();
-        if (!bankTotals[bName]) bankTotals[bName] = 0;
+        if (bankTotals[bName] === undefined) bankTotals[bName] = 0;
         bankTotals[bName] += net;
       }
     });
@@ -634,19 +643,21 @@ router.post('/:id/pay', async (req, res) => {
 
     let expenseId = payroll.expense_id;
 
+    const actualBank = payMethod === 'Cash' ? '' : (bank || '');
+
     // Create or update Cashbook Expense record
     if (expenseId) {
       await connection.query(
         `UPDATE expenses 
          SET date = ?, client = ?, description = ?, mode = ?, bank = ?, payment_amount = ?, category = 'Payroll' 
          WHERE id = ?`,
-        [payDate, payroll.employee_name, desc, payMethod, bank, netSalary, expenseId]
+        [payDate, payroll.employee_name, desc, payMethod, actualBank, netSalary, expenseId]
       );
     } else {
       const [expResult] = await connection.query(
         `INSERT INTO expenses (date, client, description, mode, bank, reference, receipt_amount, payment_amount, category)
          VALUES (?, ?, ?, ?, ?, ?, 0.00, ?, 'Payroll')`,
-        [payDate, payroll.employee_name, desc, payMethod, bank, `PAYROLL-${payroll.id}`, netSalary]
+        [payDate, payroll.employee_name, desc, payMethod, actualBank, `PAYROLL-${payroll.id}`, netSalary]
       );
       expenseId = expResult.insertId;
     }
@@ -656,7 +667,7 @@ router.post('/:id/pay', async (req, res) => {
       `UPDATE payrolls 
        SET status = 'Paid', payment_date = ?, payment_method = ?, bank_name = ?, expense_id = ?, notes = COALESCE(?, notes)
        WHERE id = ?`,
-      [payDate, payMethod, bank, expenseId, notes || null, payrollId]
+      [payDate, payMethod, actualBank, expenseId, notes || null, payrollId]
     );
 
     await connection.commit();

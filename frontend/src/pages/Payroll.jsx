@@ -10,6 +10,28 @@ import './Payroll.css';
 
 const API_URL = import.meta.env.VITE_API_URL || '/api';
 
+const formatPayslipMonth = (monthStr) => {
+  if (!monthStr) return '';
+  try {
+    const parts = String(monthStr).trim().split('-');
+    if (parts.length >= 2) {
+      const year = parseInt(parts[0], 10);
+      const monthNum = parseInt(parts[1], 10);
+      if (!isNaN(year) && !isNaN(monthNum) && monthNum >= 1 && monthNum <= 12) {
+        const date = new Date(year, monthNum - 1, 1);
+        return date.toLocaleString('en-US', { month: 'long', year: 'numeric' });
+      }
+    }
+    const d = new Date(monthStr);
+    if (!isNaN(d.getTime())) {
+      return d.toLocaleString('en-US', { month: 'long', year: 'numeric' });
+    }
+  } catch (e) {
+    console.error('Error formatting month:', e);
+  }
+  return monthStr;
+};
+
 export default function Payroll() {
   // Month selection state (default to current YYYY-MM e.g., '2026-07')
   const [selectedMonth, setSelectedMonth] = useState(new Date().toISOString().slice(0, 7));
@@ -247,7 +269,11 @@ export default function Payroll() {
     if (!selectedPayrollToPay) return;
 
     try {
-      const res = await axios.post(`${API_URL}/payroll/${selectedPayrollToPay.id}/pay`, payFormData);
+      const payload = {
+        ...payFormData,
+        bank_name: payFormData.payment_method === 'Cash' ? '' : payFormData.bank_name
+      };
+      const res = await axios.post(`${API_URL}/payroll/${selectedPayrollToPay.id}/pay`, payload);
       showTempMessage(res.data.message || 'Payment processed & logged in Cashbook!');
       setIsPayModalOpen(false);
       fetchPayrollData();
@@ -849,7 +875,14 @@ export default function Payroll() {
                   <label>Payment Method *</label>
                   <select 
                     value={payFormData.payment_method}
-                    onChange={e => setPayFormData({ ...payFormData, payment_method: e.target.value })}
+                    onChange={e => {
+                      const method = e.target.value;
+                      setPayFormData({
+                        ...payFormData,
+                        payment_method: method,
+                        bank_name: method === 'Cash' ? '' : (payFormData.bank_name || (banks.length > 0 ? banks[0].name : ''))
+                      });
+                    }}
                   >
                     <option value="Bank Transfer">Bank Transfer</option>
                     <option value="Cash">Cash</option>
@@ -1069,6 +1102,9 @@ export default function Payroll() {
         const otherDeductions = parseFloat(payslipItem.other_deductions || 0);
         const totalDeductions = parseFloat(payslipItem.deductions || (advance + tax + otherDeductions));
         const net = parseFloat(payslipItem.net_salary || (gross - totalDeductions));
+        const isSalesEmployee = (payslipItem.employee_role || '').toLowerCase().includes('sales');
+        const isProductionEmployee = (payslipItem.employee_role || '').toLowerCase().includes('production');
+        const showInvoiceProducts = !isProductionEmployee && !isSalesEmployee;
 
         return (
           <div className="modal-overlay">
@@ -1088,13 +1124,16 @@ export default function Payroll() {
               {/* Printable Payslip Container */}
               <div className="payslip-document" id="printable-payslip">
                 <div className="payslip-header">
-                  <div className="payslip-company">
-                    <h2>ADWISE LABS</h2>
-                    <p style={{ margin: 0, color: '#64748b', fontSize: '0.85rem' }}>Sales Agent & Media Management System</p>
+                  <div className="payslip-company" style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+                    <img src="/logo.webp" alt="Adwise Labs" style={{ height: '44px', width: 'auto', objectFit: 'contain' }} />
+                    <div>
+                      <h2 style={{ margin: 0, fontSize: '1.35rem', letterSpacing: '-0.02em' }}>ADWISE LABS</h2>
+                      <p style={{ margin: 0, color: '#64748b', fontSize: '0.82rem' }}>Sales Agent & Operations Management System</p>
+                    </div>
                   </div>
                   <div className="payslip-title-box">
                     <h3>PAYSLIP</h3>
-                    <p>For the Month of <strong>{payslipItem.month}</strong></p>
+                    <p>For the Month of <strong>{formatPayslipMonth(payslipItem.month)}</strong></p>
                   </div>
                 </div>
 
@@ -1213,74 +1252,141 @@ export default function Payroll() {
                   <div style={{ pageBreakBefore: 'always', marginTop: '2rem' }}>
                     <div className="payslip-header" style={{ marginBottom: '1.5rem', borderBottom: '2px solid #0f172a', paddingBottom: '1rem' }}>
                       <h3 style={{ margin: 0, fontSize: '1.3rem', color: '#0f172a' }}>COMMISSION BREAKDOWN</h3>
-                      <p style={{ margin: '0.25rem 0 0 0', color: '#64748b' }}>For {payslipItem.employee_name} ({payslipItem.month})</p>
+                      <p style={{ margin: '0.25rem 0 0 0', color: '#64748b' }}>For {payslipItem.employee_name} ({formatPayslipMonth(payslipItem.month)})</p>
                     </div>
                     
                     <table className="payslip-table" style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.85rem' }}>
                       <thead>
                         <tr>
-                          <th style={{ textAlign: 'left', padding: '0.75rem', borderBottom: '1px solid #cbd5e1' }}>Project / Step</th>
-                          <th style={{ textAlign: 'left', padding: '0.75rem', borderBottom: '1px solid #cbd5e1' }}>Invoice / Products</th>
-                          <th style={{ textAlign: 'center', padding: '0.75rem', borderBottom: '1px solid #cbd5e1' }}>Comm. %</th>
-                          <th style={{ textAlign: 'center', padding: '0.75rem', borderBottom: '1px solid #cbd5e1' }}>Date</th>
-                          <th style={{ textAlign: 'right', padding: '0.75rem', borderBottom: '1px solid #cbd5e1' }}>Potential</th>
-                          <th style={{ textAlign: 'right', padding: '0.75rem', borderBottom: '1px solid #cbd5e1' }}>Earned</th>
+                          {isSalesEmployee ? (
+                            <>
+                              <th style={{ textAlign: 'left', padding: '0.75rem', borderBottom: '1px solid #cbd5e1' }}>Client & Business Name</th>
+                              <th style={{ textAlign: 'left', padding: '0.75rem', borderBottom: '1px solid #cbd5e1' }}>Invoice Number</th>
+                              <th style={{ textAlign: 'center', padding: '0.75rem', borderBottom: '1px solid #cbd5e1' }}>Payment Recv Date</th>
+                              <th style={{ textAlign: 'right', padding: '0.75rem', borderBottom: '1px solid #cbd5e1' }}>Payment Amount</th>
+                              <th style={{ textAlign: 'center', padding: '0.75rem', borderBottom: '1px solid #cbd5e1' }}>Comm. %</th>
+                              <th style={{ textAlign: 'right', padding: '0.75rem', borderBottom: '1px solid #cbd5e1' }}>Commission Earned</th>
+                            </>
+                          ) : (
+                            <>
+                              <th style={{ textAlign: 'left', padding: '0.75rem', borderBottom: '1px solid #cbd5e1' }}>Project / Step</th>
+                              {showInvoiceProducts && (
+                                <th style={{ textAlign: 'left', padding: '0.75rem', borderBottom: '1px solid #cbd5e1' }}>Invoice / Products</th>
+                              )}
+                              <th style={{ textAlign: 'center', padding: '0.75rem', borderBottom: '1px solid #cbd5e1' }}>Comm. %</th>
+                              <th style={{ textAlign: 'center', padding: '0.75rem', borderBottom: '1px solid #cbd5e1' }}>Date</th>
+                              <th style={{ textAlign: 'right', padding: '0.75rem', borderBottom: '1px solid #cbd5e1' }}>Potential</th>
+                              <th style={{ textAlign: 'right', padding: '0.75rem', borderBottom: '1px solid #cbd5e1' }}>Earned</th>
+                            </>
+                          )}
                         </tr>
                       </thead>
                       <tbody>
                         {employeeBreakdown.map((item, idx) => (
                           <tr key={idx} style={{ borderBottom: '1px solid #e2e8f0' }}>
-                            <td style={{ padding: '0.75rem' }}>
-                              <div style={{ fontWeight: 600, color: '#1e293b' }}>{item.project_title}</div>
-                              <div style={{ fontSize: '0.75rem', color: '#64748b' }}>{item.step_title}</div>
-                            </td>
-                            <td style={{ padding: '0.75rem' }}>
-                              {item.invoice_numbers && item.invoice_numbers.length > 0 && (
-                                <div style={{ fontSize: '0.75rem', color: '#475569', marginBottom: '0.25rem', display: 'flex', alignItems: 'center', gap: '0.35rem', flexWrap: 'wrap' }}>
-                                  <span>Invoices:</span>
-                                  {item.invoice_numbers.map((inv, i) => {
-                                    const isSalesEmployee = payslipItem.employee_role === 'Sales' || payslipItem.employee_role === 'Sales Rep';
-                                    return isSalesEmployee ? (
-                                      <span 
-                                        key={i}
-                                        onClick={() => {
-                                          setSelectedTimelineInvoice(inv);
-                                          setIsTimelineModalOpen(true);
-                                        }}
-                                        title="Click to view payment timeline & split release"
-                                        style={{ cursor: 'pointer', background: '#eff6ff', color: '#2563eb', padding: '0.1rem 0.45rem', borderRadius: '4px', fontWeight: 700, border: '1px solid #bfdbfe' }}
-                                      >
-                                        {inv}
-                                      </span>
-                                    ) : (
-                                      <span 
-                                        key={i}
-                                        style={{ background: '#f1f5f9', color: '#475569', padding: '0.1rem 0.45rem', borderRadius: '4px', fontWeight: 600, border: '1px solid #e2e8f0' }}
-                                      >
-                                        {inv}
-                                      </span>
-                                    );
-                                  })}
-                                </div>
-                              )}
-                              {item.products && item.products.length > 0 && (
-                                <div style={{ fontSize: '0.7rem', color: '#64748b' }}>
-                                  {item.products.map((p, i) => <div key={i}>• {p.description}</div>)}
-                                </div>
-                              )}
-                            </td>
-                            <td style={{ textAlign: 'center', padding: '0.75rem', fontWeight: '500' }}>
-                              {item.commission_percentage || 0}%
-                            </td>
-                            <td style={{ textAlign: 'center', padding: '0.75rem', color: '#64748b', fontSize: '0.8rem' }}>
-                              {item.date ? new Date(item.date).toLocaleDateString() : '-'}
-                            </td>
-                            <td style={{ textAlign: 'right', padding: '0.75rem', color: '#64748b' }}>
-                              PKR {Number(item.potential_commission || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                            </td>
-                            <td style={{ textAlign: 'right', padding: '0.75rem', fontWeight: 600, color: '#16a34a' }}>
-                              PKR {Number(item.earned_commission || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                            </td>
+                            {isSalesEmployee ? (
+                              <>
+                                <td style={{ padding: '0.75rem' }}>
+                                  <div style={{ fontWeight: 600, color: '#1e293b' }}>
+                                    {item.client_name || item.project_title || '-'}
+                                  </div>
+                                  {item.business_name && (
+                                    <div style={{ fontSize: '0.75rem', color: '#64748b', marginTop: '0.15rem' }}>
+                                      {item.business_name}
+                                    </div>
+                                  )}
+                                  {!item.business_name && item.project_title && item.client_name && item.project_title !== item.client_name && !item.project_title.includes('Client Invoice #') && (
+                                    <div style={{ fontSize: '0.75rem', color: '#64748b', marginTop: '0.15rem' }}>
+                                      {item.project_title}
+                                    </div>
+                                  )}
+                                </td>
+                                <td style={{ padding: '0.75rem' }}>
+                                  {(item.invoice_number || (item.invoice_numbers && item.invoice_numbers.length > 0)) ? (
+                                    <div style={{ display: 'flex', gap: '0.35rem', flexWrap: 'wrap' }}>
+                                      {(item.invoice_numbers && item.invoice_numbers.length > 0 ? item.invoice_numbers : [item.invoice_number]).map((inv, i) => (
+                                        <span 
+                                          key={i}
+                                          onClick={() => {
+                                            setSelectedTimelineInvoice(inv);
+                                            setIsTimelineModalOpen(true);
+                                          }}
+                                          title="Click to view payment timeline & split release"
+                                          style={{ 
+                                            cursor: 'pointer', 
+                                            background: '#eff6ff', 
+                                            color: '#2563eb', 
+                                            padding: '0.15rem 0.5rem', 
+                                            borderRadius: '4px', 
+                                            fontWeight: 700, 
+                                            border: '1px solid #bfdbfe',
+                                            fontSize: '0.8rem',
+                                            display: 'inline-block'
+                                          }}
+                                        >
+                                          {inv}
+                                        </span>
+                                      ))}
+                                    </div>
+                                  ) : (
+                                    <span style={{ color: '#94a3b8' }}>-</span>
+                                  )}
+                                </td>
+                                <td style={{ textAlign: 'center', padding: '0.75rem', color: '#64748b', fontSize: '0.8rem' }}>
+                                  {item.date ? new Date(item.date).toLocaleDateString() : '-'}
+                                </td>
+                                <td style={{ textAlign: 'right', padding: '0.75rem', color: '#0f172a', fontWeight: 500 }}>
+                                  PKR {Number(item.invoice_paid_amount || item.amount || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                </td>
+                                <td style={{ textAlign: 'center', padding: '0.75rem', fontWeight: '500' }}>
+                                  {item.commission_percentage || 0}%
+                                </td>
+                                <td style={{ textAlign: 'right', padding: '0.75rem', fontWeight: 600, color: '#16a34a' }}>
+                                  PKR {Number(item.earned_commission || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                </td>
+                              </>
+                            ) : (
+                              <>
+                                <td style={{ padding: '0.75rem' }}>
+                                  <div style={{ fontWeight: 600, color: '#1e293b' }}>{item.project_title}</div>
+                                  <div style={{ fontSize: '0.75rem', color: '#64748b' }}>{item.step_title}</div>
+                                </td>
+                                {showInvoiceProducts && (
+                                  <td style={{ padding: '0.75rem' }}>
+                                    {item.invoice_numbers && item.invoice_numbers.length > 0 && (
+                                      <div style={{ fontSize: '0.75rem', color: '#475569', marginBottom: '0.25rem', display: 'flex', alignItems: 'center', gap: '0.35rem', flexWrap: 'wrap' }}>
+                                        <span>Invoices:</span>
+                                        {item.invoice_numbers.map((inv, i) => (
+                                          <span 
+                                            key={i}
+                                            style={{ background: '#f1f5f9', color: '#475569', padding: '0.1rem 0.45rem', borderRadius: '4px', fontWeight: 600, border: '1px solid #e2e8f0' }}
+                                          >
+                                            {inv}
+                                          </span>
+                                        ))}
+                                      </div>
+                                    )}
+                                    {item.products && item.products.length > 0 && (
+                                      <div style={{ fontSize: '0.7rem', color: '#64748b' }}>
+                                        {item.products.map((p, i) => <div key={i}>• {p.description}</div>)}
+                                      </div>
+                                    )}
+                                  </td>
+                                )}
+                                <td style={{ textAlign: 'center', padding: '0.75rem', fontWeight: '500' }}>
+                                  {item.commission_percentage || 0}%
+                                </td>
+                                <td style={{ textAlign: 'center', padding: '0.75rem', color: '#64748b', fontSize: '0.8rem' }}>
+                                  {item.date ? new Date(item.date).toLocaleDateString() : '-'}
+                                </td>
+                                <td style={{ textAlign: 'right', padding: '0.75rem', color: '#64748b' }}>
+                                  PKR {Number(item.potential_commission || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                </td>
+                                <td style={{ textAlign: 'right', padding: '0.75rem', fontWeight: 600, color: '#16a34a' }}>
+                                  PKR {Number(item.earned_commission || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                </td>
+                              </>
+                            )}
                           </tr>
                         ))}
                       </tbody>

@@ -18,6 +18,7 @@ router.get('/appeals', async (req, res) => {
         ps.proposed_deadline,
         ps.deadline_appeal_reason as appeal_reason,
         ps.appealed_at,
+        ps.created_at,
         ps.reassign_todos,
         ps.reject_todos,
         COALESCE(ps.deadline_status, 'Pending Acceptance') as deadline_status,
@@ -122,6 +123,28 @@ router.post('/accept/:step_id', async (req, res) => {
       [step_id, user_id || null, 'Confirmed and accepted step deadline']
     );
     res.json({ message: 'Deadline confirmed successfully' });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Trigger 2-hour auto-acceptance on demand
+router.post('/auto-accept-check', async (req, res) => {
+  try {
+    const [steps] = await db.query(`
+      SELECT id, title, created_at FROM project_steps 
+      WHERE assignee_id IS NOT NULL 
+        AND deadline IS NOT NULL 
+        AND (deadline_status = 'Pending Acceptance' OR deadline_status IS NULL)
+        AND created_at < NOW() - INTERVAL 2 HOUR
+    `);
+
+    for (const step of steps) {
+      await db.query(`UPDATE project_steps SET deadline_status = 'Accepted' WHERE id = ?`, [step.id]);
+      await db.query(`INSERT INTO step_activity (step_id, user_id, action_text) VALUES (?, NULL, 'System Auto-Accepted the deadline after 2 hours of inactivity.')`, [step.id]);
+    }
+
+    res.json({ message: `Auto-accepted ${steps.length} pending deadlines.`, count: steps.length, steps });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }

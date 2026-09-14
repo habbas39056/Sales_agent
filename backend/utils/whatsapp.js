@@ -9,12 +9,18 @@ const db = require('../db');
  */
 function normalizePhoneNumber(number) {
     if (!number) return null;
+    const str = String(number).trim();
+    // If it is a WhatsApp Group JID (e.g. 1203630248234@g.us), preserve as is
+    if (str.includes('@g.us')) return str;
+
     // Strip everything except digits
-    let cleaned = number.replace(/\D/g, '');
+    let cleaned = str.replace(/\D/g, '');
     if (!cleaned) return null;
     
-    // Some formats require the exact number (like 5511999999999 for Brazil)
-    // We will just return the cleaned digits. The user must provide the country code when saving.
+    // Auto-normalize Pakistani numbers from 0300... to 92300...
+    if (cleaned.startsWith('03') && cleaned.length === 11) {
+        cleaned = '92' + cleaned.substring(1);
+    }
     return cleaned;
 }
 
@@ -172,8 +178,8 @@ async function notifyUserWhatsApp(userId, message, context = {}) {
     try {
         const [[user]] = await db.query('SELECT whatsapp_number, name FROM users WHERE id = ?', [userId]);
         if (user && user.whatsapp_number) {
-            const aiFormattedMessage = await formatWhatsAppWithAI(message, { recipient: user.name, ...context });
-            return await sendWhatsAppMessage(user.whatsapp_number, aiFormattedMessage);
+            const finalMessage = context.skipAI ? message : await formatWhatsAppWithAI(message, { recipient: user.name, ...context });
+            return await sendWhatsAppMessage(user.whatsapp_number, finalMessage);
         }
     } catch (e) {
         console.error('notifyUserWhatsApp error:', e);
@@ -189,8 +195,8 @@ async function notifyClientWhatsApp(clientId, message, context = {}) {
     try {
         const [[client]] = await db.query('SELECT whatsapp_number, full_name, business_name FROM clients WHERE id = ?', [clientId]);
         if (client && client.whatsapp_number) {
-            const aiFormattedMessage = await formatWhatsAppWithAI(message, { client: client.full_name, company: client.business_name, ...context });
-            return await sendWhatsAppMessage(client.whatsapp_number, aiFormattedMessage);
+            const finalMessage = context.skipAI ? message : await formatWhatsAppWithAI(message, { client: client.full_name, company: client.business_name, ...context });
+            return await sendWhatsAppMessage(client.whatsapp_number, finalMessage);
         }
     } catch (e) {
         console.error('notifyClientWhatsApp error:', e);
@@ -198,10 +204,30 @@ async function notifyClientWhatsApp(clientId, message, context = {}) {
     return false;
 }
 
+/**
+ * Notify internal managers (PMs and Admins) directly via WhatsApp
+ */
+async function notifyManagersWhatsApp(userIds, message) {
+    if (!userIds || userIds.length === 0) return;
+    const ids = Array.isArray(userIds) ? userIds : [userIds];
+    try {
+        const [users] = await db.query('SELECT id, whatsapp_number FROM users WHERE id IN (?)', [ids]);
+        for (const user of users) {
+            if (user.whatsapp_number) {
+                await sendWhatsAppMessage(user.whatsapp_number, message);
+            }
+        }
+    } catch (e) {
+        console.error('notifyManagersWhatsApp error:', e);
+    }
+}
+
 module.exports = {
     sendWhatsAppMessage,
     notifyUserWhatsApp,
     notifyClientWhatsApp,
+    notifyManagersWhatsApp,
     formatWhatsAppWithAI
 };
+
 

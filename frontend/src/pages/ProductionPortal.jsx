@@ -1,94 +1,75 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import axios from 'axios';
 import { useNavigate } from 'react-router-dom';
 import { 
   CheckCircle2, AlertTriangle, Clock, FolderKanban, Plus, Trash2, 
-  ExternalLink, Upload, ArrowRight, ShieldAlert, FileText, CheckSquare, Layers 
+  ExternalLink, Upload, ArrowRight, ShieldAlert, FileText, CheckSquare, 
+  Layers, Search, Filter, RotateCcw, LayoutGrid, ListFilter, MessageSquare, 
+  Check, Calendar, Paperclip, ChevronDown, ChevronUp, Sparkles, User, 
+  Briefcase, Send, X, FileCheck
 } from 'lucide-react';
+import StepInhouseChat from '../components/StepInhouseChat';
 import './ProductionPortal.css';
 import './Modal.css';
 
 export default function ProductionPortal() {
   const [projects, setProjects] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [filterTab, setFilterTab] = useState('All');
+  const [refreshing, setRefreshing] = useState(false);
   
+  // View mode: 'table' (High-density Step Matrix) vs 'cards' (Project Kanban Cards)
+  const [viewMode, setViewMode] = useState('table');
+  
+  // Search & Filter state
+  const [searchQuery, setSearchQuery] = useState('');
+  const [statusFilter, setStatusFilter] = useState('All');
+  const [urgencyFilter, setUrgencyFilter] = useState('All');
+  const [kpiFilter, setKpiFilter] = useState('All'); // Clickable KPI card filtering
+
   // Interactive To-Do Checklist State
   const [todoList, setTodoList] = useState([]);
   const [newTodoText, setNewTodoText] = useState('');
+  const [todoFilter, setTodoFilter] = useState('all');
 
-  // Deliverable Upload Modal State
-  const [activeModalProject, setActiveModalProject] = useState(null);
-  const [deliverableForm, setDeliverableForm] = useState({
-    file_name: '',
-    file_url: '',
-    notes: ''
+  // Expanded rows in table view to see description/revision details
+  const [expandedStepIds, setExpandedStepIds] = useState(new Set());
+
+  // In-house Chat Modal State
+  const [chatModal, setChatModal] = useState({ isOpen: false, stepId: null, stepTitle: '', projectId: null, projectTitle: '' });
+
+  // Step Deliverable Submission Modal State
+  const [submitModal, setSubmitModal] = useState({ 
+    isOpen: false, 
+    projectId: null, 
+    stepId: null, 
+    projectName: '', 
+    stepTitle: '' 
   });
-  const [submittingDeliverable, setSubmittingDeliverable] = useState(false);
-
-  // Deadline extension state
-  const [appealModal, setAppealModal] = useState({ isOpen: false, projectId: null, stepId: null, proposedDate: '', reason: '' });
-  
-  // Submit Deliverable state
-  const [submitModal, setSubmitModal] = useState({ isOpen: false, projectId: null, stepId: null, projectName: '' });
   const [deliverableName, setDeliverableName] = useState('');
   const [deliverableUrl, setDeliverableUrl] = useState('');
+  const [deliverableFile, setDeliverableFile] = useState(null);
+  const [submittingDeliverable, setSubmittingDeliverable] = useState(false);
+
+  // Project-Level Final Delivery Modal State
+  const [projectDeliveryModal, setProjectDeliveryModal] = useState({ isOpen: false, project: null });
+  const [projectDeliveryForm, setProjectDeliveryForm] = useState({ file_name: '', file_url: '', notes: '' });
+  const [submittingProjectDelivery, setSubmittingProjectDelivery] = useState(false);
 
   // Deadline Appeal Modal State
   const [appealModalStep, setAppealModalStep] = useState(null);
-  const [appealForm, setAppealForm] = useState({
-    proposed_deadline: '',
-    reason: ''
-  });
+  const [appealForm, setAppealForm] = useState({ proposed_deadline: '', reason: '' });
   const [submittingAppeal, setSubmittingAppeal] = useState(false);
 
+  // Top Ribbon Alert State
+  const [isRibbonDismissed, setIsRibbonDismissed] = useState(false);
+  const [batchAccepting, setBatchAccepting] = useState(false);
+
   const navigate = useNavigate();
-  const currentUser = JSON.parse(localStorage.getItem('user') || '{}');
+  const currentUser = useMemo(() => {
+    return JSON.parse(localStorage.getItem('user') || '{}');
+  }, []);
 
-  const handleAcceptDeadline = async (projectId, stepId) => {
-    try {
-      await axios.post(`/api/projects/${projectId}/steps/${stepId}/accept-deadline`, {
-        user_id: currentUser.id
-      });
-      fetchProjects();
-    } catch (e) {
-      console.error('Failed to accept deadline', e);
-    }
-  };
-
-  const handleOpenAppealModal = (project, step) => {
-    setAppealModalStep({
-      project_id: project.id,
-      step_id: step.id,
-      step_title: step.title,
-      current_deadline: step.deadline
-    });
-    setAppealForm({
-      proposed_deadline: step.deadline || '',
-      reason: ''
-    });
-  };
-
-  const handleSubmitAppeal = async (e) => {
-    e.preventDefault();
-    if (!appealModalStep || !appealForm.proposed_deadline) return;
-    setSubmittingAppeal(true);
-    try {
-      await axios.post(`/api/projects/${appealModalStep.project_id}/steps/${appealModalStep.step_id}/appeal-deadline`, {
-        proposed_deadline: appealForm.proposed_deadline,
-        reason: appealForm.reason,
-        user_id: currentUser.id
-      });
-      alert('Deadline extension appeal submitted! Admin will be notified in Deadline Workflow.');
-      setAppealModalStep(null);
-      fetchProjects();
-    } catch (e) {
-      console.error('Failed to submit appeal', e);
-      alert('Failed to submit deadline appeal.');
-    } finally {
-      setSubmittingAppeal(false);
-    }
-  };
+  const isAdminOrPM = currentUser.role === 'Admin' || currentUser.role === 'Project Manager';
 
   useEffect(() => {
     fetchProjects();
@@ -108,9 +89,16 @@ export default function ProductionPortal() {
       console.error('Failed to fetch projects', e);
     } finally {
       setLoading(false);
+      setRefreshing(false);
     }
   };
 
+  const handleManualRefresh = () => {
+    setRefreshing(true);
+    fetchProjects();
+  };
+
+  // --- To-Do Checklist Handlers ---
   const loadTodoList = () => {
     const key = `prod_todos_${currentUser.id || 'guest'}`;
     const saved = localStorage.getItem(key);
@@ -120,11 +108,10 @@ export default function ProductionPortal() {
         return;
       } catch (e) { console.error(e); }
     }
-    // Default sample to-do list for production users
     const initial = [
-      { id: 1, text: 'Review initial design wireframes', completed: true },
-      { id: 2, text: 'Export high-res client deliverables', completed: false },
-      { id: 3, text: 'Perform cross-browser QA checks', completed: false }
+      { id: 1, text: 'Review briefing & creative assets', completed: true },
+      { id: 2, text: 'Execute assigned project step deliverables', completed: false },
+      { id: 3, text: 'Perform export QA & submit deliverable proof', completed: false }
     ];
     setTodoList(initial);
     localStorage.setItem(key, JSON.stringify(initial));
@@ -161,914 +148,1618 @@ export default function ProductionPortal() {
     saveTodoList(updated);
   };
 
-  const handleStepStatusChange = async (projectId, stepId, newStatus) => {
+  const handleClearCompletedTodos = () => {
+    const updated = todoList.filter(item => !item.completed);
+    saveTodoList(updated);
+  };
+
+  // --- Step Workflow Actions ---
+  const handleAcceptDeadline = async (projectId, stepId) => {
     try {
-      await axios.put(`/api/projects/${projectId}/steps/${stepId}`, { status: newStatus });
+      await axios.post(`/api/projects/${projectId}/steps/${stepId}/accept-deadline`, {
+        user_id: currentUser.id
+      });
       fetchProjects();
     } catch (e) {
-      console.error('Failed to update step status', e);
+      console.error('Failed to accept deadline', e);
+      alert('Failed to accept deadline: ' + (e.response?.data?.error || e.message));
     }
   };
 
-  const submitDeliverable = async () => {
-    if (!deliverableName || !deliverableUrl) {
-      alert("Please fill in all required fields.");
-      return;
-    }
+  // 1-Click Quick Batch Accept All Pending Deadlines from Ribbon
+  const handleQuickAcceptAllPending = async () => {
+    const pendingSteps = allProductionSteps.filter(s => 
+      s.status !== 'Completed' && (!s.deadline_status || s.deadline_status === 'Pending Acceptance' || s.deadline_status === 'Rejected')
+    );
+    if (pendingSteps.length === 0) return;
+    if (!window.confirm(`Are you sure you want to accept all ${pendingSteps.length} pending milestone deadline(s)?`)) return;
+
+    setBatchAccepting(true);
     try {
-      await axios.put(`/api/projects/${submitModal.projectId}/steps/${submitModal.stepId}`, {
-        status: 'Pending Approval',
-        deliverable_name: deliverableName,
-        deliverable_url: deliverableUrl
-      });
-      setSubmitModal({ isOpen: false, projectId: null, stepId: null, projectName: '' });
+      await Promise.all(
+        pendingSteps.map(s => 
+          axios.post(`/api/projects/${s.project_id}/steps/${s.id}/accept-deadline`, {
+            user_id: currentUser.id
+          }).catch(err => console.error(`Failed to accept step ${s.id}`, err))
+        )
+      );
       fetchProjects();
-    } catch (error) {
-      console.error('Failed to submit step for approval', error);
-      alert('Failed to update step status: ' + (error.response?.data?.error || error.message));
+    } catch (e) {
+      console.error('Failed to batch accept deadlines', e);
+      alert('Failed to batch accept deadlines: ' + (e.response?.data?.error || e.message));
+    } finally {
+      setBatchAccepting(false);
     }
   };
 
-  const openDeliverableModal = (project) => {
-    setActiveModalProject(project);
-    setDeliverableForm({
-      file_name: `${project.title} - Final Deliverable`,
-      file_url: 'https://drive.google.com/file/d/sample',
-      notes: ''
+  const handleOpenAppealModal = (project, step) => {
+    setAppealModalStep({
+      project_id: project.id,
+      step_id: step.id,
+      step_title: step.title,
+      project_title: project.title,
+      current_deadline: step.deadline
+    });
+    setAppealForm({
+      proposed_deadline: step.deadline ? step.deadline.split('T')[0] : '',
+      reason: step.deadline_appeal_reason || ''
     });
   };
 
-  const handleDeliverableSubmit = async (e) => {
+  const handleSubmitAppeal = async (e) => {
     e.preventDefault();
-    if (!activeModalProject) return;
-    setSubmittingDeliverable(true);
+    if (!appealModalStep || !appealForm.proposed_deadline) return;
+    setSubmittingAppeal(true);
     try {
-      await axios.post(`/api/projects/${activeModalProject.id}/submit-delivery`, {
-        user_id: currentUser.id || 1,
-        file_url: deliverableForm.file_url || 'https://drive.google.com/file/d/sample',
-        file_name: deliverableForm.file_name || 'Project Deliverable'
+      await axios.post(`/api/projects/${appealModalStep.project_id}/steps/${appealModalStep.step_id}/appeal-deadline`, {
+        proposed_deadline: appealForm.proposed_deadline,
+        reason: appealForm.reason,
+        user_id: currentUser.id
       });
-      alert('Deliverable submitted successfully! Client has been notified.');
-      setActiveModalProject(null);
+      setAppealModalStep(null);
       fetchProjects();
     } catch (e) {
-      console.error('Failed to submit deliverable', e);
-      alert('Failed to submit deliverable.');
+      console.error('Failed to submit appeal', e);
+      alert('Failed to submit deadline appeal: ' + (e.response?.data?.error || e.message));
+    } finally {
+      setSubmittingAppeal(false);
+    }
+  };
+
+  // Step-level deliverable submission (marks Pending Approval)
+  const openStepSubmitModal = (projectId, projectName, step) => {
+    setSubmitModal({
+      isOpen: true,
+      projectId,
+      stepId: step.id,
+      projectName,
+      stepTitle: step.title
+    });
+    setDeliverableName(step.deliverable_name || `${projectName} - ${step.title} Package`);
+    setDeliverableUrl(step.deliverable_url || '');
+    setDeliverableFile(null);
+  };
+
+  const handleStepDeliverableSubmit = async (e) => {
+    e.preventDefault();
+    if (!deliverableName.trim() || (!deliverableUrl.trim() && !deliverableFile)) {
+      alert("Please provide a deliverable package name and either a file upload or download link.");
+      return;
+    }
+    setSubmittingDeliverable(true);
+    try {
+      let finalUrl = deliverableUrl.trim();
+
+      // If user provided a local file, upload it first
+      if (deliverableFile) {
+        const formData = new FormData();
+        formData.append('documents', deliverableFile);
+        const uploadRes = await axios.post(`/api/projects/${submitModal.projectId}/steps/${submitModal.stepId}/documents`, formData, {
+          headers: { 'Content-Type': 'multipart/form-data' }
+        });
+        if (uploadRes.data?.paths && uploadRes.data.paths[0]) {
+          finalUrl = uploadRes.data.paths[0];
+        }
+      }
+
+      await axios.put(`/api/projects/${submitModal.projectId}/steps/${submitModal.stepId}`, {
+        status: 'Pending Approval',
+        deliverable_name: deliverableName.trim(),
+        deliverable_url: finalUrl
+      });
+
+      setSubmitModal({ isOpen: false, projectId: null, stepId: null, projectName: '', stepTitle: '' });
+      fetchProjects();
+    } catch (error) {
+      console.error('Failed to submit step deliverable', error);
+      alert('Failed to submit deliverable: ' + (error.response?.data?.error || error.message));
     } finally {
       setSubmittingDeliverable(false);
     }
   };
 
-  // Utility to calculate deadline status
-  const getDeadlineInfo = (deadlineStr) => {
-    if (!deadlineStr) return { isOverdue: false, isSoon: false, label: 'No Deadline' };
-    const due = new Date(deadlineStr);
-    const now = new Date();
-    const diffTime = due - now;
-    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+  // Project-level delivery submission
+  const openProjectDeliveryModal = (project) => {
+    setProjectDeliveryModal({ isOpen: true, project });
+    setProjectDeliveryForm({
+      file_name: `${project.title} - Final Delivery`,
+      file_url: '',
+      notes: ''
+    });
+  };
 
-    if (diffDays < 0) {
-      return { isOverdue: true, isSoon: false, label: `🔥 Overdue by ${Math.abs(diffDays)} day${Math.abs(diffDays) > 1 ? 's' : ''}` };
-    } else if (diffDays === 0) {
-      return { isOverdue: false, isSoon: true, label: '⏰ Due Today!' };
-    } else if (diffDays <= 3) {
-      return { isOverdue: false, isSoon: true, label: `⚡ Due in ${diffDays} day${diffDays > 1 ? 's' : ''}` };
-    } else {
-      return { isOverdue: false, isSoon: false, label: `📅 Due ${due.toLocaleDateString()}` };
+  const handleProjectDeliverySubmit = async (e) => {
+    e.preventDefault();
+    if (!projectDeliveryModal.project || !projectDeliveryForm.file_url) {
+      alert('Please provide a valid deliverable download URL.');
+      return;
+    }
+    setSubmittingProjectDelivery(true);
+    try {
+      await axios.post(`/api/projects/${projectDeliveryModal.project.id}/submit-delivery`, {
+        user_id: currentUser.id || 1,
+        file_url: projectDeliveryForm.file_url,
+        file_name: projectDeliveryForm.file_name || 'Final Project Deliverables'
+      });
+      setProjectDeliveryModal({ isOpen: false, project: null });
+      fetchProjects();
+    } catch (e) {
+      console.error('Failed to submit project delivery', e);
+      alert('Failed to submit delivery: ' + (e.response?.data?.error || e.message));
+    } finally {
+      setSubmittingProjectDelivery(false);
     }
   };
 
-  const isAdminOrPM = currentUser.role === 'Admin' || currentUser.role === 'Project Manager';
+  // Toggle table row expansion
+  const toggleStepExpansion = (stepId) => {
+    setExpandedStepIds(prev => {
+      const next = new Set(prev);
+      if (next.has(stepId)) next.delete(stepId);
+      else next.add(stepId);
+      return next;
+    });
+  };
 
-  // For production / employee team members, only show projects where they have assigned steps or are the production lead
-  const relevantProjects = isAdminOrPM 
-    ? projects 
-    : projects.filter(p => (p.user_assigned_steps && p.user_assigned_steps.length > 0) || p.production_id === currentUser.id);
+  // Deadline calculation utility
+  const getDeadlineInfo = (deadlineStr) => {
+    if (!deadlineStr) return { isOverdue: false, isSoon: false, isToday: false, label: 'No Deadline', daysDiff: null };
+    const due = new Date(deadlineStr);
+    const now = new Date();
+    // Normalize both to start of day for comparison
+    const dueDate = new Date(due.getFullYear(), due.getMonth(), due.getDate());
+    const nowDate = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const diffTime = dueDate - nowDate;
+    const diffDays = Math.round(diffTime / (1000 * 60 * 60 * 24));
 
-  // Metrics Calculations
-  const totalProjectsCount = relevantProjects.length;
-  const completedProjectsCount = relevantProjects.filter(p => p.status === 'Completed' || p.status === 'Commission Released').length;
-  const activeProjectsCount = totalProjectsCount - completedProjectsCount;
+    if (diffDays < 0) {
+      return { 
+        isOverdue: true, 
+        isSoon: false, 
+        isToday: false, 
+        daysDiff: diffDays,
+        label: `Overdue by ${Math.abs(diffDays)}d` 
+      };
+    } else if (diffDays === 0) {
+      return { 
+        isOverdue: false, 
+        isSoon: true, 
+        isToday: true, 
+        daysDiff: 0,
+        label: 'Due Today!' 
+      };
+    } else if (diffDays <= 3) {
+      return { 
+        isOverdue: false, 
+        isSoon: true, 
+        isToday: false, 
+        daysDiff: diffDays,
+        label: `Due in ${diffDays}d` 
+      };
+    } else {
+      return { 
+        isOverdue: false, 
+        isSoon: false, 
+        isToday: false, 
+        daysDiff: diffDays,
+        label: `Due ${due.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}` 
+      };
+    }
+  };
 
-  // Find overdue / urgent deadline projects
-  const urgentProjects = relevantProjects.filter(p => {
-    if (p.status === 'Completed' || p.status === 'Commission Released') return false;
-    const dl = getDeadlineInfo(p.locked_deadline);
-    return dl.isOverdue || dl.isSoon;
-  });
+  // Relevant projects for the current user
+  const relevantProjects = useMemo(() => {
+    if (isAdminOrPM) return projects;
+    return projects.filter(p => {
+      const hasSteps = (p.user_assigned_steps && p.user_assigned_steps.length > 0);
+      const isLead = (p.production_id === currentUser.id);
+      return hasSteps || isLead;
+    });
+  }, [projects, isAdminOrPM, currentUser]);
 
-  // Calculate overall steps completed percentage across assigned projects
-  let totalStepsCount = 0;
-  let completedStepsCount = 0;
-  relevantProjects.forEach(p => {
-    const stepsToCount = isAdminOrPM ? (p.steps || []) : (p.user_assigned_steps || []);
-    const total = stepsToCount.length;
-    const completed = stepsToCount.filter(s => s.status === 'Completed').length;
-    totalStepsCount += total;
-    completedStepsCount += completed;
-  });
-  const overallProgressPercent = totalStepsCount > 0 ? Math.round((completedStepsCount / totalStepsCount) * 100) : 0;
+  // Flattened steps list for the Enterprise Task Matrix Table
+  const allProductionSteps = useMemo(() => {
+    return relevantProjects.flatMap(project => {
+      const stepsList = isAdminOrPM ? (project.steps || []) : (project.user_assigned_steps || []);
+      return stepsList.map(step => {
+        const hasRevision = Boolean(
+          (step.reject_todos && step.reject_todos !== '0' && step.reject_todos !== 0) ||
+          (step.reassign_todos && step.reassign_todos !== '0' && step.reassign_todos !== 0) ||
+          step.status === 'Revision Requested'
+        );
+        const deadlineInfo = getDeadlineInfo(step.deadline);
+        return {
+          ...step,
+          project_id: project.id,
+          project_title: project.title,
+          project_status: project.status,
+          client_name: project.client_name,
+          service_type: project.service_type,
+          project_deadline: project.locked_deadline || project.due_date,
+          assigned_members: project.assigned_members,
+          deadlineInfo,
+          hasRevision
+        };
+      });
+    });
+  }, [relevantProjects, isAdminOrPM]);
 
-  // Filter projects for display
-  const filteredProjects = relevantProjects.filter(p => {
-    const isComp = p.status === 'Completed' || p.status === 'Commission Released';
-    if (filterTab === 'Active') return !isComp;
-    if (filterTab === 'Completed') return isComp;
+  // Metric Calculations
+  const metrics = useMemo(() => {
+    const totalProjects = relevantProjects.length;
+    const activeProjects = relevantProjects.filter(p => p.status !== 'Completed' && p.status !== 'Commission Released').length;
+    const activeSteps = allProductionSteps.filter(s => s.status !== 'Completed').length;
+    const pendingAcceptance = allProductionSteps.filter(s => 
+      s.status !== 'Completed' && (!s.deadline_status || s.deadline_status === 'Pending Acceptance' || s.deadline_status === 'Rejected')
+    ).length;
+    const appealedSteps = allProductionSteps.filter(s => s.status !== 'Completed' && s.deadline_status === 'Appealed').length;
+    const revisionsNeeded = allProductionSteps.filter(s => s.hasRevision && s.status !== 'Completed').length;
+    const underReview = allProductionSteps.filter(s => s.status === 'Pending Approval').length;
+    const completedSteps = allProductionSteps.filter(s => s.status === 'Completed').length;
     
-    const dl = getDeadlineInfo(p.locked_deadline);
-    if (filterTab === 'Due Soon') {
-      return !isComp && (dl.isOverdue || dl.isSoon);
+    // Urgent tasks (overdue or due in <= 3 days)
+    const urgentSteps = allProductionSteps.filter(s => s.status !== 'Completed' && (s.deadlineInfo.isOverdue || s.deadlineInfo.isSoon));
+
+    return {
+      totalProjects,
+      activeProjects,
+      activeSteps,
+      pendingAcceptance,
+      appealedSteps,
+      revisionsNeeded,
+      underReview,
+      completedSteps,
+      urgentSteps
+    };
+  }, [relevantProjects, allProductionSteps]);
+
+  // Quick 1-click filter from KPI cards
+  const handleKpiCardClick = (filterKey) => {
+    if (kpiFilter === filterKey) {
+      setKpiFilter('All');
+      setStatusFilter('All');
+      setUrgencyFilter('All');
+    } else {
+      setKpiFilter(filterKey);
+      if (filterKey === 'active_projects') {
+        setStatusFilter('Active');
+        setUrgencyFilter('All');
+      } else if (filterKey === 'active_steps') {
+        setStatusFilter('In Progress');
+        setUrgencyFilter('All');
+      } else if (filterKey === 'pending_acceptance') {
+        setStatusFilter('Pending Acceptance');
+        setUrgencyFilter('All');
+      } else if (filterKey === 'revisions') {
+        setStatusFilter('Revision Required');
+        setUrgencyFilter('All');
+      } else if (filterKey === 'under_review') {
+        setStatusFilter('Pending Approval');
+        setUrgencyFilter('All');
+      } else if (filterKey === 'completed') {
+        setStatusFilter('Completed');
+        setUrgencyFilter('All');
+      }
     }
-    if (filterTab === 'Due Today') {
-      return !isComp && (dl.label === '⏰ Due Today!' || dl.isOverdue);
-    }
-    
-    const stepsToCheck = isAdminOrPM ? (p.steps || []) : (p.user_assigned_steps || []);
-    if (filterTab === 'Pending Approval') {
-      return !isComp && stepsToCheck.some(s => s.status === 'Pending Approval');
-    }
-    if (filterTab === 'Appealed') {
-      return !isComp && stepsToCheck.some(s => s.deadline_status === 'Appealed');
-    }
-    
-    return true; // All
-  });
+  };
+
+  const handleResetFilters = () => {
+    setSearchQuery('');
+    setStatusFilter('All');
+    setUrgencyFilter('All');
+    setKpiFilter('All');
+  };
+
+  // Filtered steps for the Matrix Table view
+  const filteredSteps = useMemo(() => {
+    return allProductionSteps.filter(step => {
+      // Search filter
+      if (searchQuery.trim()) {
+        const q = searchQuery.toLowerCase();
+        const matchesTitle = step.title?.toLowerCase().includes(q);
+        const matchesProject = step.project_title?.toLowerCase().includes(q);
+        const matchesClient = step.client_name?.toLowerCase().includes(q);
+        const matchesService = step.service_type?.toLowerCase().includes(q);
+        if (!matchesTitle && !matchesProject && !matchesClient && !matchesService) return false;
+      }
+
+      // Status filter
+      if (statusFilter === 'Pending Acceptance') {
+        if (step.status === 'Completed') return false;
+        if (step.deadline_status === 'Accepted') return false;
+      } else if (statusFilter === 'In Progress') {
+        if (step.status === 'Completed' || step.status === 'Pending Approval') return false;
+      } else if (statusFilter === 'Pending Approval') {
+        if (step.status !== 'Pending Approval') return false;
+      } else if (statusFilter === 'Revision Required') {
+        if (!step.hasRevision) return false;
+      } else if (statusFilter === 'Completed') {
+        if (step.status !== 'Completed') return false;
+      }
+
+      // Urgency filter
+      if (urgencyFilter === 'Overdue' && !step.deadlineInfo.isOverdue) return false;
+      if (urgencyFilter === 'Due Today' && !step.deadlineInfo.isToday) return false;
+      if (urgencyFilter === 'Due Soon' && !step.deadlineInfo.isSoon) return false;
+
+      return true;
+    });
+  }, [allProductionSteps, searchQuery, statusFilter, urgencyFilter]);
+
+  // Filtered projects for the Kanban Cards view
+  const filteredProjects = useMemo(() => {
+    return relevantProjects.filter(p => {
+      const isComp = p.status === 'Completed' || p.status === 'Commission Released';
+      if (statusFilter === 'Active' && isComp) return false;
+      if (statusFilter === 'Completed' && !isComp) return false;
+
+      const projectSteps = isAdminOrPM ? (p.steps || []) : (p.user_assigned_steps || []);
+
+      if (statusFilter === 'Pending Acceptance') {
+        const hasPending = projectSteps.some(s => !s.deadline_status || s.deadline_status === 'Pending Acceptance');
+        if (!hasPending) return false;
+      }
+      if (statusFilter === 'Pending Approval') {
+        const hasApproval = projectSteps.some(s => s.status === 'Pending Approval');
+        if (!hasApproval) return false;
+      }
+      if (statusFilter === 'Revision Required') {
+        const hasRev = projectSteps.some(s => (s.reject_todos && s.reject_todos !== '0') || (s.reassign_todos && s.reassign_todos !== '0'));
+        if (!hasRev) return false;
+      }
+
+      if (searchQuery.trim()) {
+        const q = searchQuery.toLowerCase();
+        const matchesTitle = p.title?.toLowerCase().includes(q);
+        const matchesClient = p.client_name?.toLowerCase().includes(q);
+        const matchesService = p.service_type?.toLowerCase().includes(q);
+        if (!matchesTitle && !matchesClient && !matchesService) return false;
+      }
+
+      const pDl = getDeadlineInfo(p.locked_deadline);
+      if (urgencyFilter === 'Overdue' && !pDl.isOverdue) return false;
+      if (urgencyFilter === 'Due Today' && !pDl.isToday) return false;
+      if (urgencyFilter === 'Due Soon' && !pDl.isSoon) return false;
+
+      return true;
+    });
+  }, [relevantProjects, statusFilter, urgencyFilter, searchQuery, isAdminOrPM]);
+
+  // Filtered to-dos
+  const filteredTodos = useMemo(() => {
+    if (todoFilter === 'active') return todoList.filter(t => !t.completed);
+    if (todoFilter === 'completed') return todoList.filter(t => t.completed);
+    return todoList;
+  }, [todoList, todoFilter]);
+
+  const todoCompletionPercent = todoList.length > 0 
+    ? Math.round((todoList.filter(t => t.completed).length / todoList.length) * 100) 
+    : 0;
+
+  const hasPendingAlert = metrics.pendingAcceptance > 0 || metrics.appealedSteps > 0 || (isAdminOrPM && metrics.underReview > 0);
 
   return (
-    <div className="prod-dashboard-container">
+    <div className="prod-dashboard-container modern-ui">
       
-      {/* Header Banner */}
-      <div className="prod-header-banner">
-        <div className="prod-header-info">
-          <h1>Production Command Center 🚀</h1>
-          <p>Welcome back, {currentUser.name || 'Team Member'}. Here is your project workflow breakdown.</p>
-        </div>
-        <button 
-          onClick={fetchProjects}
-          style={{ background: 'rgba(255,255,255,0.15)', border: '1px solid rgba(255,255,255,0.3)', color: 'white', padding: '0.6rem 1.2rem', borderRadius: '10px', fontWeight: '600', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.5rem', backdropFilter: 'blur(4px)' }}
-        >
-          <Clock size={16} /> Refresh Dashboard
-        </button>
-      </div>
+      {/* Top Ribbon Alert: Deadline Approval & 2-Hour Acceptance Workflow */}
+      {hasPendingAlert && !isRibbonDismissed && (
+        <div className="prod-top-ribbon-alert">
+          <div className="ribbon-left">
+            <div className="ribbon-icon-container">
+              <AlertTriangle size={18} />
+              <span className="ribbon-ping-ring"></span>
+            </div>
+            <div className="ribbon-text-content">
+              <div className="ribbon-title-row">
+                <span className="ribbon-title">DEADLINE APPROVAL & ACCEPTANCE ALERT</span>
+                <span className="ribbon-timer-badge">
+                  <Clock size={12} /> 2-Hour Auto-Accept Window Active
+                </span>
+                {metrics.pendingAcceptance > 0 && (
+                  <span className="ribbon-count-tag">{metrics.pendingAcceptance} Unconfirmed</span>
+                )}
+                {metrics.appealedSteps > 0 && (
+                  <span className="ribbon-appealed-tag">{metrics.appealedSteps} Extension Appeals</span>
+                )}
+              </div>
+              <p className="ribbon-desc">
+                {metrics.pendingAcceptance > 0 ? (
+                  <>
+                    You have <strong>{metrics.pendingAcceptance} milestone deadline{metrics.pendingAcceptance !== 1 ? 's' : ''}</strong> awaiting confirmation. 
+                    Deadlines automatically accept <strong>after 2 hours</strong> of inactivity. Please review and confirm or appeal before the timer expires.
+                  </>
+                ) : metrics.appealedSteps > 0 ? (
+                  <>
+                    {isAdminOrPM 
+                      ? <><strong>{metrics.appealedSteps} deadline extension appeal(s)</strong> require your administrative review and approval.</>
+                      : <><strong>{metrics.appealedSteps} milestone extension appeal(s)</strong> have been submitted and are currently under PM review.</>
+                    }
+                  </>
+                ) : (
+                  <>Deliverables are currently in review.</>
+                )}
+              </p>
+            </div>
+          </div>
 
-      {/* Metric Stat Cards Grid */}
-      <div className="prod-metrics-grid">
-        <div className="prod-metric-card">
-          <div className="prod-metric-icon indigo">
-            <FolderKanban size={24} />
-          </div>
-          <div className="prod-metric-content">
-            <span className="prod-metric-val">{totalProjectsCount}</span>
-            <span className="prod-metric-lbl">Total Projects</span>
-          </div>
-        </div>
+          <div className="ribbon-actions">
+            {metrics.pendingAcceptance > 0 && (
+              <button 
+                className="ribbon-btn primary"
+                onClick={() => {
+                  setKpiFilter('pending_acceptance');
+                  setStatusFilter('Pending Acceptance');
+                  setUrgencyFilter('All');
+                }}
+                title="Filter table to view all pending deadlines"
+              >
+                <ListFilter size={14} />
+                <span>Review Deadlines ({metrics.pendingAcceptance})</span>
+              </button>
+            )}
 
-        <div className="prod-metric-card">
-          <div className="prod-metric-icon amber">
-            <Clock size={24} />
-          </div>
-          <div className="prod-metric-content">
-            <span className="prod-metric-val">{activeProjectsCount}</span>
-            <span className="prod-metric-lbl">Active Projects</span>
-          </div>
-        </div>
+            {metrics.pendingAcceptance > 0 && !isAdminOrPM && (
+              <button 
+                className="ribbon-btn success"
+                onClick={handleQuickAcceptAllPending}
+                disabled={batchAccepting}
+                title="Confirm and accept all your pending milestone deadlines in 1 click"
+              >
+                <CheckCircle2 size={14} />
+                <span>{batchAccepting ? 'Accepting...' : `Accept All (${metrics.pendingAcceptance})`}</span>
+              </button>
+            )}
 
-        <div className="prod-metric-card">
-          <div className="prod-metric-icon emerald">
-            <CheckCircle2 size={24} />
-          </div>
-          <div className="prod-metric-content">
-            <span className="prod-metric-val">{completedProjectsCount}</span>
-            <span className="prod-metric-lbl">Completed</span>
-          </div>
-        </div>
+            <button 
+              className="ribbon-btn secondary"
+              onClick={() => navigate('/deadlines')}
+              title="Open full Deadline Workflow manager"
+            >
+              <ExternalLink size={14} />
+              <span>Workflow</span>
+            </button>
 
-        <div className="prod-metric-card">
-          <div className="prod-metric-icon rose">
-            <AlertTriangle size={24} />
-          </div>
-          <div className="prod-metric-content">
-            <span className="prod-metric-val">{urgentProjects.length}</span>
-            <span className="prod-metric-lbl">Urgent / Due Soon</span>
-          </div>
-        </div>
-
-        <div className="prod-metric-card">
-          <div className="prod-metric-icon indigo">
-            <Layers size={24} />
-          </div>
-          <div className="prod-metric-content">
-            <span className="prod-metric-val">{overallProgressPercent}%</span>
-            <span className="prod-metric-lbl">Overall Progress</span>
-          </div>
-        </div>
-      </div>
-
-      {/* Urgent Deadline Alert Banner */}
-      {urgentProjects.length > 0 && (
-        <div className="prod-alerts-banner">
-          <div className="prod-alerts-header">
-            <ShieldAlert size={20} />
-            <span>ATTENTION REQUIRED: {urgentProjects.length} Project{urgentProjects.length > 1 ? 's' : ''} Require Immediate Production Action</span>
-          </div>
-          <div className="prod-alerts-list">
-            {urgentProjects.map(p => {
-              const dl = getDeadlineInfo(p.locked_deadline);
-              return (
-                <div key={p.id} className="prod-alert-item">
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                    <strong>{p.title}</strong>
-                    <span className="alert-client-name">Client: {p.client_name || 'Unassigned'}</span>
-                  </div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-                    <span className={dl.isOverdue ? 'badge-deadline-overdue-alert' : 'badge-deadline-soon-alert'}>
-                      {dl.label}
-                    </span>
-                    <button 
-                      onClick={() => navigate(`/projects/${p.id}`)}
-                      style={{ background: '#ffffff', border: 'none', color: '#b91c1c', fontWeight: '800', fontSize: '0.85rem', padding: '0.5rem 1rem', borderRadius: '8px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.35rem', boxShadow: '0 2px 4px rgba(0,0,0,0.1)' }}
-                    >
-                      Open Project <ArrowRight size={15} />
-                    </button>
-                  </div>
-                </div>
-              );
-            })}
+            <button 
+              className="ribbon-close-btn"
+              onClick={() => setIsRibbonDismissed(true)}
+              title="Dismiss alert for this session"
+            >
+              <X size={16} />
+            </button>
           </div>
         </div>
       )}
 
-      {/* Main Layout Grid (Projects List + Side Daily Checklist) */}
-      <div className="prod-content-layout">
-        
-        {/* Left Side: Projects Board */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
-          
-          {/* Filter Pills */}
-          <div className="prod-filter-bar">
+      {/* 1. Page Header */}
+      <div className="prod-page-header">
+        <div className="header-title-area">
+          <div className="header-badge-row">
+            <h1 className="prod-main-heading">Production Command Center</h1>
+            <span className="prod-role-badge">
+              <Briefcase size={13} />
+              {isAdminOrPM ? 'Admin / PM Oversight' : 'Production Specialist'}
+            </span>
+            <span className="prod-count-badge">
+              {metrics.activeSteps} Active Task{metrics.activeSteps !== 1 ? 's' : ''}
+            </span>
+            {metrics.urgentSteps.length > 0 && (
+              <span className="prod-urgent-pill">
+                🔥 {metrics.urgentSteps.length} Urgent Deadlines
+              </span>
+            )}
+          </div>
+          <p className="prod-subheading">
+            Triage assigned project steps, confirm or appeal deadlines, submit deliverables, and track client revisions in real time.
+          </p>
+        </div>
+
+        {/* Header Action Toolbar */}
+        <div className="prod-header-actions">
+          {/* Restore Ribbon Pill (shown if user dismissed the ribbon but pending alerts exist) */}
+          {hasPendingAlert && isRibbonDismissed && (
             <button 
-              className={`prod-filter-btn ${filterTab === 'All' ? 'active' : ''}`}
-              onClick={() => setFilterTab('All')}
+              className="ribbon-restore-pill"
+              onClick={() => setIsRibbonDismissed(false)}
+              title="Show deadline approval alert ribbon"
             >
-              All Projects ({projects.length})
+              <AlertTriangle size={13} />
+              <span>{metrics.pendingAcceptance} Pending Deadlines (2h Timer)</span>
+            </button>
+          )}
+
+          {/* Dual View Switcher */}
+          <div className="view-mode-toggle" title="Switch between Table Matrix & Card Grid">
+            <button 
+              className={`view-btn ${viewMode === 'table' ? 'active' : ''}`}
+              onClick={() => setViewMode('table')}
+            >
+              <ListFilter size={15} />
+              <span>Task Matrix</span>
             </button>
             <button 
-              className={`prod-filter-btn ${filterTab === 'Due Soon' ? 'active' : ''}`}
-              onClick={() => setFilterTab('Due Soon')}
+              className={`view-btn ${viewMode === 'cards' ? 'active' : ''}`}
+              onClick={() => setViewMode('cards')}
             >
-              🔥 Due Soon / Overdue
-            </button>
-            <button 
-              className={`prod-filter-btn ${filterTab === 'Due Today' ? 'active' : ''}`}
-              onClick={() => setFilterTab('Due Today')}
-            >
-              ⏰ Due Today
-            </button>
-            <button 
-              className={`prod-filter-btn ${filterTab === 'Pending Approval' ? 'active' : ''}`}
-              onClick={() => setFilterTab('Pending Approval')}
-            >
-              ⏳ Pending Approval
-            </button>
-            <button 
-              className={`prod-filter-btn ${filterTab === 'Appealed' ? 'active' : ''}`}
-              onClick={() => setFilterTab('Appealed')}
-            >
-              🚨 Appealed
-            </button>
-            <button 
-              className={`prod-filter-btn ${filterTab === 'Active' ? 'active' : ''}`}
-              onClick={() => setFilterTab('Active')}
-            >
-              ⚡ Active ({activeProjectsCount})
-            </button>
-            <button 
-              className={`prod-filter-btn ${filterTab === 'Completed' ? 'active' : ''}`}
-              onClick={() => setFilterTab('Completed')}
-            >
-              ✅ Completed ({completedProjectsCount})
+              <LayoutGrid size={15} />
+              <span>Project Cards</span>
             </button>
           </div>
 
-          {/* Project Cards List */}
-          {loading ? (
-            <div style={{ padding: '3rem', textAlign: 'center', color: '#64748b' }}>Loading production workflow...</div>
-          ) : filteredProjects.length === 0 ? (
-            <div style={{ background: '#ffffff', padding: '3rem', borderRadius: '16px', border: '1px solid #e2e8f0', textAlign: 'center', color: '#64748b' }}>
-              <FolderKanban size={40} style={{ color: '#cbd5e1', marginBottom: '0.75rem' }} />
-              <p style={{ margin: 0, fontWeight: '600' }}>No projects match the selected filter.</p>
+          {/* Quick Refresh */}
+          <button 
+            className="action-btn secondary-btn"
+            onClick={handleManualRefresh}
+            title="Reload live production data"
+          >
+            <RotateCcw size={15} className={refreshing ? 'spin' : ''} />
+            <span>Refresh</span>
+          </button>
+        </div>
+      </div>
+
+      {/* 2. Compact (~75px) KPI Metric Cards Row */}
+      <div className="prod-kpi-grid">
+        {/* Total Assigned Projects */}
+        <div 
+          className={`prod-kpi-card ${kpiFilter === 'active_projects' ? 'active' : ''}`}
+          onClick={() => handleKpiCardClick('active_projects')}
+          title="Click to filter active assigned projects"
+        >
+          <div className="kpi-icon-wrap total">
+            <FolderKanban size={20} />
+          </div>
+          <div className="kpi-card-content">
+            <span className="kpi-card-val">{metrics.activeProjects}</span>
+            <span className="kpi-card-lbl">Assigned Projects</span>
+          </div>
+        </div>
+
+        {/* Active Work Steps */}
+        <div 
+          className={`prod-kpi-card ${kpiFilter === 'active_steps' ? 'active' : ''}`}
+          onClick={() => handleKpiCardClick('active_steps')}
+          title="Click to filter active work steps"
+        >
+          <div className="kpi-icon-wrap active">
+            <Layers size={20} />
+          </div>
+          <div className="kpi-card-content">
+            <span className="kpi-card-val">{metrics.activeSteps}</span>
+            <span className="kpi-card-lbl">Active Steps</span>
+          </div>
+        </div>
+
+        {/* Pending Deadline Acceptance */}
+        <div 
+          className={`prod-kpi-card ${kpiFilter === 'pending_acceptance' ? 'active' : ''}`}
+          onClick={() => handleKpiCardClick('pending_acceptance')}
+          title="Click to filter steps awaiting deadline confirmation"
+        >
+          <div className="kpi-icon-wrap pending">
+            <Clock size={20} />
+          </div>
+          <div className="kpi-card-content">
+            <span className="kpi-card-val">{metrics.pendingAcceptance}</span>
+            <span className="kpi-card-lbl">Pending Accept</span>
+          </div>
+        </div>
+
+        {/* Revision Feedback Callouts */}
+        <div 
+          className={`prod-kpi-card ${kpiFilter === 'revisions' ? 'active' : ''}`}
+          onClick={() => handleKpiCardClick('revisions')}
+          title="Click to filter steps with client or PM revision feedback"
+        >
+          <div className="kpi-icon-wrap revisions">
+            <AlertTriangle size={20} />
+          </div>
+          <div className="kpi-card-content">
+            <span className="kpi-card-val">{metrics.revisionsNeeded}</span>
+            <span className="kpi-card-lbl">Feedback / Fixes</span>
+          </div>
+        </div>
+
+        {/* Submitted for Review */}
+        <div 
+          className={`prod-kpi-card ${kpiFilter === 'under_review' ? 'active' : ''}`}
+          onClick={() => handleKpiCardClick('under_review')}
+          title="Click to filter steps currently under PM review"
+        >
+          <div className="kpi-icon-wrap review">
+            <FileCheck size={20} />
+          </div>
+          <div className="kpi-card-content">
+            <span className="kpi-card-val">{metrics.underReview}</span>
+            <span className="kpi-card-lbl">Under Review</span>
+          </div>
+        </div>
+
+        {/* Completed Steps */}
+        <div 
+          className={`prod-kpi-card ${kpiFilter === 'completed' ? 'active' : ''}`}
+          onClick={() => handleKpiCardClick('completed')}
+          title="Click to filter finished steps"
+        >
+          <div className="kpi-icon-wrap completed">
+            <CheckCircle2 size={20} />
+          </div>
+          <div className="kpi-card-content">
+            <span className="kpi-card-val">{metrics.completedSteps}</span>
+            <span className="kpi-card-lbl">Completed</span>
+          </div>
+        </div>
+      </div>
+
+      {/* 3. Urgent Overdue / Due Soon Alert Banner */}
+      {metrics.urgentSteps.length > 0 && (
+        <div className="prod-urgent-banner">
+          <div className="urgent-banner-icon">
+            <ShieldAlert size={22} />
+          </div>
+          <div className="urgent-banner-content">
+            <div className="urgent-banner-header">
+              <strong>ATTENTION REQUIRED: {metrics.urgentSteps.length} Step{metrics.urgentSteps.length !== 1 ? 's' : ''} Require Urgent Production Action</strong>
+              <span className="urgent-sub-text">Deadlines are due today, overdue, or due within 72 hours.</span>
             </div>
-          ) : (
-            filteredProjects.map(p => {
-              const dl = getDeadlineInfo(p.locked_deadline);
-              const cardSteps = isAdminOrPM ? (p.steps || []) : (p.user_assigned_steps || []);
-              const total = cardSteps.length;
-              const completed = cardSteps.filter(s => s.status === 'Completed').length;
-              const percent = total > 0 ? Math.round((completed / total) * 100) : 0;
-              const isCompleted = p.status === 'Completed' || p.status === 'Commission Released';
+            <div className="urgent-banner-pills">
+              {metrics.urgentSteps.slice(0, 4).map(step => (
+                <div key={step.id} className="urgent-task-pill" onClick={() => {
+                  setSearchQuery(step.title);
+                  setViewMode('table');
+                }}>
+                  <span className="pill-title">{step.title}</span>
+                  <span className="pill-proj">({step.project_title})</span>
+                  <span className={`pill-badge ${step.deadlineInfo.isOverdue ? 'overdue' : 'soon'}`}>
+                    {step.deadlineInfo.label}
+                  </span>
+                </div>
+              ))}
+              {metrics.urgentSteps.length > 4 && (
+                <button 
+                  className="urgent-see-all-btn"
+                  onClick={() => { setUrgencyFilter('Overdue'); setViewMode('table'); }}
+                >
+                  +{metrics.urgentSteps.length - 4} More...
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
-              return (
-                <div key={p.id} className="prod-project-card">
-                  
-                  {/* Top Bar */}
-                  <div className="prod-card-top">
-                    <div>
-                      <h3 className="prod-card-title">{p.title}</h3>
-                      <div className="prod-card-meta">
-                        <span>Client: <strong>{p.client_name || 'No Client'}</strong></span>
-                        <span>·</span>
-                        <span>Service: <strong>{p.service_type || 'Unspecified'}</strong></span>
-                      </div>
-                    </div>
+      {/* 4. Filter & Search Toolbar */}
+      <div className="prod-toolbar-card">
+        <div className="search-input-wrapper">
+          <Search size={16} className="search-icon" />
+          <input 
+            type="text"
+            className="search-input"
+            placeholder="Search by step name, project title, client, or service..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+          />
+          {searchQuery && (
+            <button className="clear-search-btn" onClick={() => setSearchQuery('')}>
+              <X size={14} />
+            </button>
+          )}
+        </div>
 
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
-                      <span className={`badge-status ${isCompleted ? 'completed' : 'active'}`}>
-                        {isCompleted ? 'Completed' : p.status || 'Active'}
-                      </span>
-                      <span className={dl.isOverdue ? 'badge-deadline-overdue' : dl.isSoon ? 'badge-deadline-soon' : 'badge-deadline-normal'}>
-                        {dl.label}
-                      </span>
-                    </div>
-                  </div>
+        <div className="filter-controls-group">
+          {/* Status Dropdown */}
+          <div className="select-wrapper">
+            <select 
+              value={statusFilter} 
+              onChange={(e) => { setStatusFilter(e.target.value); setKpiFilter('All'); }}
+              className="toolbar-select"
+            >
+              <option value="All">All Step Statuses</option>
+              <option value="Pending Acceptance">⏳ Pending Acceptance</option>
+              <option value="In Progress">⚡ In Progress / Confirmed</option>
+              <option value="Revision Required">⚠️ Revision Feedback</option>
+              <option value="Pending Approval">🔍 Under Review</option>
+              <option value="Completed">✅ Completed</option>
+            </select>
+          </div>
 
-                  {/* Steps Checklist inside Project Card */}
-                  {(() => {
-                    const displaySteps = isAdminOrPM
-                      ? (p.steps || [])
-                      : (p.user_assigned_steps || []);
+          {/* Urgency Dropdown */}
+          <div className="select-wrapper">
+            <select 
+              value={urgencyFilter} 
+              onChange={(e) => { setUrgencyFilter(e.target.value); }}
+              className="toolbar-select"
+            >
+              <option value="All">All Deadlines</option>
+              <option value="Overdue">🔥 Overdue</option>
+              <option value="Due Today">⏰ Due Today</option>
+              <option value="Due Soon">⚡ Due in 3 Days</option>
+            </select>
+          </div>
 
-                    if (displaySteps.length === 0) return null;
+          {/* Reset Filters */}
+          {(searchQuery || statusFilter !== 'All' || urgencyFilter !== 'All' || kpiFilter !== 'All') && (
+            <button className="reset-filter-btn" onClick={handleResetFilters} title="Reset all filters">
+              <RotateCcw size={14} />
+              <span>Reset</span>
+            </button>
+          )}
+        </div>
+      </div>
 
-                    return (
-                      <div className="prod-steps-box">
-                        <div className="prod-steps-header">📌 Project Steps & Deadline Status:</div>
-                        {displaySteps.map(step => {
-                          const formattedDeadline = step.deadline ? new Date(step.deadline).toLocaleDateString() : 'No Deadline';
-                          const formattedProposed = step.proposed_deadline ? new Date(step.proposed_deadline).toLocaleDateString() : 'N/A';
+      {/* 5. Main Content Area: Workload Matrix / Cards + Side Daily Scratchpad */}
+      <div className="prod-main-grid">
+        
+        {/* Left Column: Primary Work Area */}
+        <div className="prod-work-column">
+          
+          {loading ? (
+            <div className="prod-loading-box">
+              <div className="spinner"></div>
+              <span>Loading production command center...</span>
+            </div>
+          ) : viewMode === 'table' ? (
+            
+            /* VIEW MODE A: Enterprise Task Matrix Table */
+            <div className="prod-table-card">
+              <div className="table-header-info">
+                <div className="table-title-wrap">
+                  <h2 className="table-heading">Assigned Steps & Deadline Matrix</h2>
+                  <span className="table-record-count">Showing {filteredSteps.length} of {allProductionSteps.length} Steps</span>
+                </div>
+              </div>
 
-                          return (
-                            <div key={step.id} className="prod-step-row" style={{ flexWrap: 'wrap', gap: '0.75rem' }}>
-                              <div style={{ flex: 1, minWidth: '200px' }}>
-                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
-                                  <span className="prod-step-title">{step.title}</span>
+              {filteredSteps.length === 0 ? (
+                <div className="prod-empty-state">
+                  <FolderKanban size={44} className="empty-icon" />
+                  <h3>No Production Steps Found</h3>
+                  <p>No steps match the selected search or filter criteria.</p>
+                  <button className="action-btn secondary-btn" onClick={handleResetFilters}>
+                    Clear Filters
+                  </button>
+                </div>
+              ) : (
+                <div className="table-responsive-wrapper">
+                  <table className="prod-matrix-table">
+                    <thead>
+                      <tr>
+                        <th style={{ width: '28%' }}>Step & Specifications</th>
+                        <th style={{ width: '20%' }}>Project & Client</th>
+                        <th style={{ width: '18%' }}>Deadline & Urgency</th>
+                        <th style={{ width: '16%' }}>Deliverable Status</th>
+                        <th style={{ width: '18%', textAlign: 'right' }}>Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {filteredSteps.map((step) => {
+                        const isExpanded = expandedStepIds.has(step.id);
+                        const isAccepted = step.deadline_status === 'Accepted';
+                        const isPendingAccept = !step.deadline_status || step.deadline_status === 'Pending Acceptance' || step.deadline_status === 'Rejected';
+                        const isAppealed = step.deadline_status === 'Appealed';
+                        const isUnderReview = step.status === 'Pending Approval';
+                        const isCompleted = step.status === 'Completed';
+
+                        // Parse revision todos if present
+                        let revisionTodos = [];
+                        const rawTodos = (step.reject_todos && step.reject_todos !== '0' && step.reject_todos !== 0) 
+                          ? step.reject_todos 
+                          : ((step.reassign_todos && step.reassign_todos !== '0' && step.reassign_todos !== 0) ? step.reassign_todos : null);
+                        if (rawTodos) {
+                          try {
+                            revisionTodos = typeof rawTodos === 'string' ? JSON.parse(rawTodos) : rawTodos;
+                          } catch (e) {}
+                        }
+
+                        return (
+                          <React.Fragment key={step.id}>
+                            <tr className={`step-row ${step.hasRevision ? 'has-revision-row' : ''} ${step.deadlineInfo.isOverdue && !isCompleted ? 'is-overdue-row' : ''}`}>
+                              {/* Step & Specifications */}
+                              <td>
+                                <div className="step-main-cell">
+                                  <div className="step-title-row">
+                                    <span className="step-title-text">{step.title}</span>
+                                    {step.hasRevision && (
+                                      <span className="badge-revision-alert" title="Revision requested by client or PM">
+                                        ⚠️ Revision
+                                      </span>
+                                    )}
+                                    {step.description && (
+                                      <button 
+                                        className="btn-toggle-expand"
+                                        onClick={() => toggleStepExpansion(step.id)}
+                                        title="View full step instructions"
+                                      >
+                                        {isExpanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+                                      </button>
+                                    )}
+                                  </div>
                                   
-                                  {/* Step Deadline Urgency Indicator */}
-                                  {step.deadline && step.status !== 'Completed' && (
-                                    (() => {
-                                      const sdl = getDeadlineInfo(step.deadline);
-                                      if (sdl.isOverdue || sdl.isSoon) {
-                                        return (
-                                          <span style={{ 
-                                            background: sdl.isOverdue ? '#fee2e2' : '#fef3c7', 
-                                            color: sdl.isOverdue ? '#b91c1c' : '#b45309', 
-                                            fontSize: '0.72rem', 
-                                            padding: '2px 8px', 
-                                            borderRadius: '10px', 
-                                            fontWeight: '800' 
-                                          }}>
-                                            {sdl.label}
-                                          </span>
-                                        );
-                                      }
-                                      return null;
-                                    })()
+                                  {step.description && !isExpanded && (
+                                    <p className="step-snippet-desc">
+                                      {step.description.length > 75 ? `${step.description.substring(0, 75)}...` : step.description}
+                                    </p>
                                   )}
-                                  
-                                  {/* Deadline Status Badges */}
-                                  {step.deadline_status === 'Accepted' && (
-                                    <span style={{ background: '#d1fae5', color: '#047857', fontSize: '0.72rem', padding: '2px 8px', borderRadius: '10px', fontWeight: '700' }}>
-                                      ✅ Confirmed: {formattedDeadline}
+                                </div>
+                              </td>
+
+                              {/* Project & Client */}
+                              <td>
+                                <div className="proj-cell">
+                                  <span 
+                                    className="proj-title-link"
+                                    onClick={() => navigate(`/projects/${step.project_id}`)}
+                                    title="Open Project Details"
+                                  >
+                                    {step.project_title}
+                                    <ExternalLink size={11} />
+                                  </span>
+                                  <div className="proj-meta-sub">
+                                    <span>Client: <strong>{step.client_name || 'Direct'}</strong></span>
+                                    {step.service_type && <span>· {step.service_type}</span>}
+                                  </div>
+                                </div>
+                              </td>
+
+                              {/* Deadline & Urgency */}
+                              <td>
+                                <div className="deadline-cell">
+                                  <div className="deadline-primary-row">
+                                    <Calendar size={13} className="text-slate-400" />
+                                    <span className="deadline-date-val">
+                                      {step.deadline ? new Date(step.deadline).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }) : 'No Target Set'}
                                     </span>
-                                  )}
-                                  {(!step.deadline_status || step.deadline_status === 'Pending Acceptance') && (
-                                    <span style={{ background: '#fef3c7', color: '#b45309', fontSize: '0.72rem', padding: '2px 8px', borderRadius: '10px', fontWeight: '700' }}>
-                                      ⏳ Pending Acceptance ({formattedDeadline})
+                                  </div>
+
+                                  <div className="deadline-badge-wrap">
+                                    {/* Relative countdown pill */}
+                                    {step.deadline && !isCompleted && (
+                                      <span className={`urgency-chip ${step.deadlineInfo.isOverdue ? 'overdue' : step.deadlineInfo.isSoon ? 'soon' : 'normal'}`}>
+                                        {step.deadlineInfo.label}
+                                      </span>
+                                    )}
+
+                                    {/* Acceptance state pill */}
+                                    {isAccepted && (
+                                      <span className="chip-accepted" title="Deadline accepted by production member">
+                                        ✓ Confirmed
+                                      </span>
+                                    )}
+                                    {isPendingAccept && (
+                                      <span className="chip-pending-accept" title="Deadline awaiting production confirmation (Auto-accepts after 2 hours of inactivity)">
+                                        ⏳ Unconfirmed
+                                      </span>
+                                    )}
+                                    {isAppealed && (
+                                      <span className="chip-appealed" title="Extension appeal submitted to PM">
+                                        ⚠️ Appealed
+                                      </span>
+                                    )}
+                                  </div>
+                                </div>
+                              </td>
+
+                              {/* Deliverable Status */}
+                              <td>
+                                <div className="deliverable-cell">
+                                  {isCompleted ? (
+                                    <span className="status-badge completed">
+                                      <CheckCircle2 size={13} /> Approved
                                     </span>
-                                  )}
-                                  {step.deadline_status === 'Appealed' && (
-                                    <span style={{ background: '#e0e7ff', color: '#3730a3', fontSize: '0.72rem', padding: '2px 8px', borderRadius: '10px', fontWeight: '700' }}>
-                                      ⚠️ Extension Appealed (Proposed: {formattedProposed})
+                                  ) : isUnderReview ? (
+                                    <span className="status-badge review">
+                                      <Clock size={13} /> Under Review
                                     </span>
-                                  )}
-                                  {step.deadline_status === 'Rejected' && (
-                                    <span style={{ background: '#fee2e2', color: '#991b1b', fontSize: '0.72rem', padding: '2px 8px', borderRadius: '10px', fontWeight: '700' }}>
-                                      ❌ Extension Rejected (Due: {formattedDeadline})
+                                  ) : (step.deliverable_name || step.deliverable_url) ? (
+                                    <div className="submitted-file-pill">
+                                      <Paperclip size={12} />
+                                      <span className="file-name">{step.deliverable_name || 'Proof Link'}</span>
+                                      {step.deliverable_url && (
+                                        <a 
+                                          href={step.deliverable_url.startsWith('http') ? step.deliverable_url : `https://${step.deliverable_url}`}
+                                          target="_blank"
+                                          rel="noopener noreferrer"
+                                          className="link-icon"
+                                          title="Open submitted deliverable file"
+                                        >
+                                          <ExternalLink size={12} />
+                                        </a>
+                                      )}
+                                    </div>
+                                  ) : (
+                                    <span className="status-badge pending">
+                                      Pending Upload
                                     </span>
                                   )}
                                 </div>
-                              </div>
+                              </td>
 
-                              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                                {/* Accept / Appeal Buttons for Production */}
-                                {(!step.deadline_status || step.deadline_status === 'Pending Acceptance' || step.deadline_status === 'Rejected') && (
-                                  <div style={{ display: 'flex', gap: '0.35rem' }}>
-                                    <button 
-                                      type="button"
-                                      onClick={() => handleAcceptDeadline(p.id, step.id)}
-                                      style={{ background: '#10b981', color: 'white', border: 'none', padding: '0.25rem 0.6rem', borderRadius: '6px', fontSize: '0.75rem', fontWeight: '700', cursor: 'pointer' }}
-                                    >
-                                      Accept
-                                    </button>
-                                    <button 
-                                      type="button"
-                                      onClick={() => handleOpenAppealModal(p, step)}
-                                      style={{ background: '#f59e0b', color: 'white', border: 'none', padding: '0.25rem 0.6rem', borderRadius: '6px', fontSize: '0.75rem', fontWeight: '700', cursor: 'pointer' }}
-                                    >
-                                      Appeal Extension
-                                    </button>
-                                  </div>
-                                )}
-
-                                {step.deadline_status === 'Accepted' && (
-                                  <button 
-                                    type="button"
-                                    onClick={() => handleOpenAppealModal(p, step)}
-                                    style={{ background: 'none', border: '1px solid #cbd5e1', color: '#64748b', padding: '0.25rem 0.5rem', borderRadius: '6px', fontSize: '0.75rem', fontWeight: '600', cursor: 'pointer' }}
-                                  >
-                                    Request Extension
-                                  </button>
-                                )}
-
-                                {step.deadline_status === 'Appealed' && (
-                                  <button 
-                                    type="button"
-                                    onClick={() => handleOpenAppealModal(p, step)}
-                                    style={{ background: '#e0e7ff', border: '1px solid #c7d2fe', color: '#3730a3', padding: '0.25rem 0.5rem', borderRadius: '6px', fontSize: '0.75rem', fontWeight: '600', cursor: 'pointer' }}
-                                  >
-                                    Update Appeal
-                                  </button>
-                                )}
-
-                                {/* Status Button */}
-                                {step.status === 'Pending Approval' ? (
-                                  <span style={{ 
-                                    padding: '0.35rem 0.75rem', 
-                                    borderRadius: '6px', 
-                                    fontSize: '0.78rem', 
-                                    fontWeight: '700', 
-                                    border: '1px solid #f59e0b',
-                                    backgroundColor: '#fffbeb',
-                                    color: '#b45309'
-                                  }}>
-                                    ⏳ Pending Approval
-                                  </span>
-                                ) : step.status !== 'Completed' ? (
-                                  step.deadline_status === 'Accepted' ? (
-                                    <button
-                                      type="button"
-                                      onClick={() => {
-                                        setSubmitModal({
-                                          isOpen: true,
-                                          projectId: p.id,
-                                          stepId: step.id,
-                                          projectName: p.title
-                                        });
-                                        setDeliverableName('');
-                                        setDeliverableUrl('');
-                                      }}
-                                      style={{
-                                        padding: '0.35rem 0.75rem',
-                                        borderRadius: '6px',
-                                        fontSize: '0.75rem',
-                                        fontWeight: '700',
-                                        border: 'none',
-                                        backgroundColor: '#4f46e5',
-                                        color: '#ffffff',
-                                        cursor: 'pointer',
-                                        boxShadow: '0 1px 2px rgba(0,0,0,0.05)'
-                                      }}
-                                    >
-                                      Submit for Approval
-                                    </button>
-                                  ) : null
-                                ) : (
-                                  <span style={{ 
-                                    padding: '0.3rem 0.6rem', 
-                                    borderRadius: '6px', 
-                                    fontSize: '0.78rem', 
-                                    fontWeight: '700', 
-                                    border: '1px solid #10b981',
-                                    backgroundColor: '#d1fae5',
-                                    color: '#047857'
-                                  }}>
-                                    ✅ Approved & Completed
-                                  </span>
-                                )}
-                              </div>
-
-                              {/* Step Details, Deliverables & Feedback To-Dos */}
-                              <div style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: '0.4rem', marginTop: '0.25rem' }}>
-                                {step.description && (
-                                  <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '6px', padding: '0.5rem 0.75rem', fontSize: '0.82rem', color: '#334155' }}>
-                                    <strong style={{ color: '#1e293b' }}>Description / Instructions:</strong>
-                                    <div style={{ whiteSpace: 'pre-wrap', marginTop: '0.2rem' }}>{step.description}</div>
-                                  </div>
-                                )}
-
-                                {(step.deliverable_name || step.deliverable_url) && (
-                                  <div style={{ background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: '6px', padding: '0.45rem 0.75rem', fontSize: '0.8rem', color: '#166534', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '0.4rem' }}>
-                                    <div>
-                                      <strong>Submitted Deliverable:</strong> {step.deliverable_name || 'File Package'}
-                                    </div>
-                                    {step.deliverable_url && (
-                                      <a 
-                                        href={step.deliverable_url.startsWith('http') ? step.deliverable_url : `https://${step.deliverable_url}`} 
-                                        target="_blank" 
-                                        rel="noopener noreferrer" 
-                                        style={{ color: '#15803d', fontWeight: '700', textDecoration: 'underline', display: 'inline-flex', alignItems: 'center', gap: '0.2rem' }}
-                                      >
-                                        <ExternalLink size={12} /> View File
-                                      </a>
-                                    )}
-                                  </div>
-                                )}
-
-                                {(() => {
-                                  const todosList = (step.reject_todos && step.reject_todos !== '0' && step.reject_todos !== 0) 
-                                    ? step.reject_todos 
-                                    : ((step.reassign_todos && step.reassign_todos !== '0' && step.reassign_todos !== 0) ? step.reassign_todos : null);
-                                  if (!todosList) return null;
-                                  let parsedTodos = [];
-                                  try {
-                                    parsedTodos = typeof todosList === 'string' ? JSON.parse(todosList) : todosList;
-                                  } catch (e) {}
+                              {/* Actions */}
+                              <td style={{ textAlign: 'right' }}>
+                                <div className="action-buttons-group">
                                   
-                                  if (Array.isArray(parsedTodos) && parsedTodos.length > 0) {
-                                    return (
-                                      <div style={{ padding: '0.65rem 0.85rem', background: '#fff1f2', border: '1px solid #fecaca', borderRadius: '6px', display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
-                                        <strong style={{ fontSize: '0.78rem', color: '#e11d48', display: 'flex', alignItems: 'center', gap: '0.3rem', textTransform: 'uppercase' }}>
-                                          ⚠️ Revision Feedback & Required Changes:
-                                        </strong>
-                                        <ul style={{ margin: 0, paddingLeft: '1.25rem', display: 'flex', flexDirection: 'column', gap: '0.25rem', color: '#4c1d95', fontSize: '0.82rem' }}>
-                                          {parsedTodos.map((todo, idx) => (
-                                            <li key={idx} style={{ lineHeight: '1.35' }}>
-                                              <span>{todo.text}</span>
+                                  {/* If deadline is unconfirmed, show Accept & Appeal */}
+                                  {isPendingAccept && !isCompleted && (
+                                    <>
+                                      <button 
+                                        className="btn-action btn-accept"
+                                        onClick={() => handleAcceptDeadline(step.project_id, step.id)}
+                                        title="Accept deadline commitment"
+                                      >
+                                        <Check size={14} /> Accept
+                                      </button>
+                                      <button 
+                                        className="btn-action btn-appeal"
+                                        onClick={() => handleOpenAppealModal({ id: step.project_id, title: step.project_title }, step)}
+                                        title="Appeal for deadline extension"
+                                      >
+                                        Appeal
+                                      </button>
+                                    </>
+                                  )}
+
+                                  {/* If confirmed or appealed, can submit deliverable */}
+                                  {(isAccepted || isAppealed) && !isCompleted && !isUnderReview && (
+                                    <button 
+                                      className="btn-action btn-submit-proof"
+                                      onClick={() => openStepSubmitModal(step.project_id, step.project_title, step)}
+                                      title="Submit deliverable file or link for review"
+                                    >
+                                      <Upload size={14} /> Submit Proof
+                                    </button>
+                                  )}
+
+                                  {/* Internal Step Chat */}
+                                  <button 
+                                    className="btn-action btn-chat-icon"
+                                    onClick={() => setChatModal({
+                                      isOpen: true,
+                                      stepId: step.id,
+                                      stepTitle: step.title,
+                                      projectId: step.project_id,
+                                      projectTitle: step.project_title
+                                    })}
+                                    title="Open internal team chat for this step"
+                                  >
+                                    <MessageSquare size={14} />
+                                  </button>
+
+                                </div>
+                              </td>
+                            </tr>
+
+                            {/* Expandable Row for Details & Revision To-Dos */}
+                            {(isExpanded || (step.hasRevision && Array.isArray(revisionTodos) && revisionTodos.length > 0)) && (
+                              <tr className="expanded-details-row">
+                                <td colSpan="5">
+                                  <div className="expanded-panel-body">
+                                    
+                                    {/* Description / Instructions */}
+                                    {step.description && (
+                                      <div className="spec-block">
+                                        <span className="spec-label">STEP SPECIFICATIONS & INSTRUCTIONS:</span>
+                                        <p className="spec-text">{step.description}</p>
+                                      </div>
+                                    )}
+
+                                    {/* Revision Feedback Callout */}
+                                    {Array.isArray(revisionTodos) && revisionTodos.length > 0 && (
+                                      <div className="revision-feedback-box">
+                                        <div className="revision-header">
+                                          <AlertTriangle size={16} />
+                                          <span>REVISION FEEDBACK & REQUIRED AMENDMENTS:</span>
+                                        </div>
+                                        <ul className="revision-items-list">
+                                          {revisionTodos.map((todo, idx) => (
+                                            <li key={idx} className="revision-item">
+                                              <span className="revision-todo-text">{todo.text}</span>
                                               {todo.file_url && (
-                                                <div style={{ marginTop: '0.2rem' }}>
-                                                  <a href={`http://localhost:5000${todo.file_url}`} target="_blank" rel="noopener noreferrer" style={{ display: 'inline-flex', alignItems: 'center', gap: '0.2rem', fontSize: '0.75rem', color: '#2563eb', textDecoration: 'none', background: '#eff6ff', padding: '0.15rem 0.4rem', borderRadius: '4px', border: '1px solid #bfdbfe' }}>
-                                                    <ExternalLink size={11} /> View Attached File
-                                                  </a>
-                                                </div>
+                                                <a 
+                                                  href={`http://localhost:5000${todo.file_url}`}
+                                                  target="_blank"
+                                                  rel="noopener noreferrer"
+                                                  className="revision-file-attachment"
+                                                >
+                                                  <Paperclip size={12} /> Reference Attachment
+                                                </a>
                                               )}
                                             </li>
                                           ))}
                                         </ul>
                                       </div>
-                                    );
-                                  }
-                                  return null;
-                                })()}
-                              </div>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    );
-                  })()}
+                                    )}
 
-                  {/* Card Action Footer */}
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingTop: '0.75rem', borderTop: '1px solid #f1f5f9' }}>
-                    {p.assigned_members && p.assigned_members.length > 0 ? (
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', flexWrap: 'wrap' }}>
-                        <span style={{ fontSize: '0.78rem', color: '#94a3b8', fontWeight: '600' }}>Team:</span>
-                        {p.assigned_members.map(m => (
-                          <span key={m.id} style={{ background: '#e0e7ff', color: '#3730a3', padding: '2px 8px', borderRadius: '12px', fontSize: '0.75rem', fontWeight: '600' }}>
-                            {m.name}
-                          </span>
-                        ))}
-                      </div>
-                    ) : <div></div>}
+                                    {/* Submitted Deliverable Info if available */}
+                                    {(step.deliverable_name || step.deliverable_url) && (
+                                      <div className="submitted-proof-block">
+                                        <span className="spec-label">CURRENTLY SUBMITTED PROOF:</span>
+                                        <div className="proof-details-inline">
+                                          <strong>{step.deliverable_name || 'Deliverable Package'}</strong>
+                                          {step.deliverable_url && (
+                                            <a 
+                                              href={step.deliverable_url.startsWith('http') ? step.deliverable_url : `https://${step.deliverable_url}`} 
+                                              target="_blank" 
+                                              rel="noopener noreferrer"
+                                              className="proof-link"
+                                            >
+                                              <ExternalLink size={13} /> {step.deliverable_url}
+                                            </a>
+                                          )}
+                                        </div>
+                                      </div>
+                                    )}
 
-                    <div style={{ display: 'flex', gap: '0.6rem' }}>
-                      <button 
-                        onClick={() => openDeliverableModal(p)}
-                        style={{ display: 'inline-flex', alignItems: 'center', gap: '0.4rem', background: '#4338ca', color: '#ffffff', border: 'none', padding: '0.5rem 1rem', borderRadius: '8px', fontWeight: '700', fontSize: '0.85rem', cursor: 'pointer' }}
-                      >
-                        <Upload size={15} /> Submit Deliverable
-                      </button>
-                      <button 
-                        onClick={() => navigate(`/projects/${p.id}`)}
-                        style={{ display: 'inline-flex', alignItems: 'center', gap: '0.4rem', background: '#f1f5f9', color: '#334155', border: '1px solid #cbd5e1', padding: '0.5rem 1rem', borderRadius: '8px', fontWeight: '600', fontSize: '0.85rem', cursor: 'pointer' }}
-                      >
-                        <ExternalLink size={15} /> Details
-                      </button>
-                    </div>
-                  </div>
-
+                                  </div>
+                                </td>
+                              </tr>
+                            )}
+                          </React.Fragment>
+                        );
+                      })}
+                    </tbody>
+                  </table>
                 </div>
-              );
-            })
+              )}
+            </div>
+
+          ) : (
+            
+            /* VIEW MODE B: Project Cards & Kanban Board */
+            <div className="prod-cards-grid">
+              {filteredProjects.length === 0 ? (
+                <div className="prod-empty-state">
+                  <FolderKanban size={44} className="empty-icon" />
+                  <h3>No Projects Found</h3>
+                  <p>No assigned projects match the selected filters.</p>
+                  <button className="action-btn secondary-btn" onClick={handleResetFilters}>
+                    Clear Filters
+                  </button>
+                </div>
+              ) : (
+                filteredProjects.map(project => {
+                  const pSteps = isAdminOrPM ? (project.steps || []) : (project.user_assigned_steps || []);
+                  const totalSteps = pSteps.length;
+                  const completedSteps = pSteps.filter(s => s.status === 'Completed').length;
+                  const progressPct = totalSteps > 0 ? Math.round((completedSteps / totalSteps) * 100) : 0;
+                  const pDeadline = getDeadlineInfo(project.locked_deadline);
+                  const isFinished = project.status === 'Completed' || project.status === 'Commission Released';
+
+                  return (
+                    <div key={project.id} className={`project-kanban-card ${isFinished ? 'is-completed' : ''}`}>
+                      
+                      {/* Card Header */}
+                      <div className="card-top-bar">
+                        <div className="card-title-group">
+                          <h3 
+                            className="card-project-title"
+                            onClick={() => navigate(`/projects/${project.id}`)}
+                            title="Click to view full project timeline"
+                          >
+                            {project.title}
+                          </h3>
+                          <div className="card-meta-row">
+                            <span>Client: <strong>{project.client_name || 'Direct'}</strong></span>
+                            <span>·</span>
+                            <span>Service: <strong>{project.service_type || 'Custom'}</strong></span>
+                          </div>
+                        </div>
+
+                        <div className="card-badge-group">
+                          <span className={`status-pill ${isFinished ? 'completed' : 'active'}`}>
+                            {isFinished ? 'Completed' : project.status || 'Active'}
+                          </span>
+                          <span className={`urgency-pill ${pDeadline.isOverdue ? 'overdue' : pDeadline.isSoon ? 'soon' : 'normal'}`}>
+                            {pDeadline.label}
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Progress Bar */}
+                      <div className="card-progress-section">
+                        <div className="progress-labels">
+                          <span className="progress-title">Milestone Progress</span>
+                          <span className="progress-ratio">{completedSteps}/{totalSteps} Steps ({progressPct}%)</span>
+                        </div>
+                        <div className="progress-track">
+                          <div 
+                            className={`progress-fill ${progressPct === 100 ? 'done' : ''}`}
+                            style={{ width: `${progressPct}%` }}
+                          ></div>
+                        </div>
+                      </div>
+
+                      {/* Steps List Drawer inside Card */}
+                      <div className="card-steps-drawer">
+                        <div className="drawer-heading">Assigned Steps ({pSteps.length}):</div>
+                        <div className="drawer-steps-list">
+                          {pSteps.map(step => {
+                            const stepDl = getDeadlineInfo(step.deadline);
+                            const isStepDone = step.status === 'Completed';
+                            const isStepUnderReview = step.status === 'Pending Approval';
+                            const isStepAccepted = step.deadline_status === 'Accepted';
+                            const isStepUnconfirmed = !step.deadline_status || step.deadline_status === 'Pending Acceptance' || step.deadline_status === 'Rejected';
+
+                            return (
+                              <div key={step.id} className="drawer-step-item">
+                                <div className="step-info-col">
+                                  <div className="step-title-line">
+                                    <span className="step-text">{step.title}</span>
+                                    {step.deadline && !isStepDone && (
+                                      <span className={`step-dl-tag ${stepDl.isOverdue ? 'overdue' : stepDl.isSoon ? 'soon' : ''}`}>
+                                        {stepDl.label}
+                                      </span>
+                                    )}
+                                  </div>
+                                  <span className="step-date-sub">
+                                    Target: {step.deadline ? new Date(step.deadline).toLocaleDateString() : 'None'}
+                                  </span>
+                                </div>
+
+                                <div className="step-action-col">
+                                  {isStepDone ? (
+                                    <span className="chip-accepted">✓ Done</span>
+                                  ) : isStepUnderReview ? (
+                                    <span className="chip-under-review">⏳ In Review</span>
+                                  ) : isStepUnconfirmed ? (
+                                    <button 
+                                      className="btn-action btn-accept mini"
+                                      onClick={() => handleAcceptDeadline(project.id, step.id)}
+                                    >
+                                      Accept
+                                    </button>
+                                  ) : (
+                                    <button 
+                                      className="btn-action btn-submit-proof mini"
+                                      onClick={() => openStepSubmitModal(project.id, project.title, step)}
+                                    >
+                                      <Upload size={12} /> Submit
+                                    </button>
+                                  )}
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+
+                      {/* Card Footer Actions */}
+                      <div className="card-footer-actions">
+                        <button 
+                          className="btn-final-delivery"
+                          onClick={() => openProjectDeliveryModal(project)}
+                        >
+                          <Upload size={14} /> Final Client Delivery
+                        </button>
+                        <button 
+                          className="btn-view-project"
+                          onClick={() => navigate(`/projects/${project.id}`)}
+                        >
+                          <ExternalLink size={14} /> Details
+                        </button>
+                      </div>
+
+                    </div>
+                  );
+                })
+              )}
+            </div>
           )}
 
         </div>
 
-        {/* Right Side: Interactive Daily To-Do Checklist */}
-        <div>
-          <div className="prod-todo-card">
+        {/* Right Column: Daily Production To-Do Scratchpad */}
+        <div className="prod-side-column">
+          <div className="prod-todo-widget">
             
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                <CheckSquare size={20} color="#4338ca" />
-                <h3 style={{ margin: 0, fontSize: '1.1rem', color: '#0f172a' }}>Daily Production Tasks</h3>
+            <div className="todo-widget-header">
+              <div className="todo-title-wrap">
+                <CheckSquare size={18} className="todo-icon" />
+                <h3 className="todo-heading">Daily Task Board</h3>
               </div>
-              <span style={{ fontSize: '0.78rem', background: '#e0e7ff', color: '#3730a3', padding: '2px 8px', borderRadius: '12px', fontWeight: '700' }}>
+              <span className="todo-counter-pill">
                 {todoList.filter(t => t.completed).length}/{todoList.length}
               </span>
             </div>
 
-            {/* Add Task Input Form */}
-            <form onSubmit={handleAddTodo} className="todo-input-row">
+            {/* Progress Bar */}
+            <div className="todo-progress-wrap">
+              <div className="todo-progress-bar">
+                <div 
+                  className="todo-progress-fill"
+                  style={{ width: `${todoCompletionPercent}%` }}
+                ></div>
+              </div>
+              <span className="todo-progress-text">{todoCompletionPercent}% Completed</span>
+            </div>
+
+            {/* Add Task Form */}
+            <form onSubmit={handleAddTodo} className="todo-add-form">
               <input 
-                type="text" 
+                type="text"
+                className="todo-add-input"
                 placeholder="Add daily task..."
                 value={newTodoText}
                 onChange={(e) => setNewTodoText(e.target.value)}
               />
-              <button type="submit" title="Add Task">
-                <Plus size={18} />
+              <button type="submit" className="todo-add-btn" title="Add item">
+                <Plus size={16} />
               </button>
             </form>
 
-            {/* Task Checklist Items */}
-            <div className="todo-list">
-              {todoList.length === 0 ? (
-                <p style={{ color: '#94a3b8', fontSize: '0.85rem', textAlign: 'center', margin: '1rem 0' }}>No tasks added. Add a task above to track your daily progress!</p>
+            {/* Todo Filter Pills */}
+            <div className="todo-filter-pills">
+              <button 
+                className={`todo-pill ${todoFilter === 'all' ? 'active' : ''}`}
+                onClick={() => setTodoFilter('all')}
+              >
+                All ({todoList.length})
+              </button>
+              <button 
+                className={`todo-pill ${todoFilter === 'active' ? 'active' : ''}`}
+                onClick={() => setTodoFilter('active')}
+              >
+                Active ({todoList.filter(t => !t.completed).length})
+              </button>
+              <button 
+                className={`todo-pill ${todoFilter === 'completed' ? 'active' : ''}`}
+                onClick={() => setTodoFilter('completed')}
+              >
+                Done ({todoList.filter(t => t.completed).length})
+              </button>
+            </div>
+
+            {/* Checklist items */}
+            <div className="todo-items-list">
+              {filteredTodos.length === 0 ? (
+                <div className="todo-empty-notice">
+                  <span>No tasks found in this view.</span>
+                </div>
               ) : (
-                todoList.map(item => (
-                  <div key={item.id} className={`todo-item ${item.completed ? 'completed' : ''}`}>
-                    <div className="todo-item-check" onClick={() => handleToggleTodo(item.id)}>
+                filteredTodos.map(item => (
+                  <div key={item.id} className={`todo-item-row ${item.completed ? 'is-done' : ''}`}>
+                    <label className="todo-checkbox-label">
                       <input 
-                        type="checkbox" 
-                        checked={item.completed} 
-                        onChange={() => {}} // Controlled via container click
-                        style={{ cursor: 'pointer', accentColor: '#4338ca' }}
+                        type="checkbox"
+                        checked={item.completed}
+                        onChange={() => handleToggleTodo(item.id)}
+                        className="todo-native-checkbox"
                       />
-                      <span>{item.text}</span>
-                    </div>
+                      <span className="todo-text">{item.text}</span>
+                    </label>
                     <button 
-                      type="button" 
-                      className="todo-delete-btn"
+                      className="todo-del-btn"
                       onClick={() => handleDeleteTodo(item.id)}
-                      title="Delete Task"
+                      title="Delete task"
                     >
-                      <Trash2 size={15} />
+                      <Trash2 size={13} />
                     </button>
                   </div>
                 ))
               )}
             </div>
 
+            {/* Clear Completed Action */}
+            {todoList.some(t => t.completed) && (
+              <div className="todo-footer-wrap">
+                <button className="todo-clear-btn" onClick={handleClearCompletedTodos}>
+                  Clear Completed Tasks
+                </button>
+              </div>
+            )}
+
           </div>
         </div>
 
       </div>
 
-      {/* DELIVERABLE SUBMISSION MODAL */}
-      {activeModalProject && (
-        <div className="modal-overlay" style={{ zIndex: 3000 }}>
-          <div className="deliverable-modal-content">
-            
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                <Upload size={22} color="#4338ca" />
-                <h3 style={{ margin: 0, fontSize: '1.2rem', color: '#0f172a' }}>Submit Project Deliverable</h3>
+      {/* ========================================================================= */}
+      {/* MODAL 1: STEP DELIVERABLE & PROOF SUBMISSION */}
+      {/* ========================================================================= */}
+      {submitModal.isOpen && (
+        <div className="prod-modal-overlay">
+          <div className="prod-modal-dialog">
+            <div className="prod-modal-header">
+              <div className="modal-title-wrap">
+                <Upload size={20} className="modal-header-icon" />
+                <h3>Submit Step Deliverable Proof</h3>
               </div>
               <button 
-                onClick={() => setActiveModalProject(null)}
-                style={{ background: 'none', border: 'none', color: '#64748b', cursor: 'pointer', fontSize: '1.2rem' }}
+                className="modal-close-btn"
+                onClick={() => setSubmitModal({ isOpen: false, projectId: null, stepId: null, projectName: '', stepTitle: '' })}
               >
-                ✕
+                <X size={18} />
               </button>
             </div>
 
-            <p style={{ fontSize: '0.88rem', color: '#64748b', margin: '0 0 1.25rem 0' }}>
-              Project: <strong style={{ color: '#1e293b' }}>{activeModalProject.title}</strong>
-            </p>
+            <div className="modal-context-strip">
+              <div>Project: <strong>{submitModal.projectName}</strong></div>
+              <div>Step: <span className="highlight-step">{submitModal.stepTitle}</span></div>
+            </div>
 
-            <form onSubmit={handleDeliverableSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-              
-              <div>
-                <label style={{ display: 'block', fontSize: '0.82rem', fontWeight: '700', color: '#475569', marginBottom: '0.35rem', letterSpacing: '0.03em' }}>
-                  FILE / PACKAGE NAME *
-                </label>
+            <form onSubmit={handleStepDeliverableSubmit} className="prod-modal-form">
+              <div className="form-group">
+                <label>PACKAGE / DELIVERABLE NAME *</label>
                 <input 
                   type="text"
                   required
-                  value={deliverableForm.file_name}
-                  onChange={(e) => setDeliverableForm({ ...deliverableForm, file_name: e.target.value })}
+                  value={deliverableName}
+                  onChange={(e) => setDeliverableName(e.target.value)}
                   placeholder="e.g. Logo Design Final Assets v1.0"
-                  style={{ width: '100%', padding: '0.6rem 0.8rem', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '0.9rem' }}
+                  className="form-control"
                 />
               </div>
 
-              <div>
-                <label style={{ display: 'block', fontSize: '0.82rem', fontWeight: '700', color: '#475569', marginBottom: '0.35rem', letterSpacing: '0.03em' }}>
-                  DOWNLOAD LINK / FILE URL *
-                </label>
+              <div className="form-group">
+                <label>DOWNLOAD LINK / CLOUD REPOSITORY URL *</label>
                 <input 
                   type="url"
-                  required
-                  value={deliverableForm.file_url}
-                  onChange={(e) => setDeliverableForm({ ...deliverableForm, file_url: e.target.value })}
-                  placeholder="https://drive.google.com/... or https://dropbox.com/..."
-                  style={{ width: '100%', padding: '0.6rem 0.8rem', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '0.9rem' }}
+                  value={deliverableUrl}
+                  onChange={(e) => setDeliverableUrl(e.target.value)}
+                  placeholder="https://drive.google.com/... or https://figma.com/..."
+                  className="form-control"
                 />
+                <span className="input-helper-text">
+                  Provide a shareable Google Drive, Figma, Dropbox, Loom, or GitHub link.
+                </span>
               </div>
 
-              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.75rem', marginTop: '0.75rem' }}>
+              <div className="form-group">
+                <label>OR ATTACH DIRECT FILE (OPTIONAL)</label>
+                <input 
+                  type="file"
+                  onChange={(e) => setDeliverableFile(e.target.files[0])}
+                  className="form-file-control"
+                />
+                {deliverableFile && (
+                  <span className="selected-file-label">Selected: {deliverableFile.name}</span>
+                )}
+              </div>
+
+              <div className="modal-actions-row">
                 <button 
-                  type="button"
-                  onClick={() => setActiveModalProject(null)}
-                  style={{ background: 'none', border: 'none', color: '#64748b', fontWeight: '600', cursor: 'pointer' }}
+                  type="button" 
+                  className="btn-modal-cancel"
+                  onClick={() => setSubmitModal({ isOpen: false, projectId: null, stepId: null, projectName: '', stepTitle: '' })}
                 >
                   Cancel
                 </button>
                 <button 
-                  type="submit"
+                  type="submit" 
+                  className="btn-modal-primary"
                   disabled={submittingDeliverable}
-                  style={{ background: '#4338ca', color: '#ffffff', border: 'none', padding: '0.6rem 1.25rem', borderRadius: '8px', fontWeight: '700', fontSize: '0.88rem', cursor: 'pointer' }}
                 >
-                  {submittingDeliverable ? 'Submitting...' : 'Submit Deliverable'}
+                  {submittingDeliverable ? 'Submitting Proof...' : 'Submit for PM Approval'}
                 </button>
               </div>
-
             </form>
-
           </div>
         </div>
       )}
 
-      {/* DEADLINE APPEAL MODAL */}
+      {/* ========================================================================= */}
+      {/* MODAL 2: DEADLINE EXTENSION APPEAL */}
+      {/* ========================================================================= */}
       {appealModalStep && (
-        <div className="modal-overlay" style={{ zIndex: 3000 }}>
-          <div className="deliverable-modal-content">
-            
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                <Clock size={22} color="#f59e0b" />
-                <h3 style={{ margin: 0, fontSize: '1.2rem', color: '#0f172a' }}>Appeal Deadline Extension</h3>
+        <div className="prod-modal-overlay">
+          <div className="prod-modal-dialog">
+            <div className="prod-modal-header">
+              <div className="modal-title-wrap">
+                <Clock size={20} className="modal-header-icon amber" />
+                <h3>Appeal Deadline Extension</h3>
               </div>
               <button 
+                className="modal-close-btn"
                 onClick={() => setAppealModalStep(null)}
-                style={{ background: 'none', border: 'none', color: '#64748b', cursor: 'pointer', fontSize: '1.2rem' }}
               >
-                ✕
+                <X size={18} />
               </button>
             </div>
 
-            <p style={{ fontSize: '0.88rem', color: '#64748b', margin: '0 0 0.25rem 0' }}>
-              Step: <strong style={{ color: '#1e293b' }}>{appealModalStep.step_title}</strong>
-            </p>
-            <p style={{ fontSize: '0.82rem', color: '#94a3b8', margin: '0 0 1.25rem 0' }}>
-              Original Admin Deadline: <strong>{appealModalStep.current_deadline ? new Date(appealModalStep.current_deadline).toLocaleDateString() : 'Unspecified'}</strong>
-            </p>
+            <div className="modal-context-strip">
+              <div>Project: <strong>{appealModalStep.project_title}</strong></div>
+              <div>Step: <span className="highlight-step">{appealModalStep.step_title}</span></div>
+              <div>Current Deadline: <strong>{appealModalStep.current_deadline ? new Date(appealModalStep.current_deadline).toLocaleDateString() : 'None'}</strong></div>
+            </div>
 
-            <form onSubmit={handleSubmitAppeal} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-              
-              <div>
-                <label style={{ display: 'block', fontSize: '0.82rem', fontWeight: '700', color: '#475569', marginBottom: '0.35rem', letterSpacing: '0.03em' }}>
-                  PROPOSED NEW DEADLINE DATE *
-                </label>
+            <form onSubmit={handleSubmitAppeal} className="prod-modal-form">
+              <div className="form-group">
+                <label>PROPOSED NEW DEADLINE DATE *</label>
                 <input 
                   type="date"
                   required
-                  value={appealForm.proposed_deadline ? appealForm.proposed_deadline.split('T')[0] : ''}
+                  value={appealForm.proposed_deadline}
                   onChange={(e) => setAppealForm({ ...appealForm, proposed_deadline: e.target.value })}
-                  style={{ width: '100%', padding: '0.6rem 0.8rem', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '0.9rem' }}
+                  className="form-control"
                 />
-                
-                {/* Quick Date Presets */}
-                <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.45rem', alignItems: 'center' }}>
-                  <span style={{ fontSize: '0.75rem', color: '#64748b', fontWeight: '600' }}>Quick Add:</span>
+
+                {/* Quick Add Presets */}
+                <div className="quick-presets-row">
+                  <span className="preset-label">Quick Add:</span>
                   <button 
                     type="button"
+                    className="preset-btn"
                     onClick={() => {
                       const base = appealModalStep?.current_deadline ? new Date(appealModalStep.current_deadline) : new Date();
                       base.setDate(base.getDate() + 2);
                       setAppealForm(prev => ({ ...prev, proposed_deadline: base.toISOString().split('T')[0] }));
                     }}
-                    style={{ background: '#f1f5f9', border: '1px solid #cbd5e1', color: '#334155', padding: '0.2rem 0.55rem', borderRadius: '6px', fontSize: '0.75rem', cursor: 'pointer', fontWeight: '600' }}
                   >
-                    + 2 Days
+                    +2 Days
                   </button>
                   <button 
                     type="button"
+                    className="preset-btn"
                     onClick={() => {
                       const base = appealModalStep?.current_deadline ? new Date(appealModalStep.current_deadline) : new Date();
                       base.setDate(base.getDate() + 5);
                       setAppealForm(prev => ({ ...prev, proposed_deadline: base.toISOString().split('T')[0] }));
                     }}
-                    style={{ background: '#f1f5f9', border: '1px solid #cbd5e1', color: '#334155', padding: '0.2rem 0.55rem', borderRadius: '6px', fontSize: '0.75rem', cursor: 'pointer', fontWeight: '600' }}
                   >
-                    + 5 Days
+                    +5 Days
                   </button>
                   <button 
                     type="button"
+                    className="preset-btn"
                     onClick={() => {
                       const base = appealModalStep?.current_deadline ? new Date(appealModalStep.current_deadline) : new Date();
                       base.setDate(base.getDate() + 7);
                       setAppealForm(prev => ({ ...prev, proposed_deadline: base.toISOString().split('T')[0] }));
                     }}
-                    style={{ background: '#f1f5f9', border: '1px solid #cbd5e1', color: '#334155', padding: '0.2rem 0.55rem', borderRadius: '6px', fontSize: '0.75rem', cursor: 'pointer', fontWeight: '600' }}
                   >
-                    + 1 Week
+                    +1 Week
                   </button>
                 </div>
               </div>
 
-              <div>
-                <label style={{ display: 'block', fontSize: '0.82rem', fontWeight: '700', color: '#475569', marginBottom: '0.35rem', letterSpacing: '0.03em' }}>
-                  REASON FOR EXTENSION APPEAL *
-                </label>
+              <div className="form-group">
+                <label>REASON FOR EXTENSION APPEAL *</label>
                 <textarea 
                   required
                   rows="3"
+                  className="form-control"
+                  placeholder="Explain why extra production time is required (e.g., waiting for client brand guidelines, complex 3D render cycles, scope addition)..."
                   value={appealForm.reason}
                   onChange={(e) => setAppealForm({ ...appealForm, reason: e.target.value })}
-                  placeholder="Explain why extra time is required (e.g. Awaiting client branding assets, extra revision cycle needed)..."
-                  style={{ width: '100%', padding: '0.6rem 0.8rem', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '0.88rem', resize: 'vertical' }}
                 ></textarea>
               </div>
 
-              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.75rem', marginTop: '0.75rem' }}>
+              <div className="modal-actions-row">
                 <button 
-                  type="button"
+                  type="button" 
+                  className="btn-modal-cancel"
                   onClick={() => setAppealModalStep(null)}
-                  style={{ background: 'none', border: 'none', color: '#64748b', fontWeight: '600', cursor: 'pointer' }}
                 >
                   Cancel
                 </button>
                 <button 
-                  type="submit"
+                  type="submit" 
+                  className="btn-modal-amber"
                   disabled={submittingAppeal}
-                  style={{ background: '#f59e0b', color: '#ffffff', border: 'none', padding: '0.6rem 1.25rem', borderRadius: '8px', fontWeight: '700', fontSize: '0.88rem', cursor: 'pointer' }}
                 >
-                  {submittingAppeal ? 'Submitting...' : 'Submit Appeal to Admin'}
+                  {submittingAppeal ? 'Submitting Appeal...' : 'Submit Appeal to PM'}
                 </button>
               </div>
-
             </form>
-
           </div>
         </div>
       )}
 
-      {/* Submit Deliverable Modal (for step level) */}
-      {submitModal.isOpen && (
-        <div className="modal-overlay">
-          <div className="modal-content" style={{ maxWidth: '500px' }}>
-            <div className="modal-header">
-              <h2>Submit Project Deliverable</h2>
-              <button className="close-btn" onClick={() => setSubmitModal({ isOpen: false, projectId: null, stepId: null, projectName: '' })}>
-                &times;
+      {/* ========================================================================= */}
+      {/* MODAL 3: PROJECT-LEVEL FINAL DELIVERY */}
+      {/* ========================================================================= */}
+      {projectDeliveryModal.isOpen && (
+        <div className="prod-modal-overlay">
+          <div className="prod-modal-dialog">
+            <div className="prod-modal-header">
+              <div className="modal-title-wrap">
+                <Upload size={20} className="modal-header-icon" />
+                <h3>Submit Project Final Delivery</h3>
+              </div>
+              <button 
+                className="modal-close-btn"
+                onClick={() => setProjectDeliveryModal({ isOpen: false, project: null })}
+              >
+                <X size={18} />
               </button>
             </div>
-            
-            <div style={{ padding: '0 1.5rem', marginBottom: '1.5rem' }}>
-              <p style={{ margin: '0 0 1.5rem 0', color: '#334155', fontWeight: '600', fontSize: '0.9rem' }}>Project: {submitModal.projectName}</p>
-              
-              <div className="form-group" style={{ marginBottom: '1.25rem' }}>
-                <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: '800', color: '#475569', marginBottom: '0.5rem', textTransform: 'uppercase' }}>FILE / PACKAGE NAME *</label>
+
+            <div className="modal-context-strip">
+              Project: <strong>{projectDeliveryModal.project?.title}</strong>
+            </div>
+
+            <form onSubmit={handleProjectDeliverySubmit} className="prod-modal-form">
+              <div className="form-group">
+                <label>DELIVERY PACKAGE TITLE *</label>
                 <input 
-                  type="text" 
-                  value={deliverableName}
-                  onChange={(e) => setDeliverableName(e.target.value)}
-                  placeholder="e.g. MARKETING - Final Deliverable"
-                  style={{ width: '100%', padding: '0.65rem 1rem', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '0.9rem', color: '#0f172a' }}
+                  type="text"
+                  required
+                  value={projectDeliveryForm.file_name}
+                  onChange={(e) => setProjectDeliveryForm({ ...projectDeliveryForm, file_name: e.target.value })}
+                  placeholder="e.g. Master Production Deliverables v1.0"
+                  className="form-control"
                 />
               </div>
 
               <div className="form-group">
-                <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: '800', color: '#475569', marginBottom: '0.5rem', textTransform: 'uppercase' }}>DOWNLOAD LINK / FILE URL *</label>
+                <label>MASTER DOWNLOAD URL / REPOSITORY LINK *</label>
                 <input 
-                  type="text" 
-                  value={deliverableUrl}
-                  onChange={(e) => setDeliverableUrl(e.target.value)}
+                  type="url"
+                  required
+                  value={projectDeliveryForm.file_url}
+                  onChange={(e) => setProjectDeliveryForm({ ...projectDeliveryForm, file_url: e.target.value })}
                   placeholder="https://drive.google.com/..."
-                  style={{ width: '100%', padding: '0.65rem 1rem', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '0.9rem', color: '#0f172a' }}
+                  className="form-control"
                 />
               </div>
+
+              <div className="modal-actions-row">
+                <button 
+                  type="button" 
+                  className="btn-modal-cancel"
+                  onClick={() => setProjectDeliveryModal({ isOpen: false, project: null })}
+                >
+                  Cancel
+                </button>
+                <button 
+                  type="submit" 
+                  className="btn-modal-primary"
+                  disabled={submittingProjectDelivery}
+                >
+                  {submittingProjectDelivery ? 'Submitting...' : 'Submit Delivery Package'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* MODAL 4: STEP INTERNAL TEAM CHAT */}
+      {/* ========================================================================= */}
+      {chatModal.isOpen && (
+        <div className="prod-modal-overlay">
+          <div className="prod-modal-dialog chat-dialog">
+            <div className="prod-modal-header">
+              <div className="modal-title-wrap">
+                <MessageSquare size={20} className="modal-header-icon" />
+                <div>
+                  <h3 style={{ margin: 0 }}>Step Team Collaboration</h3>
+                  <span className="chat-sub-title">{chatModal.stepTitle} · {chatModal.projectTitle}</span>
+                </div>
+              </div>
+              <button 
+                className="modal-close-btn"
+                onClick={() => setChatModal({ isOpen: false, stepId: null, stepTitle: '', projectId: null, projectTitle: '' })}
+              >
+                <X size={18} />
+              </button>
             </div>
 
-            <div className="modal-actions" style={{ display: 'flex', justifyContent: 'flex-end', gap: '1rem', padding: '1.5rem', borderTop: '1px solid #e2e8f0' }}>
-              <button 
-                type="button" 
-                onClick={() => setSubmitModal({ isOpen: false, projectId: null, stepId: null, projectName: '' })}
-                style={{ background: 'none', border: 'none', color: '#64748b', fontWeight: '600', cursor: 'pointer' }}
-              >
-                Cancel
-              </button>
-              <button 
-                type="button" 
-                onClick={submitDeliverable}
-                style={{ padding: '0.6rem 1.25rem', backgroundColor: '#4f46e5', color: '#fff', border: 'none', borderRadius: '8px', fontWeight: '700', cursor: 'pointer' }}
-              >
-                Submit Deliverable
-              </button>
+            <div className="chat-modal-content">
+              <StepInhouseChat stepId={chatModal.stepId} currentUser={currentUser} />
             </div>
           </div>
         </div>
       )}
+
     </div>
   );
 }

@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useLocation, useNavigate, Link } from 'react-router-dom';
-import { Bell, Search, User } from 'lucide-react';
+import { Bell, Search, User, Clock, AlertTriangle } from 'lucide-react';
 import axios from 'axios';
 import './Header.css';
 
@@ -14,6 +14,7 @@ export default function Header() {
 
   const [notifications, setNotifications] = useState([]);
   const [showNotifDropdown, setShowNotifDropdown] = useState(false);
+  const [pendingDeadlines, setPendingDeadlines] = useState(0);
   const notifRef = useRef(null);
   const audioRef = useRef(null);
 
@@ -34,6 +35,18 @@ export default function Header() {
     // Create audio element for buzzer
     audioRef.current = new Audio('https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3'); // A simple clean ding sound
   }, []);
+
+  const fetchDeadlineCount = async () => {
+    const userStr = localStorage.getItem('user');
+    const u = userStr ? JSON.parse(userStr) : null;
+    if (!u) return;
+    try {
+      const res = await axios.get(`/api/deadlines/appeals/count?user_id=${u.id}&role=${encodeURIComponent(u.role || '')}`);
+      setPendingDeadlines(res.data?.pending_count || 0);
+    } catch (e) {
+      console.error('Failed to fetch deadline count:', e);
+    }
+  };
 
   const fetchNotifications = async () => {
     const userStr = localStorage.getItem('user');
@@ -56,8 +69,15 @@ export default function Header() {
 
   useEffect(() => {
     fetchNotifications();
-    const interval = setInterval(fetchNotifications, 8000); // 8 sec real-time polling
-    const onFocus = () => fetchNotifications();
+    fetchDeadlineCount();
+    const interval = setInterval(() => {
+      fetchNotifications();
+      fetchDeadlineCount();
+    }, 8000); // 8 sec real-time polling
+    const onFocus = () => {
+      fetchNotifications();
+      fetchDeadlineCount();
+    };
     window.addEventListener('focus', onFocus);
     return () => {
       clearInterval(interval);
@@ -131,9 +151,15 @@ export default function Header() {
   } else if (location.pathname === '/invoices') {
     title = 'Invoice Management';
     subtitle = 'Track and manage all invoices';
+  } else if (location.pathname.startsWith('/quotations')) {
+    title = 'Quotations';
+    subtitle = 'Create and manage sales quotations & estimates';
   } else if (location.pathname === '/projects') {
     title = 'Project Creation';
     subtitle = 'Create and configure new client projects & steps';
+  } else if (location.pathname.startsWith('/deadlines')) {
+    title = 'Deadline Workflow';
+    subtitle = 'Track milestones, delivery schedules, and approvals';
   } else if (location.pathname === '/project-management') {
     title = 'Project Management';
     subtitle = 'Overview of all projects, linked invoices, delivery deadlines & PM remarks';
@@ -156,12 +182,25 @@ export default function Header() {
 
   return (
     <header className="top-header">
-      <div className="header-left">
+      <div className="header-left" style={{ display: 'flex', alignItems: 'center', gap: '1.25rem' }}>
         {title && (
           <div className="header-titles">
             <h1 style={{ margin: '0 0 0.2rem 0', fontSize: '1.25rem', fontWeight: '700', color: 'var(--text-primary)' }}>{title}</h1>
             {subtitle && <p style={{ margin: 0, fontSize: '0.8rem', color: 'var(--text-secondary)' }}>{subtitle}</p>}
           </div>
+        )}
+
+        {pendingDeadlines > 0 && (
+          <Link 
+            to="/deadlines" 
+            className="header-deadline-alert-ribbon"
+            title={`${pendingDeadlines} milestone deadline(s) awaiting approval or acceptance (Auto-accepts in 2 hours)`}
+          >
+            <span className="ribbon-pulse-dot"></span>
+            <Clock size={13} />
+            <span><strong>{pendingDeadlines}</strong> Deadline Approval{pendingDeadlines !== 1 ? 's' : ''}</span>
+            <span className="ribbon-chip-tag">2h Auto-Accept</span>
+          </Link>
         )}
       </div>
 

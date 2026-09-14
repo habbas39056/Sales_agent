@@ -54,27 +54,33 @@ app.use((req, res) => {
 const updateLiveDb = require('./update_live_db');
 
 const startDeadlineAutoAccepter = () => {
-  setInterval(async () => {
+  const checkAndAutoAccept = async () => {
     try {
       const [steps] = await db.query(`
         SELECT id FROM project_steps 
         WHERE assignee_id IS NOT NULL 
           AND deadline IS NOT NULL 
-          AND deadline_status = 'Pending Acceptance' 
-          AND created_at < NOW() - INTERVAL 12 HOUR
+          AND (deadline_status = 'Pending Acceptance' OR deadline_status IS NULL)
+          AND created_at < NOW() - INTERVAL 2 HOUR
       `);
 
       for (const step of steps) {
         await db.query(`UPDATE project_steps SET deadline_status = 'Accepted' WHERE id = ?`, [step.id]);
-        await db.query(`INSERT INTO step_activity (step_id, user_id, action_text) VALUES (?, NULL, 'System Auto-Accepted the deadline after 12 hours of inactivity.')`, [step.id]);
+        await db.query(`INSERT INTO step_activity (step_id, user_id, action_text) VALUES (?, NULL, 'System Auto-Accepted the deadline after 2 hours of inactivity.')`, [step.id]);
       }
       if (steps.length > 0) {
-        console.log(`Auto-accepted ${steps.length} pending deadlines.`);
+        console.log(`Auto-accepted ${steps.length} pending deadlines (2-hour threshold).`);
       }
     } catch (error) {
       console.error('Error in deadline auto-accepter:', error);
     }
-  }, 60 * 60 * 1000); // Check every 1 hour
+  };
+
+  // Run initial check 5 seconds after server startup
+  setTimeout(checkAndAutoAccept, 5000);
+
+  // Check every 5 minutes so tasks are accepted promptly after reaching 2 hours
+  setInterval(checkAndAutoAccept, 5 * 60 * 1000);
 };
 
 const startFuturePayablesNotifier = () => {
@@ -93,9 +99,18 @@ const startFuturePayablesNotifier = () => {
   }, 30 * 60 * 1000);
 };
 
-app.listen(PORT, '0.0.0.0', async () => {
-  console.log(`Server running on port ${PORT}`);
-  await updateLiveDb();
-  startDeadlineAutoAccepter();
-  startFuturePayablesNotifier();
-});
+async function startServer() {
+  try {
+    await updateLiveDb();
+  } catch (err) {
+    console.error('❌ Database migration error during startup:', err);
+  }
+
+  app.listen(PORT, '0.0.0.0', () => {
+    console.log(`Server running on port ${PORT}`);
+    startDeadlineAutoAccepter();
+    startFuturePayablesNotifier();
+  });
+}
+
+startServer();

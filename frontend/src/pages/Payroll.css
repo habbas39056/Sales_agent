@@ -34,7 +34,7 @@
 }
 
 .btn-primary-payroll {
-  background: #4f46e5;
+  background: linear-gradient(135deg, #e11d48 0%, #be123c 100%);
   color: #ffffff;
   border: none;
   padding: 0.6rem 1.2rem;
@@ -45,12 +45,14 @@
   display: flex;
   align-items: center;
   gap: 0.5rem;
-  transition: all 0.2s ease;
-  box-shadow: 0 2px 4px rgba(79, 70, 229, 0.2);
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: 0 2px 6px rgba(225, 29, 72, 0.25);
 }
 
 .btn-primary-payroll:hover {
-  background: #4338ca;
+  background: linear-gradient(135deg, #be123c 0%, #9f1239 100%);
+  box-shadow: 0 4px 14px rgba(225, 29, 72, 0.35);
+  transform: translateY(-1px);
 }
 
 .btn-secondary-payroll {

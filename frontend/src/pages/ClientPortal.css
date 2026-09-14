@@ -1,29 +1,18 @@
 /* ClientPortal.css */
 
 .client-portal-sidebar {
-  background: linear-gradient(180deg, #0f172a 0%, #1e1b4b 100%);
-  border-right: 1px solid rgba(255, 255, 255, 0.05);
+  background: #ffffff;
+  border-right: 1px solid #e2e8f0;
+  box-shadow: 1px 0 10px rgba(15, 23, 42, 0.02);
   position: relative;
   overflow: hidden;
 }
 
-/* Glassmorphism subtle glow */
-.client-portal-sidebar::before {
-  content: '';
-  position: absolute;
-  top: -100px;
-  right: -100px;
-  width: 250px;
-  height: 250px;
-  background: radial-gradient(circle, rgba(79, 70, 229, 0.15) 0%, rgba(0, 0, 0, 0) 70%);
-  border-radius: 50%;
-  pointer-events: none;
-}
-
 .client-portal-sidebar .sidebar-menu-title {
-  color: rgba(255, 255, 255, 0.4);
-  font-size: 0.7rem;
-  letter-spacing: 2px;
+  color: #94a3b8;
+  font-size: 0.72rem;
+  letter-spacing: 1.2px;
+  font-weight: 700;
   margin-top: 1rem;
 }
 
@@ -31,47 +20,33 @@
 .client-portal-sidebar .nav-links button.nav-button {
   display: flex;
   align-items: center;
-  gap: 1rem;
-  padding: 0.85rem 1.2rem;
+  gap: 0.85rem;
+  padding: 0.7rem 1rem;
   font-weight: 500;
-  color: rgba(255, 255, 255, 0.6);
-  border-radius: 12px;
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  color: #475569;
+  border-radius: 10px;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
   background: transparent;
   border: 1px solid transparent;
   width: 100%;
   text-align: left;
   cursor: pointer;
-  font-size: 0.95rem;
+  font-size: 0.92rem;
   font-family: inherit;
   position: relative;
-  overflow: hidden;
 }
 
 .client-portal-sidebar .nav-links button.nav-button:hover {
-  color: rgba(255, 255, 255, 0.9);
-  background-color: rgba(255, 255, 255, 0.05);
-  transform: translateX(4px);
+  color: #0f172a;
+  background-color: #f1f5f9;
+  transform: translateX(3px);
 }
 
 .client-portal-sidebar .nav-links button.nav-button.active {
   color: #ffffff;
-  background: linear-gradient(90deg, rgba(79, 70, 229, 0.15) 0%, rgba(79, 70, 229, 0.05) 100%);
-  border: 1px solid rgba(79, 70, 229, 0.2);
-  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+  background: linear-gradient(135deg, #e11d48 0%, #be123c 100%);
+  box-shadow: 0 4px 14px rgba(225, 29, 72, 0.28);
   font-weight: 600;
-}
-
-.client-portal-sidebar .nav-links button.nav-button.active::before {
-  content: '';
-  position: absolute;
-  left: 0;
-  top: 15%;
-  height: 70%;
-  width: 3px;
-  background: linear-gradient(180deg, #818cf8, #4f46e5);
-  border-radius: 0 4px 4px 0;
-  box-shadow: 0 0 10px rgba(129, 140, 248, 0.5);
 }
 
 .client-avatar {

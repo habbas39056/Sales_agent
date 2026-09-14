@@ -1,6 +1,6 @@
 import React from 'react';
 import { BrowserRouter as Router, Routes, Route, Link, useLocation, useNavigate, Navigate } from 'react-router-dom';
-import { LayoutDashboard, Users, FileText, PlusCircle, Calendar, Clock, CheckSquare, MessageSquare, RotateCcw, CreditCard, Banknote, LogOut, Shield, Settings as SettingsIcon, CheckCircle2, FolderKanban, TrendingUp, FileSpreadsheet, Package, CheckCircle, Activity, PieChart } from 'lucide-react';
+import { LayoutDashboard, Users, FileText, PlusCircle, Calendar, Clock, CheckSquare, MessageSquare, RotateCcw, CreditCard, Banknote, LogOut, Shield, Settings as SettingsIcon, CheckCircle2, FolderKanban, TrendingUp, FileSpreadsheet, Package, CheckCircle, Activity, PieChart, ChevronDown, Briefcase } from 'lucide-react';
 import Dashboard from './pages/Dashboard';
 import Login from './pages/Login';
 import ClientsList from './pages/ClientsList';
@@ -87,6 +87,82 @@ function AppContent() {
   const showSidebar = isAuthenticated && !isLoginPage && !isClientPortal;
   const showHeader = isAuthenticated && !isLoginPage && !isClientPortal;
 
+  const [expandedModules, setExpandedModules] = React.useState(() => {
+    const path = window.location.pathname;
+    return {
+      users: path.startsWith('/clients') || path.startsWith('/team'),
+      operations: path.startsWith('/projects') || path.startsWith('/tasks') || path.startsWith('/project-management') || path.startsWith('/deadlines'),
+      finance: path.startsWith('/invoices') || path.startsWith('/quotations') || path.startsWith('/expenses') || path.startsWith('/commissions') || path.startsWith('/payroll'),
+      reports: path.startsWith('/reports')
+    };
+  });
+
+  // Auto-expand module if navigating into its submodules
+  React.useEffect(() => {
+    const path = location.pathname;
+    if (path.startsWith('/clients') || path.startsWith('/team')) {
+      setExpandedModules(prev => ({ ...prev, users: true }));
+    } else if (path.startsWith('/projects') || path.startsWith('/tasks') || path.startsWith('/project-management') || path.startsWith('/deadlines')) {
+      setExpandedModules(prev => ({ ...prev, operations: true }));
+    } else if (path.startsWith('/invoices') || path.startsWith('/quotations') || path.startsWith('/expenses') || path.startsWith('/commissions') || path.startsWith('/payroll')) {
+      setExpandedModules(prev => ({ ...prev, finance: true }));
+    } else if (path.startsWith('/reports')) {
+      setExpandedModules(prev => ({ ...prev, reports: true }));
+    }
+  }, [location.pathname]);
+
+  const toggleModule = (moduleKey) => {
+    setExpandedModules(prev => ({ ...prev, [moduleKey]: !prev[moduleKey] }));
+  };
+
+  // Permission evaluations
+  const canAccessClients = !user || user.role === 'Admin' || (user.modules_access && user.modules_access.includes('CLIENTS'));
+  const canAccessTeam = !user || user.role === 'Admin' || (user.modules_access && user.modules_access.includes('STAFF MANAGEMENT'));
+  const hasUserManagement = canAccessClients || canAccessTeam;
+
+  const canAccessProjects = !user || user.role === 'Admin' || (user.modules_access && (
+    user.modules_access.includes('PROJECTS') || 
+    user.modules_access.includes('PROJECT_MANAGEMENT') || 
+    user.modules_access.includes('TASKS')
+  ));
+  const canAccessDeadlines = !user || user.role === 'Admin' || (user.modules_access && (
+    user.modules_access.includes('DEADLINES') || 
+    user.modules_access.includes('DEADLINES_APPROVAL')
+  ));
+  const hasOperations = canAccessProjects || canAccessDeadlines;
+
+  const canAccessInvoices = !user || user.role === 'Admin' || (user.modules_access && (
+    user.modules_access.includes('INVOICES') || 
+    user.modules_access.includes('QUOTATIONS')
+  ));
+  const canAccessCashbook = !user || user.role === 'Admin' || (user.modules_access && (
+    user.modules_access.includes('CASHBOOK') || 
+    user.modules_access.includes('FUTURE_PAYABLES')
+  ));
+  const canAccessCommissions = !user || user.role === 'Admin' || (user.modules_access && user.modules_access.includes('COMMISSIONS'));
+  const canAccessPayroll = !user || user.role === 'Admin' || (user.modules_access && user.modules_access.includes('PAYROLL'));
+  const hasFinance = canAccessInvoices || canAccessCashbook || canAccessCommissions || canAccessPayroll;
+
+  const hasReports = !user || user.role === 'Admin' || (user.modules_access && (
+    user.modules_access.includes('REPORTS') ||
+    user.modules_access.includes('REPORT_SALES') ||
+    user.modules_access.includes('REPORT_CLIENTS') ||
+    user.modules_access.includes('REPORT_TEAM') ||
+    user.modules_access.includes('REPORT_EXPENSES') ||
+    user.modules_access.includes('REPORT_PROFIT') ||
+    user.modules_access.includes('REPORT_ACCOUNTING') ||
+    user.modules_access.includes('REPORT_INVOICES_AGING') ||
+    user.modules_access.includes('REPORT_CASH_FLOW') ||
+    user.modules_access.includes('REPORT_REVENUE_CONCENTRATION')
+  ));
+  const hasSettings = !user || user.role === 'Admin' || (user.modules_access && user.modules_access.includes('SETTINGS'));
+
+  // Active module checks
+  const isUsersActive = location.pathname.startsWith('/clients') || location.pathname.startsWith('/team');
+  const isOperationsActive = location.pathname.startsWith('/projects') || location.pathname.startsWith('/tasks') || location.pathname.startsWith('/project-management') || location.pathname.startsWith('/deadlines');
+  const isFinanceActive = location.pathname.startsWith('/invoices') || location.pathname.startsWith('/quotations') || location.pathname.startsWith('/expenses') || location.pathname.startsWith('/commissions') || location.pathname.startsWith('/payroll');
+  const isReportsActive = location.pathname.startsWith('/reports');
+
   const handleLogout = () => {
     localStorage.removeItem('user');
     localStorage.removeItem('token');
@@ -123,177 +199,348 @@ function AppContent() {
       <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
         {showSidebar && (
           <aside className="sidebar">
-          <div className="sidebar-brand" style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', padding: '2rem 1.5rem 1rem 1.5rem' }}>
-            <img src="/logo.png" alt="Adwise Labs Logo" style={{ width: '100%', maxWidth: '240px', height: 'auto', display: 'block', margin: '0 auto' }} />
+          <div className="sidebar-brand" style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', padding: '1.25rem 1.25rem 1.25rem 1.25rem' }}>
+            <img src="/logo.webp" alt="Adwise Labs" style={{ width: '100%', maxWidth: '210px', height: 'auto', display: 'block', maxHeight: '46px', objectFit: 'contain' }} />
           </div>
           
           <div className="sidebar-menu-title">Main Menu</div>
           <ul className="nav-links">
-            <li><Link to={getDashboardPath()} className={location.pathname === getDashboardPath() ? 'active' : ''}><LayoutDashboard size={20} /> Dashboard</Link></li>
+            {/* 1. Dashboard */}
+            <li>
+              <Link to={getDashboardPath()} className={location.pathname === getDashboardPath() ? 'active' : ''}>
+                <LayoutDashboard size={20} /> Dashboard
+              </Link>
+            </li>
             
-            {(!user || user.role === 'Admin' || (user.modules_access && user.modules_access.includes('CLIENTS'))) && (
-              <li><Link to="/clients" className={`sidebar-link ${location.pathname === '/clients' ? 'active' : ''}`}><Users size={20} /> Client Management</Link></li>
-            )}
-            
-            {(!user || user.role === 'Admin' || (user.modules_access && user.modules_access.includes('STAFF MANAGEMENT'))) && (
-              <li><Link to="/team" className={`sidebar-link ${location.pathname === '/team' ? 'active' : ''}`}><Shield size={20} /> Team Management</Link></li>
-            )}
-            
-            {(!user || user.role === 'Admin' || (user.modules_access && user.modules_access.includes('INVOICES'))) && (
-              <li><Link to="/invoices" className={`sidebar-link ${location.pathname === '/invoices' ? 'active' : ''}`}><FileText size={20} /> Invoice Management</Link></li>
-            )}
-            
-            {(!user || user.role === 'Admin' || (user.modules_access && user.modules_access.includes('INVOICES'))) && (
-              <li><Link to="/quotations" className={`sidebar-link ${location.pathname.startsWith('/quotations') ? 'active' : ''}`}><FileText size={20} /> Quotations</Link></li>
-            )}
-            
-            {(!user || user.role === 'Admin' || (user.modules_access && user.modules_access.includes('PROJECTS'))) && (
-              <>
-                <li><Link to="/projects" className={`sidebar-link ${location.pathname === '/projects' ? 'active' : ''}`}><PlusCircle size={20} /> Project Creation</Link></li>
-                {user && user.role !== 'Client' && (location.pathname.startsWith('/projects') || location.pathname.startsWith('/tasks') || location.pathname.startsWith('/project-management')) && (
-                  <>
-                    <li className="submenu-item">
-                      <Link to="/tasks" className={`sidebar-link ${location.pathname === '/tasks' ? 'active' : ''}`} style={{ paddingLeft: '3.2rem', fontSize: '0.9rem', opacity: 0.9 }}>
-                        <CheckSquare size={16} /> My Tasks
-                      </Link>
-                    </li>
-                    <li className="submenu-item">
-                      <Link to="/project-management" className={`sidebar-link ${location.pathname === '/project-management' ? 'active' : ''}`} style={{ paddingLeft: '3.2rem', fontSize: '0.9rem', opacity: 0.9 }}>
-                        <FolderKanban size={16} /> Project Management
-                      </Link>
-                    </li>
-                  </>
+            {/* 2. User Management Module */}
+            {hasUserManagement && (
+              <li className="module-group">
+                <button 
+                  type="button"
+                  onClick={() => toggleModule('users')}
+                  className={`module-header-btn ${isUsersActive ? 'is-active' : ''}`}
+                >
+                  <div className="module-header-content">
+                    <Users size={20} />
+                    <span className="module-title">User Management</span>
+                  </div>
+                  <div className="module-header-right">
+                    {isUsersActive && <div className="module-active-pill" />}
+                    <ChevronDown size={16} className={`module-chevron ${expandedModules.users ? 'rotated' : ''}`} />
+                  </div>
+                </button>
+                {expandedModules.users && (
+                  <ul className="submodule-list">
+                    {canAccessClients && (
+                      <li>
+                        <Link 
+                          to="/clients" 
+                          className={`submodule-link ${location.pathname === '/clients' ? 'active' : ''}`}
+                        >
+                          <div className="submodule-dot" />
+                          <span>Client Management</span>
+                        </Link>
+                      </li>
+                    )}
+                    {canAccessTeam && (
+                      <li>
+                        <Link 
+                          to="/team" 
+                          className={`submodule-link ${location.pathname === '/team' ? 'active' : ''}`}
+                        >
+                          <div className="submodule-dot" />
+                          <span>Team Management</span>
+                        </Link>
+                      </li>
+                    )}
+                  </ul>
                 )}
-              </>
+              </li>
             )}
 
-            {(!user || user.role === 'Admin' || (user.modules_access && user.modules_access.includes('DEADLINES'))) && (
-              <>
-                <li>
-                  <Link 
-                    to="/deadlines" 
-                    className={location.pathname === '/deadlines' && !location.search.includes('tab=approval') ? 'active' : ''}
-                  >
-                    <Clock size={20} /> Deadline Workflow
-                  </Link>
-                </li>
-                {location.pathname.startsWith('/deadlines') && (user?.role === 'Admin' || user?.role === 'Product Manager' || user?.role === 'PM' || user?.role === 'Project Manager') && (
-                  <li className="submenu-item">
-                    <Link to="/deadlines?tab=approval" className={`sidebar-link ${location.search.includes('tab=approval') ? 'active' : ''}`} style={{ paddingLeft: '3.2rem', fontSize: '0.9rem', opacity: 0.9 }}>
-                      <CheckCircle2 size={16} /> Tasks for Approval
-                    </Link>
-                  </li>
+            {/* 3. Operations & Projects Module */}
+            {hasOperations && (
+              <li className="module-group">
+                <button 
+                  type="button"
+                  onClick={() => toggleModule('operations')}
+                  className={`module-header-btn ${isOperationsActive ? 'is-active' : ''}`}
+                >
+                  <div className="module-header-content">
+                    <Briefcase size={20} />
+                    <span className="module-title">Operations & Projects</span>
+                  </div>
+                  <div className="module-header-right">
+                    {isOperationsActive && <div className="module-active-pill" />}
+                    <ChevronDown size={16} className={`module-chevron ${expandedModules.operations ? 'rotated' : ''}`} />
+                  </div>
+                </button>
+                {expandedModules.operations && (
+                  <ul className="submodule-list">
+                    {canAccessProjects && (
+                      <>
+                        <li>
+                          <Link 
+                            to="/projects" 
+                            className={`submodule-link ${location.pathname === '/projects' ? 'active' : ''}`}
+                          >
+                            <div className="submodule-dot" />
+                            <span>Project Creation</span>
+                          </Link>
+                        </li>
+                        <li>
+                          <Link 
+                            to="/project-management" 
+                            className={`submodule-link ${location.pathname === '/project-management' ? 'active' : ''}`}
+                          >
+                            <div className="submodule-dot" />
+                            <span>Project Management</span>
+                          </Link>
+                        </li>
+                        {user && user.role !== 'Client' && (
+                          <li>
+                            <Link 
+                              to="/tasks" 
+                              className={`submodule-link ${location.pathname === '/tasks' ? 'active' : ''}`}
+                            >
+                              <div className="submodule-dot" />
+                              <span>My Tasks</span>
+                            </Link>
+                          </li>
+                        )}
+                      </>
+                    )}
+                    {canAccessDeadlines && (
+                      <>
+                        <li>
+                          <Link 
+                            to="/deadlines" 
+                            className={`submodule-link ${location.pathname === '/deadlines' && !location.search.includes('tab=approval') ? 'active' : ''}`}
+                          >
+                            <div className="submodule-dot" />
+                            <span>Deadline Workflow</span>
+                          </Link>
+                        </li>
+                        {(user?.role === 'Admin' || user?.role === 'Product Manager' || user?.role === 'PM' || user?.role === 'Project Manager') && (
+                          <li>
+                            <Link 
+                              to="/deadlines?tab=approval" 
+                              className={`submodule-link ${location.pathname.startsWith('/deadlines') && location.search.includes('tab=approval') ? 'active' : ''}`}
+                            >
+                              <div className="submodule-dot" />
+                              <span>Tasks for Approval</span>
+                            </Link>
+                          </li>
+                        )}
+                      </>
+                    )}
+                  </ul>
                 )}
-              </>
+              </li>
             )}
-            
-            {(!user || user.role === 'Admin' || (user.modules_access && user.modules_access.includes('CASHBOOK'))) && (
-              <>
-                <li>
-                  <Link to="/expenses" className={`sidebar-link ${location.pathname.startsWith('/expenses') ? 'active' : ''}`}>
-                    <CreditCard size={20} /> Expenses
-                  </Link>
-                </li>
-                {location.pathname.startsWith('/expenses') && (
-                  <>
-                    <li className="submenu-item">
+
+            {/* 4. Financial Management Module */}
+            {hasFinance && (
+              <li className="module-group">
+                <button 
+                  type="button"
+                  onClick={() => toggleModule('finance')}
+                  className={`module-header-btn ${isFinanceActive ? 'is-active' : ''}`}
+                >
+                  <div className="module-header-content">
+                    <CreditCard size={20} />
+                    <span className="module-title">Financial Management</span>
+                  </div>
+                  <div className="module-header-right">
+                    {isFinanceActive && <div className="module-active-pill" />}
+                    <ChevronDown size={16} className={`module-chevron ${expandedModules.finance ? 'rotated' : ''}`} />
+                  </div>
+                </button>
+                {expandedModules.finance && (
+                  <ul className="submodule-list">
+                    {canAccessInvoices && (
+                      <>
+                        <li>
+                          <Link 
+                            to="/invoices" 
+                            className={`submodule-link ${location.pathname === '/invoices' ? 'active' : ''}`}
+                          >
+                            <div className="submodule-dot" />
+                            <span>Invoice Management</span>
+                          </Link>
+                        </li>
+                        <li>
+                          <Link 
+                            to="/quotations" 
+                            className={`submodule-link ${location.pathname.startsWith('/quotations') ? 'active' : ''}`}
+                          >
+                            <div className="submodule-dot" />
+                            <span>Quotations</span>
+                          </Link>
+                        </li>
+                      </>
+                    )}
+                    {canAccessCashbook && (
+                      <>
+                        <li>
+                          <Link 
+                            to="/expenses" 
+                            className={`submodule-link ${location.pathname === '/expenses' && !location.search.includes('tab=future-payables') ? 'active' : ''}`}
+                          >
+                            <div className="submodule-dot" />
+                            <span>Expenses & Ledger</span>
+                          </Link>
+                        </li>
+                        <li>
+                          <Link 
+                            to="/expenses?tab=future-payables" 
+                            className={`submodule-link ${location.pathname === '/expenses' && location.search.includes('tab=future-payables') ? 'active' : ''}`}
+                          >
+                            <div className="submodule-dot" />
+                            <span>Future Payables</span>
+                          </Link>
+                        </li>
+                      </>
+                    )}
+                    {canAccessCommissions && (
+                      <li>
+                        <Link 
+                          to="/commissions" 
+                          className={`submodule-link ${location.pathname.startsWith('/commissions') ? 'active' : ''}`}
+                        >
+                          <div className="submodule-dot" />
+                          <span>Commissions</span>
+                        </Link>
+                      </li>
+                    )}
+                    {canAccessPayroll && (
+                      <li>
+                        <Link 
+                          to="/payroll" 
+                          className={`submodule-link ${location.pathname.startsWith('/payroll') ? 'active' : ''}`}
+                        >
+                          <div className="submodule-dot" />
+                          <span>Payroll</span>
+                        </Link>
+                      </li>
+                    )}
+                  </ul>
+                )}
+              </li>
+            )}
+
+            {/* 5. Reports & Analytics Module */}
+            {hasReports && (
+              <li className="module-group">
+                <button 
+                  type="button"
+                  onClick={() => toggleModule('reports')}
+                  className={`module-header-btn ${isReportsActive ? 'is-active' : ''}`}
+                >
+                  <div className="module-header-content">
+                    <TrendingUp size={20} />
+                    <span className="module-title">Reports & Analytics</span>
+                  </div>
+                  <div className="module-header-right">
+                    {isReportsActive && <div className="module-active-pill" />}
+                    <ChevronDown size={16} className={`module-chevron ${expandedModules.reports ? 'rotated' : ''}`} />
+                  </div>
+                </button>
+                {expandedModules.reports && (
+                  <ul className="submodule-list">
+                    <li>
                       <Link 
-                        to="/expenses" 
-                        className={`sidebar-link ${location.pathname === '/expenses' && !location.search.includes('tab=future-payables') ? 'active' : ''}`} 
-                        style={{ paddingLeft: '3.2rem', fontSize: '0.85rem', opacity: 0.9 }}
+                        to="/reports" 
+                        className={`submodule-link ${location.pathname === '/reports' && (location.search === '' || location.search.includes('tab=sales')) ? 'active' : ''}`}
                       >
-                        <Banknote size={16} /> Cash & Bank Ledger
+                        <div className="submodule-dot" />
+                        <span>Sales Reports</span>
                       </Link>
                     </li>
-                    <li className="submenu-item">
+                    <li>
                       <Link 
-                        to="/expenses?tab=future-payables" 
-                        className={`sidebar-link ${location.search.includes('tab=future-payables') ? 'active' : ''}`} 
-                        style={{ paddingLeft: '3.2rem', fontSize: '0.85rem', opacity: 0.9 }}
+                        to="/reports?tab=clients" 
+                        className={`submodule-link ${location.pathname === '/reports' && location.search.includes('tab=clients') ? 'active' : ''}`}
                       >
-                        <Clock size={16} /> Future Payables
+                        <div className="submodule-dot" />
+                        <span>Client Reports</span>
                       </Link>
                     </li>
-                  </>
+                    <li>
+                      <Link 
+                        to="/reports?tab=team" 
+                        className={`submodule-link ${location.pathname === '/reports' && location.search.includes('tab=team') ? 'active' : ''}`}
+                      >
+                        <div className="submodule-dot" />
+                        <span>Employee & Team</span>
+                      </Link>
+                    </li>
+                    <li>
+                      <Link 
+                        to="/reports?tab=expenses" 
+                        className={`submodule-link ${location.pathname === '/reports' && location.search.includes('tab=expenses') ? 'active' : ''}`}
+                      >
+                        <div className="submodule-dot" />
+                        <span>Expense Reports</span>
+                      </Link>
+                    </li>
+                    <li>
+                      <Link 
+                        to="/reports?tab=profit" 
+                        className={`submodule-link ${location.pathname === '/reports' && location.search.includes('tab=profit') ? 'active' : ''}`}
+                      >
+                        <div className="submodule-dot" />
+                        <span>Expenses vs Income</span>
+                      </Link>
+                    </li>
+                    <li>
+                      <Link 
+                        to="/reports?tab=accounting" 
+                        className={`submodule-link ${location.pathname === '/reports' && location.search.includes('tab=accounting') ? 'active' : ''}`}
+                      >
+                        <div className="submodule-dot" />
+                        <span>Finance & Accounting</span>
+                      </Link>
+                    </li>
+                    <li>
+                      <Link 
+                        to="/reports?tab=invoices-aging" 
+                        className={`submodule-link ${location.pathname === '/reports' && location.search.includes('tab=invoices-aging') ? 'active' : ''}`}
+                      >
+                        <div className="submodule-dot" />
+                        <span>Invoicing Aging</span>
+                      </Link>
+                    </li>
+                    <li>
+                      <Link 
+                        to="/reports?tab=cash-flow" 
+                        className={`submodule-link ${location.pathname === '/reports' && location.search.includes('tab=cash-flow') ? 'active' : ''}`}
+                      >
+                        <div className="submodule-dot" />
+                        <span>Cash Flow</span>
+                      </Link>
+                    </li>
+                    <li>
+                      <Link 
+                        to="/reports?tab=revenue-concentration" 
+                        className={`submodule-link ${location.pathname === '/reports' && location.search.includes('tab=revenue-concentration') ? 'active' : ''}`}
+                      >
+                        <div className="submodule-dot" />
+                        <span>Revenue Concentration</span>
+                      </Link>
+                    </li>
+                  </ul>
                 )}
-              </>
-            )}
-            
-            {(!user || user.role === 'Admin' || (user.modules_access && user.modules_access.includes('COMMISSIONS'))) && (
-              <li><Link to="/commissions" className={location.pathname.startsWith('/commissions') ? 'active' : ''}><Banknote size={20} /> Commissions</Link></li>
+              </li>
             )}
 
-            {(!user || user.role === 'Admin' || (user.modules_access && user.modules_access.includes('PAYROLL'))) && (
-              <li><Link to="/payroll" className={location.pathname.startsWith('/payroll') ? 'active' : ''}><Banknote size={20} /> Payroll</Link></li>
-            )}
-            
-            {(!user || user.role === 'Admin' || (user.modules_access && user.modules_access.includes('REPORTS'))) && (
-              <>
-                <li><Link to="/reports" className={location.pathname.startsWith('/reports') ? 'active' : ''}><FileText size={20} /> System Reports</Link></li>
-                {location.pathname.startsWith('/reports') && (
-                  <>
-                    <li className="submenu-item">
-                      <Link to="/reports?tab=sales" className={`sidebar-link ${location.search.includes('tab=sales') || location.search === '' ? 'active' : ''}`} style={{ paddingLeft: '3.2rem', fontSize: '0.85rem', opacity: 0.9 }}>
-                        <Banknote size={16} /> Sales
-                      </Link>
-                    </li>
-                    <li className="submenu-item">
-                      <Link to="/reports?tab=clients" className={`sidebar-link ${location.search.includes('tab=clients') ? 'active' : ''}`} style={{ paddingLeft: '3.2rem', fontSize: '0.85rem', opacity: 0.9 }}>
-                        <Users size={16} /> Client Reports
-                      </Link>
-                    </li>
-                    <li className="submenu-item">
-                      <Link to="/reports?tab=team" className={`sidebar-link ${location.search.includes('tab=team') ? 'active' : ''}`} style={{ paddingLeft: '3.2rem', fontSize: '0.85rem', opacity: 0.9 }}>
-                        <Shield size={16} /> Employee / Team
-                      </Link>
-                    </li>
-                    <li className="submenu-item">
-                      <Link to="/reports?tab=expenses" className={`sidebar-link ${location.search.includes('tab=expenses') ? 'active' : ''}`} style={{ paddingLeft: '3.2rem', fontSize: '0.85rem', opacity: 0.9 }}>
-                        <CreditCard size={16} /> Expense Reports
-                      </Link>
-                    </li>
-                    <li className="submenu-item">
-                      <Link to="/reports?tab=profit" className={`sidebar-link ${location.search.includes('tab=profit') ? 'active' : ''}`} style={{ paddingLeft: '3.2rem', fontSize: '0.85rem', opacity: 0.9 }}>
-                        <TrendingUp size={16} /> Expenses vs Income
-                      </Link>
-                    </li>
-                    <li className="submenu-item">
-                      <Link to="/reports?tab=accounting" className={`sidebar-link ${location.search.includes('tab=accounting') ? 'active' : ''}`} style={{ paddingLeft: '3.2rem', fontSize: '0.85rem', opacity: 0.9 }}>
-                        <FileSpreadsheet size={16} /> Finance & Accounting
-                      </Link>
-                    </li>
-                    <li className="submenu-item">
-                      <Link to="/reports?tab=products" className={`sidebar-link ${location.search.includes('tab=products') ? 'active' : ''}`} style={{ paddingLeft: '3.2rem', fontSize: '0.85rem', opacity: 0.9 }}>
-                        <Package size={16} /> Service / Product
-                      </Link>
-                    </li>
-                    <li className="submenu-item">
-                      <Link to="/reports?tab=projects" className={`sidebar-link ${location.search.includes('tab=projects') || location.search.includes('tab=project-management') ? 'active' : ''}`} style={{ paddingLeft: '3.2rem', fontSize: '0.85rem', opacity: 0.9 }}>
-                        <CheckCircle size={16} /> Project Management
-                      </Link>
-                    </li>
-                    <li className="submenu-item">
-                      <Link to="/reports?tab=invoices-aging" className={`sidebar-link ${location.search.includes('tab=invoices-aging') ? 'active' : ''}`} style={{ paddingLeft: '3.2rem', fontSize: '0.85rem', opacity: 0.9 }}>
-                        <Clock size={16} /> Invoicing Aging
-                      </Link>
-                    </li>
-                    <li className="submenu-item">
-                      <Link to="/reports?tab=cash-flow" className={`sidebar-link ${location.search.includes('tab=cash-flow') ? 'active' : ''}`} style={{ paddingLeft: '3.2rem', fontSize: '0.85rem', opacity: 0.9 }}>
-                        <Activity size={16} /> Cash Flow
-                      </Link>
-                    </li>
-                    <li className="submenu-item">
-                      <Link to="/reports?tab=revenue-concentration" className={`sidebar-link ${location.search.includes('tab=revenue-concentration') ? 'active' : ''}`} style={{ paddingLeft: '3.2rem', fontSize: '0.85rem', opacity: 0.9 }}>
-                        <PieChart size={16} /> Revenue Concentration
-                      </Link>
-                    </li>
-                  </>
-                )}
-              </>
-            )}
-
-            {(!user || user.role === 'Admin' || (user.modules_access && user.modules_access.includes('SETTINGS'))) && (
-              <li><Link to="/settings" className={`sidebar-link ${location.pathname.startsWith('/settings') ? 'active' : ''}`}><SettingsIcon size={20} /> Settings</Link></li>
+            {/* 6. Settings */}
+            {hasSettings && (
+              <li>
+                <Link to="/settings" className={`sidebar-link ${location.pathname.startsWith('/settings') ? 'active' : ''}`}>
+                  <SettingsIcon size={20} /> Settings
+                </Link>
+              </li>
             )}
           </ul>
 
