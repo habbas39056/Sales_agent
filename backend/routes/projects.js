@@ -3,7 +3,15 @@ const router = express.Router();
 const db = require('../db');
 const multer = require('multer');
 const path = require('path');
-const { notifyUserWhatsApp, notifyClientWhatsApp, notifyManagersWhatsApp, sendWhatsAppMessage } = require('../utils/whatsapp');
+const { 
+  notifyUserWhatsApp, 
+  notifyClientWhatsApp, 
+  notifyManagersWhatsApp, 
+  sendWhatsAppMessage,
+  broadcastDeliveryNotification,
+  broadcastRevisionNotification,
+  broadcastDeliveryApprovedNotification
+} = require('../utils/whatsapp');
 const {
   getPortalBaseUrl,
   getCrmBaseUrl,
@@ -724,6 +732,14 @@ router.put('/:id/steps/:step_id', async (req, res) => {
                 [step.assignee_id, `Congratulations! Your deliverable for step "${step.title}" has been approved.`, 'step_approved', `/production`]
               );
             }
+            // Dispatch Templates 4 & 5 to Managers, Group, and Client
+            broadcastDeliveryApprovedNotification({
+              projectId: req.params.id,
+              taskName: deliverable_name || step.title,
+              crmLink: `${getCrmBaseUrl()}/projects/${req.params.id}`,
+              assigneeId: step.assignee_id
+            }).catch(console.error);
+
           } else if (status === 'Active') {
             if (step.assignee_id) {
               await db.query(
@@ -733,25 +749,12 @@ router.put('/:id/steps/:step_id', async (req, res) => {
             }
           } else if (status === 'Pending Approval') {
             await notifyManagers(req.params.id, `Deliverable submitted for step "${step.title}" and is pending your approval.`, 'step_pending', `/projects/${req.params.id}`);
-            try {
-              const [[projectInfo]] = await db.query(
-                `SELECT p.id, p.title, c.full_name as client_name, c.business_name, c.whatsapp_number as client_whatsapp 
-                 FROM projects p 
-                 LEFT JOIN clients c ON p.client_id = c.id 
-                 WHERE p.id = ?`, 
-                [req.params.id]
-              );
-              if (projectInfo && projectInfo.client_whatsapp) {
-                const waText = getDeliverySubmittedTemplate({
-                  clientName: projectInfo.client_name || projectInfo.business_name,
-                  taskName: deliverable_name || step.title,
-                  portalLink: `${getPortalBaseUrl()}/client-portal?id=${projectInfo.id}`
-                });
-                await sendWhatsAppMessage(projectInfo.client_whatsapp, waText);
-              }
-            } catch (waErr) {
-              console.error('[Step Pending Delivery WhatsApp Error]:', waErr.message);
-            }
+            // Dispatch Template 1: Delivery Submitted to Client, WhatsApp Group, and Managers
+            broadcastDeliveryNotification({
+              projectId: req.params.id,
+              deliverableName: deliverable_name || step.title,
+              portalLink: `${getPortalBaseUrl()}/client-portal?id=${req.params.id}`
+            }).catch(console.error);
           }
         }
       }
@@ -1014,27 +1017,14 @@ router.post('/:id/submit-delivery', async (req, res) => {
     await db.query('INSERT INTO deliverables (project_id, file_url, file_name, submitted_by) VALUES (?, ?, ?, ?)', [req.params.id, file_url, file_name, user_id]);
     await db.query('UPDATE projects SET status = "Submitted for Review" WHERE id = ?', [req.params.id]);
     
-    // Dispatch WhatsApp Delivery Submitted Template to Client / Group
-    try {
-      const [[projectInfo]] = await db.query(
-        `SELECT p.id, p.title, c.full_name as client_name, c.business_name, c.whatsapp_number as client_whatsapp 
-         FROM projects p 
-         LEFT JOIN clients c ON p.client_id = c.id 
-         WHERE p.id = ?`, 
-        [req.params.id]
-      );
-      if (projectInfo && projectInfo.client_whatsapp) {
-        const waText = getDeliverySubmittedTemplate({
-          clientName: projectInfo.client_name || projectInfo.business_name,
-          taskName: file_name || projectInfo.title,
-          portalLink: `${getPortalBaseUrl()}/client-portal?id=${projectInfo.id}`
-        });
-        await sendWhatsAppMessage(projectInfo.client_whatsapp, waText);
-      }
-      await notifyInternalTeam(req.params.id, `Deliverable "${file_name || 'Delivery'}" submitted for project ${projectInfo?.title || ''}.`, 'delivery_submitted', `/projects/${req.params.id}`, user_id);
-    } catch (notifErr) {
-      console.error('[Delivery WhatsApp Notification Error]:', notifErr.message);
-    }
+    // Dispatch WhatsApp Delivery Submitted Template to Client, Group, and Managers
+    broadcastDeliveryNotification({
+      projectId: req.params.id,
+      deliverableName: file_name,
+      portalLink: `${getPortalBaseUrl()}/client-portal?id=${req.params.id}`
+    }).catch(console.error);
+
+    await notifyInternalTeam(req.params.id, `Deliverable "${file_name || 'Delivery'}" submitted for project.`, 'delivery_submitted', `/projects/${req.params.id}`, user_id);
 
     res.json({ message: 'Delivery submitted' });
   } catch (error) {
@@ -1048,46 +1038,16 @@ router.post('/:id/steps/:stepId/client-approve', async (req, res) => {
   try {
     await connection.query('UPDATE project_steps SET status = "Completed", completed_at = NOW() WHERE id = ?', [req.params.stepId]);
 
-    // Dispatch WhatsApp Templates: Manager Delivery Approved & Client Approval Recorded
+    // Dispatch WhatsApp Templates: Manager Delivery Approved & Client Approval Recorded (with Group support)
     try {
-      const [[stepInfo]] = await connection.query(
-        `SELECT ps.title as step_title, p.id as project_id, p.title as project_title, p.pm_id, p.production_id, 
-                c.full_name as client_name, c.business_name, c.whatsapp_number as client_whatsapp 
-         FROM project_steps ps 
-         JOIN projects p ON ps.project_id = p.id 
-         LEFT JOIN clients c ON p.client_id = c.id 
-         WHERE ps.id = ?`, 
-        [req.params.stepId]
-      );
-
-      if (stepInfo) {
-        const clientDisplayName = stepInfo.client_name || stepInfo.business_name || 'Client';
-
-        // 1. Template 4: Manager — Delivery Approved (Sent to PM, Production lead & Admins)
-        const managerMsg = getManagerDeliveryApprovedTemplate({
-          clientName: clientDisplayName,
-          taskName: stepInfo.step_title,
-          projectName: stepInfo.project_title,
-          crmLink: `${getCrmBaseUrl()}/projects/${stepInfo.project_id}`
-        });
-
-        const [managers] = await connection.query("SELECT id, whatsapp_number FROM users WHERE role IN ('Admin', 'Product Manager')");
-        const managerIds = new Set(managers.map(m => m.id));
-        if (stepInfo.pm_id) managerIds.add(stepInfo.pm_id);
-        if (stepInfo.production_id) managerIds.add(stepInfo.production_id);
-        await notifyManagersWhatsApp(Array.from(managerIds), managerMsg);
-
-        // 2. Template 5: When Client Approves (Sent to Client)
-        if (stepInfo.client_whatsapp) {
-          const clientMsg = getClientApprovalRecordedTemplate({
-            clientName: clientDisplayName,
-            taskName: stepInfo.step_title
-          });
-          await sendWhatsAppMessage(stepInfo.client_whatsapp, clientMsg);
-        }
-      }
-    } catch (waErr) {
-      console.error('[Step Approve WhatsApp Notification Error]:', waErr.message);
+      const [[stepRow]] = await connection.query('SELECT title FROM project_steps WHERE id = ?', [req.params.stepId]);
+      broadcastDeliveryApprovedNotification({
+        projectId: req.params.id,
+        taskName: stepRow?.title || 'Deliverable',
+        crmLink: `${getCrmBaseUrl()}/projects/${req.params.id}`
+      }).catch(console.error);
+    } catch (e) {
+      console.error('[Step Approve WhatsApp Error]:', e.message);
     }
 
     res.json({ message: 'Step approved' });
@@ -1136,46 +1096,14 @@ router.post('/:id/request-revision', upload.array('images', 5), async (req, res)
       [req.params.id, title, description, is_paid, cost, step_id || null, image_url || null]);
     await connection.commit();
 
-    // Dispatch WhatsApp Templates: Manager Revision Submitted (with AI Summary) & Client Revision Received
-    try {
-      let taskTitle = title || project.title;
-      if (step_id) {
-        const [[stepRow]] = await connection.query('SELECT title FROM project_steps WHERE id = ?', [step_id]);
-        if (stepRow?.title) taskTitle = stepRow.title;
-      }
-
-      const clientDisplayName = project.client_name || project.business_name || 'Client';
-
-      // Generate AI summary of revision feedback
-      const aiSummary = await summarizeRevisionWithAI(description);
-
-      // 1. Template 2: Manager — Revision Submitted (To PM, Production & Admins)
-      const managerMsg = getManagerRevisionSubmittedTemplate({
-        clientName: clientDisplayName,
-        taskName: taskTitle,
-        projectName: project.title,
-        revisionSummary: aiSummary,
-        crmLink: `${getCrmBaseUrl()}/projects/${project.id}`
-      });
-
-      const [managers] = await connection.query("SELECT id, whatsapp_number FROM users WHERE role IN ('Admin', 'Product Manager')");
-      const managerIds = new Set(managers.map(m => m.id));
-      if (project.pm_id) managerIds.add(project.pm_id);
-      if (project.production_id) managerIds.add(project.production_id);
-      await notifyManagersWhatsApp(Array.from(managerIds), managerMsg);
-
-      // 2. Template 3: When Client Submits Revision (Confirmation to Client)
-      if (project.client_whatsapp) {
-        const clientMsg = getClientRevisionReceivedTemplate({
-          clientName: clientDisplayName,
-          taskName: taskTitle,
-          portalLink: `${getPortalBaseUrl()}/client-portal?id=${project.id}`
-        });
-        await sendWhatsAppMessage(project.client_whatsapp, clientMsg);
-      }
-    } catch (waErr) {
-      console.error('[Revision WhatsApp Notification Error]:', waErr.message);
-    }
+    // Dispatch WhatsApp Templates: Manager Revision Submitted & Client Revision Received (with Group broadcast)
+    broadcastRevisionNotification({
+      projectId: req.params.id,
+      taskName: title || project.title,
+      revisionText: description,
+      crmLink: `${getCrmBaseUrl()}/projects/${project.id}`,
+      portalLink: `${getPortalBaseUrl()}/client-portal?id=${project.id}`
+    }).catch(console.error);
 
     res.json({ message: 'Revision requested', is_paid, cost, image_url });
   } catch (error) {
@@ -1194,45 +1122,12 @@ router.post('/:id/approve', async (req, res) => {
     await connection.query('UPDATE projects SET status = "Completed" WHERE id = ?', [req.params.id]);
     await connection.commit();
 
-    // Dispatch WhatsApp Templates: Manager Delivery Approved & Client Approval Recorded
-    try {
-      const [[projectInfo]] = await connection.query(
-        `SELECT p.id, p.title, p.pm_id, p.production_id, c.full_name as client_name, c.business_name, c.whatsapp_number as client_whatsapp 
-         FROM projects p 
-         LEFT JOIN clients c ON p.client_id = c.id 
-         WHERE p.id = ?`, 
-        [req.params.id]
-      );
-
-      if (projectInfo) {
-        const clientDisplayName = projectInfo.client_name || projectInfo.business_name || 'Client';
-
-        // 1. Template 4: Manager — Delivery Approved
-        const managerMsg = getManagerDeliveryApprovedTemplate({
-          clientName: clientDisplayName,
-          taskName: projectInfo.title,
-          projectName: projectInfo.title,
-          crmLink: `${getCrmBaseUrl()}/projects/${projectInfo.id}`
-        });
-
-        const [managers] = await connection.query("SELECT id, whatsapp_number FROM users WHERE role IN ('Admin', 'Product Manager')");
-        const managerIds = new Set(managers.map(m => m.id));
-        if (projectInfo.pm_id) managerIds.add(projectInfo.pm_id);
-        if (projectInfo.production_id) managerIds.add(projectInfo.production_id);
-        await notifyManagersWhatsApp(Array.from(managerIds), managerMsg);
-
-        // 2. Template 5: When Client Approves
-        if (projectInfo.client_whatsapp) {
-          const clientMsg = getClientApprovalRecordedTemplate({
-            clientName: clientDisplayName,
-            taskName: projectInfo.title
-          });
-          await sendWhatsAppMessage(projectInfo.client_whatsapp, clientMsg);
-        }
-      }
-    } catch (waErr) {
-      console.error('[Project Approve WhatsApp Notification Error]:', waErr.message);
-    }
+    // Dispatch WhatsApp Templates: Manager Delivery Approved & Client Approval Recorded (with Group broadcast)
+    broadcastDeliveryApprovedNotification({
+      projectId: req.params.id,
+      taskName: 'Final Project Deliverables',
+      crmLink: `${getCrmBaseUrl()}/projects/${req.params.id}`
+    }).catch(console.error);
 
     res.json({ message: 'Project marked as completed' });
   } catch (error) {

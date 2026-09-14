@@ -598,6 +598,10 @@ async function updateLiveDb() {
     // clients
     await addColumnIfNotExists('clients', 'created_by', 'INT NULL');
     await addColumnIfNotExists('clients', 'whatsapp_number', 'VARCHAR(50) NULL');
+    await addColumnIfNotExists('clients', 'whatsapp_group_jid', 'VARCHAR(255) NULL');
+
+    // projects
+    await addColumnIfNotExists('projects', 'whatsapp_group_jid', 'VARCHAR(255) NULL');
     await addColumnIfNotExists('clients', 'physical_address', 'TEXT NULL');
     await addColumnIfNotExists('clients', 'profile_image_url', 'VARCHAR(255) NULL');
 
@@ -728,14 +732,58 @@ async function updateLiveDb() {
       ['email_notifications', 'true'],
       ['project_updates', 'true'],
       ['whatsapp_notifications_enabled', 'true'],
-      ['evolution_api_url', 'https://evolution.adwiselabs.com'],
-      ['evolution_instance_name', 'adwise_main'],
-      ['evolution_api_key', '']
+      ['evolution_api_url', 'https://evolution-evolution-api.o1nqjj.easypanel.host'],
+      ['evolution_instance_name', 'Adwise ERP'],
+      ['evolution_api_key', '429683C4C977415CAAFCCE10F7D57E11'],
+      ['whatsapp_delivery_group_jid', '']
     ];
 
     for (const [sKey, sVal] of defaultSettings) {
       await connection.query('INSERT IGNORE INTO `settings` (`setting_key`, `setting_value`) VALUES (?, ?)', [sKey, sVal]);
     }
+
+    // Self-heal Evolution API credentials in live settings table if they were previously blank or set to dummy URLs
+    await safeExec(`
+      UPDATE \`settings\` 
+      SET \`setting_value\` = 'https://evolution-evolution-api.o1nqjj.easypanel.host' 
+      WHERE \`setting_key\` = 'evolution_api_url' 
+        AND (\`setting_value\` = 'https://evolution.adwiselabs.com' OR \`setting_value\` = '' OR \`setting_value\` IS NULL)
+    `, 'Healed evolution_api_url on live');
+
+    await safeExec(`
+      UPDATE \`settings\` 
+      SET \`setting_value\` = 'Adwise ERP' 
+      WHERE \`setting_key\` = 'evolution_instance_name' 
+        AND (\`setting_value\` = 'adwise_main' OR \`setting_value\` = '' OR \`setting_value\` IS NULL)
+    `, 'Healed evolution_instance_name on live');
+
+    await safeExec(`
+      UPDATE \`settings\` 
+      SET \`setting_value\` = '429683C4C977415CAAFCCE10F7D57E11' 
+      WHERE \`setting_key\` = 'evolution_api_key' 
+        AND (\`setting_value\` = '' OR \`setting_value\` IS NULL)
+    `, 'Healed evolution_api_key on live');
+
+    await safeExec(`
+      UPDATE \`settings\` 
+      SET \`setting_value\` = 'true' 
+      WHERE \`setting_key\` = 'whatsapp_notifications_enabled' 
+        AND (\`setting_value\` = '' OR \`setting_value\` IS NULL)
+    `, 'Healed whatsapp_notifications_enabled on live');
+
+    // Self-heal dummy test client numbers (e.g. 0222222 or 123456789) so existing projects send successfully to Admin WhatsApp
+    await safeExec(`
+      UPDATE \`clients\` 
+      SET \`whatsapp_number\` = '+923346565253' 
+      WHERE \`whatsapp_number\` IN ('0222222', '123456789')
+    `, 'Updated dummy client whatsapp numbers to admin number');
+
+    // Ensure user 6 (hussain abbas) has whatsapp number set
+    await safeExec(`
+      UPDATE \`users\` 
+      SET \`whatsapp_number\` = '+923346565253' 
+      WHERE \`id\` = 6 AND (\`whatsapp_number\` IS NULL OR \`whatsapp_number\` = '')
+    `, 'Set user 6 whatsapp number');
 
     const defaultTermsText = `1. PAYMENT TERMS: Payments are due within 15 days from the date of invoice issuance. Late payments may be subject to a 1.5% monthly service charge.
 2. REVISIONS & SCOPE: Any additional feature requests or out-of-scope revisions beyond agreed milestone deliverables will be billed separately.

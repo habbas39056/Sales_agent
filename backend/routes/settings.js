@@ -241,4 +241,41 @@ router.post('/test-whatsapp', async (req, res) => {
   }
 });
 
+// Get WhatsApp & Evolution API connection status
+router.get('/whatsapp-status', async (req, res) => {
+  try {
+    const { getWhatsAppSettings } = require('../utils/whatsapp');
+    const settings = await getWhatsAppSettings();
+
+    const fetchFn = typeof fetch !== 'undefined' ? fetch : (...args) => import('node-fetch').then(({default: f}) => f(...args));
+    
+    let isConnected = false;
+    let state = 'disconnected';
+
+    try {
+      const resp = await fetchFn(`${settings.evolution_api_url}/instance/connectionState/${encodeURIComponent(settings.evolution_instance_name)}`, {
+        headers: { 'apikey': settings.evolution_api_key }
+      });
+      if (resp.ok) {
+        const json = await resp.json();
+        state = json.instance?.state || 'open';
+        isConnected = state === 'open';
+      }
+    } catch (apiErr) {
+      state = 'unreachable';
+    }
+
+    res.json({
+      connected: isConnected,
+      state,
+      instance_name: settings.evolution_instance_name,
+      api_url: settings.evolution_api_url,
+      group_jid: settings.whatsapp_delivery_group_jid || '',
+      notifications_enabled: settings.whatsapp_notifications_enabled === 'true'
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 module.exports = router;

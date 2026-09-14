@@ -1,6 +1,12 @@
 const express = require('express');
 const router = express.Router();
 const db = require('../db');
+const {
+  sendWhatsAppMessage,
+  broadcastDeliveryApprovedNotification,
+  broadcastRevisionNotification
+} = require('../utils/whatsapp');
+const { getCrmBaseUrl } = require('../utils/whatsappTemplates');
 
 // Get pending deadline appeals & step deadlines with role-based scoping
 router.get('/appeals', async (req, res) => {
@@ -226,6 +232,15 @@ router.post('/appeals/:step_id/review', async (req, res) => {
         );
       }
 
+      // WhatsApp alert to assignee
+      if (step.assignee_id) {
+        db.query('SELECT whatsapp_number FROM users WHERE id = ?', [step.assignee_id]).then(([[assignee]]) => {
+          if (assignee?.whatsapp_number) {
+            sendWhatsAppMessage(assignee.whatsapp_number, `✅ *Deadline Extension Approved*\n\nThe deadline appeal for "${step.title}" was approved. New deadline: ${formattedDate}.\n\n🔗 CRM: ${getCrmBaseUrl()}/projects/${step.project_id}`).catch(console.error);
+          }
+        }).catch(console.error);
+      }
+
       res.json({ message: 'Deadline extension approved successfully', new_deadline: formattedDate });
     } else {
       await db.query(`
@@ -249,6 +264,15 @@ router.post('/appeals/:step_id/review', async (req, res) => {
           'INSERT INTO notifications (user_id, message, type, link) VALUES (?, ?, ?, ?)',
           [uid, `The deadline appeal for "${step.title}" was rejected.`, 'appeal_rejected', `/projects/${step.project_id}`]
         );
+      }
+
+      // WhatsApp alert to assignee
+      if (step.assignee_id) {
+        db.query('SELECT whatsapp_number FROM users WHERE id = ?', [step.assignee_id]).then(([[assignee]]) => {
+          if (assignee?.whatsapp_number) {
+            sendWhatsAppMessage(assignee.whatsapp_number, `❌ *Deadline Appeal Rejected*\n\nYour deadline appeal for "${step.title}" was reviewed and rejected.\n\n🔗 CRM: ${getCrmBaseUrl()}/projects/${step.project_id}`).catch(console.error);
+          }
+        }).catch(console.error);
       }
 
       res.json({ message: 'Deadline appeal rejected' });
@@ -285,6 +309,14 @@ router.post('/tasks/:step_id/approve', async (req, res) => {
         [step.assignee_id, `Your deliverable for step "${step.title}" has been approved!`, 'step_approved', `/projects/${step.project_id}`]
       );
     }
+
+    // Dispatch WhatsApp Templates: Manager Delivery Approved & Client Approval Recorded (with Group support)
+    broadcastDeliveryApprovedNotification({
+      projectId: step.project_id,
+      taskName: step.title,
+      crmLink: `${getCrmBaseUrl()}/projects/${step.project_id}`,
+      assigneeId: step.assignee_id
+    }).catch(console.error);
 
     res.json({ message: 'Task approved successfully' });
   } catch (error) {
@@ -325,6 +357,14 @@ router.post('/tasks/:step_id/reject', async (req, res) => {
         [step.assignee_id, `Revisions requested for step "${step.title}": ${feedbackText}`, 'step_rejected', `/tasks`]
       );
     }
+
+    // Dispatch WhatsApp Templates: Manager Revision Submitted & Client Revision Received (with Group support)
+    broadcastRevisionNotification({
+      projectId: step.project_id,
+      taskName: step.title,
+      revisionText: feedbackText,
+      crmLink: `${getCrmBaseUrl()}/projects/${step.project_id}`
+    }).catch(console.error);
 
     res.json({ message: 'Task rejected and sent for revision' });
   } catch (error) {

@@ -4,7 +4,9 @@ import {
   ShieldCheck, 
   Save, 
   CheckCircle, 
+  CheckCircle2,
   AlertCircle, 
+  AlertTriangle,
   Lock, 
   User, 
   Mail, 
@@ -16,7 +18,10 @@ import {
   Camera,
   FileText,
   LayoutDashboard,
-  MessageSquare
+  MessageSquare,
+  Send,
+  Users,
+  Wifi
 } from 'lucide-react';
 import './Settings.css';
 
@@ -29,7 +34,15 @@ export default function Settings() {
   // Agent Config State
   const [qrCodeData, setQrCodeData] = useState(null);
   const [testingWhatsApp, setTestingWhatsApp] = useState(false);
+  const [testingGroupMsg, setTestingGroupMsg] = useState(false);
   const [fetchingQr, setFetchingQr] = useState(false);
+  const [whatsappStatus, setWhatsappStatus] = useState({
+    connected: false,
+    state: 'checking',
+    instance_name: 'Adwise ERP',
+    api_url: 'https://evolution-evolution-api.o1nqjj.easypanel.host',
+    group_jid: ''
+  });
 
   // Project Categories State
   const [categories, setCategories] = useState([]);
@@ -97,6 +110,16 @@ export default function Settings() {
           dashboard_end_date: settingsRes.data.dashboard_end_date || '',
           whatsapp_notifications_enabled: settingsRes.data.whatsapp_notifications_enabled || 'true'
         });
+      }
+
+      // Load WhatsApp connection status
+      try {
+        const statusRes = await axios.get('/api/settings/whatsapp-status');
+        if (statusRes.data) {
+          setWhatsappStatus(statusRes.data);
+        }
+      } catch (wsErr) {
+        console.warn('Failed to load WhatsApp status:', wsErr.message);
       }
     } catch (err) {
       console.error('Error loading settings data:', err);
@@ -255,6 +278,33 @@ export default function Settings() {
       showAlert('error', err.response?.data?.error || 'Failed to fetch QR code');
     } finally {
       setFetchingQr(false);
+    }
+  };
+
+  const handleSaveGroupJid = async () => {
+    setSaving(true);
+    try {
+      await axios.post('/api/settings', { whatsapp_delivery_group_jid: whatsappStatus.group_jid });
+      showAlert('success', 'WhatsApp Delivery Group JID saved successfully!');
+    } catch (err) {
+      showAlert('error', 'Failed to save Group JID');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleTestGroupMessage = async () => {
+    if (!whatsappStatus.group_jid) {
+      return showAlert('error', 'Please enter a WhatsApp Group JID first.');
+    }
+    setTestingGroupMsg(true);
+    try {
+      const res = await axios.post('/api/settings/test-whatsapp', { whatsapp_number: whatsappStatus.group_jid });
+      showAlert('success', res.data?.message || 'Test group message sent successfully!');
+    } catch (err) {
+      showAlert('error', err.response?.data?.error || 'Failed to send test message to group');
+    } finally {
+      setTestingGroupMsg(false);
     }
   };
 
@@ -638,18 +688,161 @@ export default function Settings() {
         </form>
       )}
 
-      {/* SECTION 4: AGENT CONFIG */}
+      {/* SECTION 4: AGENT & WHATSAPP CONFIG */}
       {activeTab === 'agent' && (
         <div className="settings-card">
           <div className="card-title-section">
             <MessageSquare size={24} style={{ color: 'var(--primary-color)' }} />
             <div>
-              <h3 className="card-title">Agent Configuration</h3>
-              <p className="card-description">Scan the QR code below to connect the Adwise ERP instance with Evolution API.</p>
+              <h3 className="card-title">WhatsApp & Evolution API Configuration</h3>
+              <p className="card-description">Live integration status, group delivery broadcasts, and Evolution API instance management.</p>
             </div>
           </div>
 
+          {/* Live Status Card */}
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            padding: '1.25rem',
+            borderRadius: '12px',
+            backgroundColor: whatsappStatus.connected ? '#f0fdf4' : '#fef2f2',
+            border: `1px solid ${whatsappStatus.connected ? '#bbf7d0' : '#fecaca'}`,
+            marginBottom: '1.5rem',
+            flexWrap: 'wrap',
+            gap: '1rem'
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+              <div style={{
+                width: '12px',
+                height: '12px',
+                borderRadius: '50%',
+                backgroundColor: whatsappStatus.connected ? '#22c55e' : '#ef4444',
+                boxShadow: `0 0 10px ${whatsappStatus.connected ? 'rgba(34, 197, 94, 0.6)' : 'rgba(239, 68, 68, 0.6)'}`
+              }} />
+              <div>
+                <strong style={{ color: whatsappStatus.connected ? '#166534' : '#991b1b', fontSize: '1rem' }}>
+                  {whatsappStatus.connected ? '🟢 Evolution API Connected & Active' : '🔴 Evolution API Disconnected'}
+                </strong>
+                <p style={{ margin: 0, fontSize: '0.85rem', color: whatsappStatus.connected ? '#15803d' : '#b91c1c' }}>
+                  Instance: <strong>{whatsappStatus.instance_name || 'Adwise ERP'}</strong> | State: <strong>{whatsappStatus.state || 'open'}</strong>
+                </p>
+              </div>
+            </div>
+
+            <button 
+              type="button" 
+              onClick={async () => {
+                setLoading(true);
+                try {
+                  const res = await axios.get('/api/settings/whatsapp-status');
+                  if (res.data) setWhatsappStatus(res.data);
+                  showAlert('success', 'Refreshed WhatsApp connection state!');
+                } catch (e) {
+                  showAlert('error', 'Failed to refresh WhatsApp status');
+                } finally {
+                  setLoading(false);
+                }
+              }}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '0.5rem',
+                padding: '0.5rem 1rem',
+                borderRadius: '8px',
+                border: '1px solid #cbd5e1',
+                backgroundColor: '#fff',
+                cursor: 'pointer',
+                fontSize: '0.85rem',
+                fontWeight: 600
+              }}
+            >
+              <RefreshCw size={14} /> Re-check Status
+            </button>
+          </div>
+
+          {/* Group Delivery Configuration */}
+          <div style={{
+            padding: '1.25rem',
+            borderRadius: '12px',
+            backgroundColor: '#f8fafc',
+            border: '1px solid #e2e8f0',
+            marginBottom: '1.5rem'
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.75rem' }}>
+              <Users size={18} style={{ color: 'var(--primary-color)' }} />
+              <h4 style={{ margin: 0, fontSize: '1rem', color: '#1e293b' }}>
+                WhatsApp Delivery Broadcast Group (JID)
+              </h4>
+            </div>
+            <p style={{ fontSize: '0.875rem', color: '#64748b', marginBottom: '1rem' }}>
+              When a delivery is submitted via the Production Portal, the official notification template 
+              (<em>"Hi [Client] 👋, [Task] has been delivered on your Client Portal..."</em>) is automatically dispatched to this WhatsApp group.
+            </p>
+
+            <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap', alignItems: 'center' }}>
+              <input 
+                type="text"
+                placeholder="e.g. 1203630248234@g.us or Group Link / JID"
+                value={whatsappStatus.group_jid || ''}
+                onChange={(e) => setWhatsappStatus(prev => ({ ...prev, group_jid: e.target.value }))}
+                style={{
+                  flex: 1,
+                  minWidth: '280px',
+                  padding: '0.75rem 1rem',
+                  borderRadius: '8px',
+                  border: '1px solid #cbd5e1',
+                  fontSize: '0.9rem'
+                }}
+              />
+              <button 
+                type="button"
+                onClick={handleSaveGroupJid}
+                disabled={saving}
+                style={{
+                  padding: '0.75rem 1.25rem',
+                  borderRadius: '8px',
+                  backgroundColor: 'var(--primary-color, #2563eb)',
+                  color: '#fff',
+                  border: 'none',
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '0.5rem'
+                }}
+              >
+                <Save size={16} /> Save Group JID
+              </button>
+              <button 
+                type="button"
+                onClick={handleTestGroupMessage}
+                disabled={testingGroupMsg}
+                style={{
+                  padding: '0.75rem 1.25rem',
+                  borderRadius: '8px',
+                  backgroundColor: '#0f172a',
+                  color: '#fff',
+                  border: 'none',
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '0.5rem'
+                }}
+              >
+                <Send size={16} /> {testingGroupMsg ? 'Sending...' : 'Test Group Alert'}
+              </button>
+            </div>
+          </div>
+
+          {/* QR Code Connection Section */}
           <div style={{ textAlign: 'center', margin: '2rem 0' }}>
+            <h4 style={{ color: '#334155', marginBottom: '0.5rem' }}>Pair WhatsApp Device (QR Code)</h4>
+            <p style={{ color: '#64748b', fontSize: '0.9rem', marginBottom: '1.5rem' }}>
+              If your WhatsApp instance ever disconnects, generate a new QR code below and scan it from WhatsApp on your phone.
+            </p>
+
             {qrCodeData ? (
               <div>
                 <img 
@@ -658,17 +851,17 @@ export default function Settings() {
                   style={{ width: '250px', height: '250px', border: '1px solid #e2e8f0', borderRadius: '12px', padding: '1rem', backgroundColor: '#fff', boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)' }} 
                 />
                 <p style={{ marginTop: '1rem', color: '#64748b', fontSize: '0.9rem' }}>
-                  Open WhatsApp on your phone and scan the QR code to connect.
+                  Open WhatsApp on your phone &gt; Linked Devices &gt; Scan QR code to connect.
                 </p>
               </div>
             ) : (
-              <div style={{ padding: '2rem', border: '2px dashed #cbd5e1', borderRadius: '12px', backgroundColor: '#f8fafc' }}>
+              <div style={{ padding: '2rem', border: '2px dashed #cbd5e1', borderRadius: '12px', backgroundColor: '#f8fafc', maxWidth: '400px', margin: '0 auto' }}>
                 <MessageSquare size={48} style={{ color: '#94a3b8', marginBottom: '1rem' }} />
-                <p style={{ color: '#475569', marginBottom: '1rem' }}>No QR Code loaded yet.</p>
+                <p style={{ color: '#475569', marginBottom: '0' }}>Device is currently linked or no new QR needed.</p>
               </div>
             )}
 
-            <div style={{ marginTop: '2rem' }}>
+            <div style={{ marginTop: '1.5rem' }}>
               <button 
                 onClick={fetchAgentQR} 
                 className="save-btn" 

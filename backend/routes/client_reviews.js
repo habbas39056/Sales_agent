@@ -3,7 +3,13 @@ const router = express.Router();
 const db = require('../db');
 const multer = require('multer');
 const path = require('path');
-const { sendWhatsAppMessage, notifyManagersWhatsApp } = require('../utils/whatsapp');
+const { 
+  sendWhatsAppMessage, 
+  notifyManagersWhatsApp,
+  broadcastDeliveryNotification,
+  broadcastRevisionNotification,
+  broadcastDeliveryApprovedNotification
+} = require('../utils/whatsapp');
 const {
   getPortalBaseUrl,
   getCrmBaseUrl,
@@ -50,14 +56,12 @@ router.post('/projects/:project_id', upload.single('file'), async (req, res) => 
           [client.user_id, `New submission to review: "${title}" for project ${project.title}`, 'document', `/client-portal?id=${req.params.project_id}`]
         );
       }
-      if (client && client.whatsapp_number) {
-        const waText = getDeliverySubmittedTemplate({
-          clientName: client.full_name || client.business_name,
-          taskName: title || project.title,
-          portalLink: `${getPortalBaseUrl()}/client-portal?id=${req.params.project_id}`
-        });
-        sendWhatsAppMessage(client.whatsapp_number, waText).catch(console.error);
-      }
+      // Dispatch Template 1: Delivery Submitted to Client, WhatsApp Group, and Managers
+      broadcastDeliveryNotification({
+        projectId: req.params.project_id,
+        deliverableName: title,
+        portalLink: `${getPortalBaseUrl()}/client-portal?id=${req.params.project_id}`
+      }).catch(console.error);
     }
 
     res.json({ message: 'Submitted for client review', review_id: result.insertId });
@@ -122,9 +126,8 @@ router.post('/:review_id/respond', upload.array('feedback_files', 5), async (req
           );
         }
 
-        // WhatsApp dispatch
+        // WhatsApp dispatch via centralized broadcast functions (includes group & managers)
         if (status === 'Revision Requested') {
-          // Parse feedback text
           let rawFeedback = '';
           if (feedback_todos) {
             try {
@@ -133,45 +136,19 @@ router.post('/:review_id/respond', upload.array('feedback_files', 5), async (req
               else rawFeedback = String(feedback_todos);
             } catch(e) { rawFeedback = String(feedback_todos); }
           }
-          const aiSummary = await summarizeRevisionWithAI(rawFeedback || review.title);
-
-          // 1. Template 2: Manager — Revision Submitted
-          const managerMsg = getManagerRevisionSubmittedTemplate({
-            clientName: clientDisplayName,
+          broadcastRevisionNotification({
+            projectId: project.id,
             taskName: review.title,
-            projectName: project.title,
-            revisionSummary: aiSummary,
-            crmLink: `${getCrmBaseUrl()}/projects/${project.id}`
-          });
-          await notifyManagersWhatsApp(Array.from(userIds), managerMsg);
-
-          // 2. Template 3: When Client Submits Revision
-          if (project.client_whatsapp) {
-            const clientMsg = getClientRevisionReceivedTemplate({
-              clientName: clientDisplayName,
-              taskName: review.title,
-              portalLink: `${getPortalBaseUrl()}/client-portal?id=${project.id}`
-            });
-            await sendWhatsAppMessage(project.client_whatsapp, clientMsg);
-          }
+            revisionText: rawFeedback || review.title,
+            crmLink: `${getCrmBaseUrl()}/projects/${project.id}`,
+            portalLink: `${getPortalBaseUrl()}/client-portal?id=${project.id}`
+          }).catch(console.error);
         } else if (status === 'Approved') {
-          // 1. Template 4: Manager — Delivery Approved
-          const managerMsg = getManagerDeliveryApprovedTemplate({
-            clientName: clientDisplayName,
+          broadcastDeliveryApprovedNotification({
+            projectId: project.id,
             taskName: review.title,
-            projectName: project.title,
             crmLink: `${getCrmBaseUrl()}/projects/${project.id}`
-          });
-          await notifyManagersWhatsApp(Array.from(userIds), managerMsg);
-
-          // 2. Template 5: When Client Approves
-          if (project.client_whatsapp) {
-            const clientMsg = getClientApprovalRecordedTemplate({
-              clientName: clientDisplayName,
-              taskName: review.title
-            });
-            await sendWhatsAppMessage(project.client_whatsapp, clientMsg);
-          }
+          }).catch(console.error);
         }
       }
     }
