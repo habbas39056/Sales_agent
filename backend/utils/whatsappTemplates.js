@@ -7,14 +7,14 @@ require('dotenv').config();
 function getPortalBaseUrl() {
   if (process.env.PORTAL_URL) return process.env.PORTAL_URL;
   if (process.env.FRONTEND_URL) return process.env.FRONTEND_URL;
-  if (process.env.NODE_ENV === 'production') return 'https://adwiselabs.com';
+  if (process.env.NODE_ENV === 'production' || !process.env.NODE_ENV) return 'https://crm.adwiselabs.com';
   return 'http://localhost:5173';
 }
 
 function getCrmBaseUrl() {
   if (process.env.CRM_URL) return process.env.CRM_URL;
   if (process.env.FRONTEND_URL) return process.env.FRONTEND_URL;
-  if (process.env.NODE_ENV === 'production') return 'https://adwiselabs.com';
+  if (process.env.NODE_ENV === 'production' || !process.env.NODE_ENV) return 'https://crm.adwiselabs.com';
   return 'http://localhost:5173';
 }
 

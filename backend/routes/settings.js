@@ -247,20 +247,43 @@ router.get('/whatsapp-status', async (req, res) => {
     const { getWhatsAppSettings } = require('../utils/whatsapp');
     const settings = await getWhatsAppSettings();
 
-    const fetchFn = typeof fetch !== 'undefined' ? fetch : (...args) => import('node-fetch').then(({default: f}) => f(...args));
+    const https = require('https');
+    const http = require('http');
     
     let isConnected = false;
     let state = 'disconnected';
 
     try {
-      const resp = await fetchFn(`${settings.evolution_api_url}/instance/connectionState/${encodeURIComponent(settings.evolution_instance_name)}`, {
-        headers: { 'apikey': settings.evolution_api_key }
+      const targetUrl = new URL(`${settings.evolution_api_url}/instance/connectionState/${encodeURIComponent(settings.evolution_instance_name)}`);
+      const client = targetUrl.protocol === 'https:' ? https : http;
+
+      const data = await new Promise((resolve, reject) => {
+        const reqOpts = {
+          hostname: targetUrl.hostname,
+          port: targetUrl.port || (targetUrl.protocol === 'https:' ? 443 : 80),
+          path: targetUrl.pathname + targetUrl.search,
+          method: 'GET',
+          headers: { 'apikey': settings.evolution_api_key },
+          timeout: 7000
+        };
+        const r = client.request(reqOpts, (resp) => {
+          let body = '';
+          resp.on('data', c => { body += c; });
+          resp.on('end', () => {
+            if (resp.statusCode >= 200 && resp.statusCode < 300) {
+              try { resolve(JSON.parse(body)); } catch(e) { resolve({}); }
+            } else {
+              resolve({});
+            }
+          });
+        });
+        r.on('error', reject);
+        r.on('timeout', () => { r.destroy(); reject(new Error('timeout')); });
+        r.end();
       });
-      if (resp.ok) {
-        const json = await resp.json();
-        state = json.instance?.state || 'open';
-        isConnected = state === 'open';
-      }
+
+      state = data.instance?.state || (data.instance ? 'open' : 'disconnected');
+      isConnected = state === 'open';
     } catch (apiErr) {
       state = 'unreachable';
     }

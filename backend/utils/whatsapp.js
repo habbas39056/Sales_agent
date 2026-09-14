@@ -1,3 +1,5 @@
+const https = require('https');
+const http = require('http');
 const db = require('../db');
 const {
   getPortalBaseUrl,
@@ -9,6 +11,56 @@ const {
   getClientApprovalRecordedTemplate,
   summarizeRevisionWithAI
 } = require('./whatsappTemplates');
+
+/**
+ * Robust HTTP POST helper using native https/http (no external dependencies)
+ */
+function postJson(urlStr, headers, bodyData) {
+    return new Promise((resolve, reject) => {
+        try {
+            const urlObj = new URL(urlStr);
+            const isHttps = urlObj.protocol === 'https:';
+            const client = isHttps ? https : http;
+            const postData = typeof bodyData === 'string' ? bodyData : JSON.stringify(bodyData);
+
+            const options = {
+                hostname: urlObj.hostname,
+                port: urlObj.port || (isHttps ? 443 : 80),
+                path: urlObj.pathname + urlObj.search,
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Content-Length': Buffer.byteLength(postData),
+                    ...headers
+                },
+                timeout: 12000
+            };
+
+            const req = client.request(options, (res) => {
+                let data = '';
+                res.on('data', chunk => { data += chunk; });
+                res.on('end', () => {
+                    resolve({
+                        ok: res.statusCode >= 200 && res.statusCode < 300,
+                        status: res.statusCode,
+                        text: async () => data
+                    });
+                });
+            });
+
+            req.on('error', (err) => reject(err));
+            req.on('timeout', () => {
+                req.destroy();
+                reject(new Error('Evolution API request timed out after 12s'));
+            });
+
+            req.write(postData);
+            req.end();
+        } catch (err) {
+            reject(err);
+        }
+    });
+}
 
 /**
  * Normalizes a phone number by ensuring it starts with the country code
@@ -130,7 +182,6 @@ async function sendWhatsAppMessage(to, message) {
             return false;
         }
 
-        const fetchFn = typeof fetch !== 'undefined' ? fetch : (...args) => import('node-fetch').then(({default: f}) => f(...args));
         const endpoint = `${url}/message/sendText/${encodeURIComponent(instance)}`;
         
         const payload = {
@@ -142,14 +193,7 @@ async function sendWhatsAppMessage(to, message) {
             }
         };
 
-        const response = await fetchFn(endpoint, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'apikey': apiKey
-            },
-            body: JSON.stringify(payload)
-        });
+        const response = await postJson(endpoint, { 'apikey': apiKey }, payload);
 
         if (!response.ok) {
             const errorText = await response.text();
@@ -259,9 +303,11 @@ async function notifyClientWhatsApp(clientId, message, context = {}) {
  */
 async function notifyManagersWhatsApp(userIds, message) {
     if (!userIds || userIds.length === 0) return;
-    const ids = Array.isArray(userIds) ? userIds : [userIds];
+    const rawIds = Array.isArray(userIds) ? userIds : [userIds];
+    const validIds = rawIds.filter(id => id && !isNaN(id));
+    if (validIds.length === 0) return;
     try {
-        const [users] = await db.query('SELECT id, whatsapp_number FROM users WHERE id IN (?)', [ids]);
+        const [users] = await db.query('SELECT id, whatsapp_number FROM users WHERE id IN (?)', [validIds]);
         for (const user of users) {
             if (user.whatsapp_number) {
                 await sendWhatsAppMessage(user.whatsapp_number, message);
@@ -321,16 +367,19 @@ async function broadcastDeliveryNotification({ projectId, deliverableName, porta
 
         // 3. Always dispatch a copy to Admin / PM team so notification is never lost in live
         const [managers] = await db.query("SELECT id, whatsapp_number FROM users WHERE role IN ('Admin', 'Product Manager')");
-        const managerIds = new Set(managers.map(m => m.id));
-        if (proj.pm_id) managerIds.add(proj.pm_id);
-
-        const [mgrUsers] = await db.query('SELECT whatsapp_number FROM users WHERE id IN (?)', [Array.from(managerIds)]);
-        mgrUsers.forEach(u => {
-            if (u.whatsapp_number) {
-                const norm = normalizePhoneNumber(u.whatsapp_number);
+        managers.forEach(m => {
+            if (m.whatsapp_number) {
+                const norm = normalizePhoneNumber(m.whatsapp_number);
                 if (norm) recipients.add(norm);
             }
         });
+        if (proj.pm_id) {
+            const [pmUsers] = await db.query('SELECT whatsapp_number FROM users WHERE id = ?', [proj.pm_id]);
+            if (pmUsers && pmUsers.length > 0 && pmUsers[0].whatsapp_number) {
+                const norm = normalizePhoneNumber(pmUsers[0].whatsapp_number);
+                if (norm) recipients.add(norm);
+            }
+        }
 
         console.log(`[WhatsApp Broadcast] Dispatching Delivery Submitted template to ${recipients.size} destination(s):`, Array.from(recipients));
 
@@ -385,13 +434,14 @@ async function broadcastRevisionNotification({ projectId, taskName, revisionText
         const globalGroupJid = settings['whatsapp_delivery_group_jid'];
         const groupTarget = proj.proj_group_jid || proj.client_group_jid || globalGroupJid;
 
-        // Dispatch Template 2 to Managers & Group
         const [managers] = await db.query("SELECT id, whatsapp_number FROM users WHERE role IN ('Admin', 'Product Manager')");
-        const managerIds = new Set(managers.map(m => m.id));
+        const managerIds = new Set(managers.map(m => m.id).filter(Boolean));
         if (proj.pm_id) managerIds.add(proj.pm_id);
         if (proj.production_id) managerIds.add(proj.production_id);
 
-        await notifyManagersWhatsApp(Array.from(managerIds), managerMsg);
+        if (managerIds.size > 0) {
+            await notifyManagersWhatsApp(Array.from(managerIds), managerMsg);
+        }
         if (groupTarget) {
             await sendWhatsAppMessage(groupTarget.trim(), managerMsg);
         }
@@ -447,12 +497,14 @@ async function broadcastDeliveryApprovedNotification({ projectId, taskName, crmL
 
         // 1. Dispatch Template 4 to Managers, Production Lead, Assignee, and WhatsApp Group
         const [managers] = await db.query("SELECT id, whatsapp_number FROM users WHERE role IN ('Admin', 'Product Manager')");
-        const managerIds = new Set(managers.map(m => m.id));
+        const managerIds = new Set(managers.map(m => m.id).filter(Boolean));
         if (proj.pm_id) managerIds.add(proj.pm_id);
         if (proj.production_id) managerIds.add(proj.production_id);
         if (assigneeId) managerIds.add(assigneeId);
 
-        await notifyManagersWhatsApp(Array.from(managerIds), managerMsg);
+        if (managerIds.size > 0) {
+            await notifyManagersWhatsApp(Array.from(managerIds), managerMsg);
+        }
         if (groupTarget) {
             await sendWhatsAppMessage(groupTarget.trim(), managerMsg);
         }
