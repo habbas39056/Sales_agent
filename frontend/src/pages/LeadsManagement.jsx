@@ -37,7 +37,8 @@ import {
   Download,
   Upload,
   FileSpreadsheet,
-  PhoneCall
+  PhoneCall,
+  MessageCircle
 } from 'lucide-react';
 import './LeadsManagement.css';
 
@@ -365,6 +366,23 @@ export default function LeadsManagement() {
     } catch (err) {
       setSessionRecentActivities([]);
     }
+  };
+
+  const handleOpenWhatsApp = (lead) => {
+    const phoneRaw = lead.phone || lead.whatsapp_number || '';
+    const phoneClean = phoneRaw.replace(/[^0-9]/g, '');
+    if (!phoneClean) {
+      return showAlert('error', `No phone/WhatsApp number recorded for ${lead.contact_name}.`);
+    }
+
+    const clientName = lead.contact_name || 'Valued Client';
+    const serviceName = lead.category_name || lead.title || 'our services';
+    const refId = lead.lead_number || `#${lead.id}`;
+
+    const text = `Dear ${clientName},\n\nGreetings from Adwise Sales!\n\nWe are reaching out regarding your inquiry for ${serviceName} (Ref: ${refId}). We would love to discuss how we can best assist you with your project requirements.\n\nPlease let us know a convenient time for a brief call or chat.\n\nBest regards,\nSales Team | Adwise`;
+
+    const url = `https://wa.me/${phoneClean}?text=${encodeURIComponent(text)}`;
+    window.open(url, '_blank', 'noopener,noreferrer');
   };
 
   const startCallingSession = () => {
@@ -983,6 +1001,13 @@ export default function LeadsManagement() {
 
                     <td style={{ textAlign: 'right' }}>
                       <div className="table-actions">
+                        <button 
+                          className="btn-icon text-whatsapp" 
+                          title="Send Professional WhatsApp Message"
+                          onClick={() => handleOpenWhatsApp(lead)}
+                        >
+                          <MessageCircle size={16} />
+                        </button>
                         <button 
                           className="btn-icon text-blue" 
                           title="View Full Lead Details"

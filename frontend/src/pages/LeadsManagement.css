@@ -1307,4 +1307,16 @@
   transform: translateY(-1px);
 }
 
+.btn-icon.text-whatsapp {
+  color: #10b981;
+  border-color: #a7f3d0;
+  background-color: #ecfdf5;
+}
+
+.btn-icon.text-whatsapp:hover {
+  background-color: #d1fae5;
+  color: #047857;
+  border-color: #10b981;
+}
+
 
