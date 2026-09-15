@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
+import * as XLSX from 'xlsx';
 import { 
   Target, 
   Plus, 
@@ -32,7 +33,10 @@ import {
   Settings as SettingsIcon,
   Palette,
   Eye,
-  FileText
+  FileText,
+  Download,
+  Upload,
+  FileSpreadsheet
 } from 'lucide-react';
 import './LeadsManagement.css';
 
@@ -246,6 +250,103 @@ export default function LeadsManagement() {
     }
   };
 
+  const handleExportExcel = () => {
+    if (!leads || leads.length === 0) {
+      return showAlert('error', 'No leads available to export.');
+    }
+
+    const exportData = leads.map(l => ({
+      'Lead Number': l.lead_number || `#${l.id}`,
+      'Client Name': l.contact_name || '',
+      'Business Name': l.company_name || l.client_business || '',
+      'Phone Number': l.phone || l.whatsapp_number || '',
+      'Email': l.email || '',
+      'Lead Title / Opportunity': l.title || '',
+      'Services Interested / Category': l.category_name || l.title || '',
+      'Estimated Value (PKR)': l.estimated_value || 0,
+      'Pipeline Stage': l.status || '',
+      'Source': l.source || '',
+      'Assigned Rep': l.assigned_name || 'Unassigned',
+      'Last Activity': l.last_activity_at ? new Date(l.last_activity_at).toLocaleString() : '',
+      'Next Follow-up': l.next_followup_date ? new Date(l.next_followup_date).toLocaleString() : '',
+      'Remarks': l.notes || ''
+    }));
+
+    const worksheet = XLSX.utils.json_to_sheet(exportData);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, 'Sales Leads');
+    XLSX.writeFile(workbook, `sales_leads_export_${new Date().toISOString().slice(0, 10)}.xlsx`);
+    showAlert('success', `Exported ${exportData.length} leads to Excel!`);
+  };
+
+  const handleImportExcel = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = async (evt) => {
+      try {
+        const bstr = evt.target.result;
+        const wb = XLSX.read(bstr, { type: 'binary' });
+        const wsname = wb.SheetNames[0];
+        const ws = wb.Sheets[wsname];
+        const data = XLSX.utils.sheet_to_json(ws);
+
+        if (!data || data.length === 0) {
+          return showAlert('error', 'The uploaded Excel file contains no data rows.');
+        }
+
+        let successCount = 0;
+        let errorCount = 0;
+        const defaultStg = stages[0]?.id || 'New Lead';
+        const defaultSrc = sources[0] || 'Website';
+
+        for (const row of data) {
+          try {
+            const contactName = row['Client Name'] || row['Contact Name'] || row.contact_name || row.Name || row.name || 'Imported Lead';
+            const titleVal = row['Lead Title / Opportunity'] || row['Title'] || row.title || row.Opportunity || `Opportunity - ${contactName}`;
+            const phoneVal = row['Phone Number'] || row['Phone'] || row['WhatsApp'] || row.phone || row.whatsapp_number || '';
+            const companyVal = row['Business Name'] || row['Company Name'] || row['Company'] || row.company_name || '';
+            const emailVal = row['Email'] || row['Email Address'] || row.email || '';
+            const estVal = row['Estimated Value (PKR)'] || row['Estimated Value'] || row['Value'] || row.estimated_value || 0;
+            const stageVal = row['Pipeline Stage'] || row['Status'] || row['Stage'] || row.status || defaultStg;
+            const sourceVal = row['Source'] || row['Lead Source'] || row.source || defaultSrc;
+            const notesVal = row['Remarks'] || row['Notes'] || row.notes || row.remarks || '';
+            const nextFollowup = row['Next Follow-up'] || row['Next Followup'] || row.next_followup_date || null;
+
+            const payload = {
+              title: String(titleVal),
+              contact_name: String(contactName),
+              company_name: String(companyVal),
+              email: String(emailVal),
+              phone: String(phoneVal),
+              whatsapp_number: String(phoneVal),
+              source: String(sourceVal),
+              status: String(stageVal),
+              estimated_value: parseFloat(estVal) || 0,
+              notes: String(notesVal),
+              next_followup_date: nextFollowup ? new Date(nextFollowup).toISOString().slice(0, 16) : null
+            };
+
+            await axios.post('/api/leads', payload);
+            successCount++;
+          } catch (err) {
+            console.error('Import error for row:', row, err);
+            errorCount++;
+          }
+        }
+
+        showAlert('success', `Excel Import Complete! Successfully imported ${successCount} leads.${errorCount > 0 ? ` (${errorCount} failed)` : ''}`);
+        loadLeads();
+      } catch (err) {
+        console.error('Excel parse error:', err);
+        showAlert('error', 'Failed to parse Excel file. Please ensure it is a valid .xlsx or .xls file.');
+      }
+    };
+    reader.readAsBinaryString(file);
+    e.target.value = '';
+  };
+
   const handleSaveLead = async (e) => {
     e.preventDefault();
     if (!formData.title.trim() || !formData.contact_name.trim()) {
@@ -433,6 +534,13 @@ export default function LeadsManagement() {
           <button className="btn-secondary" onClick={() => setIsSettingsModalOpen(true)}>
             <SettingsIcon size={16} /> Manage Pipeline Settings
           </button>
+          <button className="btn-secondary" onClick={handleExportExcel} title="Export Leads to Excel">
+            <Download size={16} /> Export Excel
+          </button>
+          <label className="btn-secondary" style={{ cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '0.5rem', margin: 0 }} title="Import Leads from Excel">
+            <Upload size={16} /> Import Excel
+            <input type="file" accept=".xlsx, .xls, .csv" onChange={handleImportExcel} style={{ display: 'none' }} />
+          </label>
           <button className="btn-secondary" onClick={loadLeads} disabled={loading}>
             <RefreshCw size={16} className={loading ? 'spin-icon' : ''} /> Refresh
           </button>
