@@ -1140,7 +1140,7 @@ router.post('/:id/approve', async (req, res) => {
 
 // Reassign a completed step with a new deadline
 router.post('/:id/steps/:step_id/reassign', upload.array('attachments', 10), async (req, res) => {
-  const { new_deadline, user_id, todos } = req.body;
+  const { new_deadline, user_id, todos, assignee_id } = req.body;
   if (!new_deadline) {
     return res.status(400).json({ error: 'New deadline is required for reassignment.' });
   }
@@ -1166,10 +1166,13 @@ router.post('/:id/steps/:step_id/reassign', upload.array('attachments', 10), asy
       finalTodosJSON = JSON.stringify(finalTodos);
     }
 
-    // Reset step to In Progress, update deadline, reset acceptance
+    const targetAssigneeId = assignee_id ? parseInt(assignee_id) : step.assignee_id;
+
+    // Reset step to Pending, update assignee and deadline, reset acceptance
     await connection.query(
       `UPDATE project_steps 
        SET status = 'Pending', 
+           assignee_id = ?,
            deadline = ?, 
            deadline_status = 'Pending Acceptance', 
            completed_at = NULL,
@@ -1179,8 +1182,12 @@ router.post('/:id/steps/:step_id/reassign', upload.array('attachments', 10), asy
            appealed_at = NULL,
            reassign_todos = ?
        WHERE id = ?`,
-      [new_deadline, finalTodosJSON, step.id]
+      [targetAssigneeId, new_deadline, finalTodosJSON, step.id]
     );
+
+    // Fetch project title for notifications
+    const [[project]] = await connection.query('SELECT title FROM projects WHERE id = ?', [req.params.id]);
+    const projectTitle = project?.title || 'Project';
 
     // Insert activity log
     await connection.query(
@@ -1189,6 +1196,31 @@ router.post('/:id/steps/:step_id/reassign', upload.array('attachments', 10), asy
     );
 
     await connection.commit();
+
+    // Dispatch notifications to assigned team member
+    if (targetAssigneeId) {
+      const formattedDeadline = new Date(new_deadline).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+      const notifMsg = `⚡ [Task Reassigned] You have been assigned step "${step.title}" in project "${projectTitle}" with new deadline: ${formattedDeadline}.`;
+      
+      // 1. Portal Notification
+      try {
+        await db.query(
+          'INSERT INTO notifications (user_id, message, type, link) VALUES (?, ?, ?, ?)',
+          [targetAssigneeId, notifMsg, 'task_reassigned', `/production`]
+        );
+      } catch (e) {
+        console.error('Failed to insert portal notification for reassignment:', e);
+      }
+
+      // 2. WhatsApp Notification
+      try {
+        const waMsg = `📌 *Task Reassigned*\n\nHello! The task *"${step.title}"* for project *"${projectTitle}"* has been reassigned to you.\n\n📅 *New Deadline:* ${formattedDeadline}\n\nPlease check your production portal to review details.`;
+        await notifyUserWhatsApp(targetAssigneeId, waMsg);
+      } catch (e) {
+        console.error('Failed to send WhatsApp notification for reassignment:', e);
+      }
+    }
+
     res.json({ message: 'Step reassigned successfully.' });
   } catch (error) {
     await connection.rollback();
@@ -1200,7 +1232,7 @@ router.post('/:id/steps/:step_id/reassign', upload.array('attachments', 10), asy
 
 // Reject and Reassign a step with feedback
 router.post('/:id/steps/:step_id/reject', upload.array('attachments', 10), async (req, res) => {
-  const { new_deadline, user_id, todos } = req.body;
+  const { new_deadline, user_id, todos, assignee_id } = req.body;
   if (!new_deadline) {
     return res.status(400).json({ error: 'New deadline is required to reject and reassign.' });
   }
@@ -1224,10 +1256,13 @@ router.post('/:id/steps/:step_id/reject', upload.array('attachments', 10), async
       });
       finalTodosJSON = JSON.stringify(finalTodos);
     }
+
+    const targetAssigneeId = assignee_id ? parseInt(assignee_id) : step.assignee_id;
     
     await connection.query(
       `UPDATE project_steps 
        SET status = 'Pending', 
+           assignee_id = ?,
            deadline = ?, 
            deadline_status = 'Pending Acceptance', 
            completed_at = NULL,
@@ -1236,8 +1271,12 @@ router.post('/:id/steps/:step_id/reject', upload.array('attachments', 10), async
            deliverable_url = NULL,
            reject_todos = ?
        WHERE id = ?`,
-      [new_deadline, finalTodosJSON, step.id]
+      [targetAssigneeId, new_deadline, finalTodosJSON, step.id]
     );
+
+    // Fetch project title for notifications
+    const [[project]] = await connection.query('SELECT title FROM projects WHERE id = ?', [req.params.id]);
+    const projectTitle = project?.title || 'Project';
 
     // Add activity log
     await connection.query(
@@ -1246,6 +1285,31 @@ router.post('/:id/steps/:step_id/reject', upload.array('attachments', 10), async
     );
 
     await connection.commit();
+
+    // Dispatch notifications to assigned team member
+    if (targetAssigneeId) {
+      const formattedDeadline = new Date(new_deadline).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+      const notifMsg = `⚡ [Task Revision Requested] Step "${step.title}" in project "${projectTitle}" requires revision. New deadline: ${formattedDeadline}.`;
+      
+      // 1. Portal Notification
+      try {
+        await db.query(
+          'INSERT INTO notifications (user_id, message, type, link) VALUES (?, ?, ?, ?)',
+          [targetAssigneeId, notifMsg, 'step_rejected', `/production`]
+        );
+      } catch (e) {
+        console.error('Failed to insert portal notification for step rejection:', e);
+      }
+
+      // 2. WhatsApp Notification
+      try {
+        const waMsg = `⚠️ *Task Revision Requested*\n\nHello! The task *"${step.title}"* for project *"${projectTitle}"* has been rejected with feedback and reassigned to you.\n\n📅 *New Deadline:* ${formattedDeadline}\n\nPlease check your production portal to review feedback.`;
+        await notifyUserWhatsApp(targetAssigneeId, waMsg);
+      } catch (e) {
+        console.error('Failed to send WhatsApp notification for step rejection:', e);
+      }
+    }
+
     res.json({ message: 'Step rejected and reassigned successfully.' });
   } catch (error) {
     await connection.rollback();

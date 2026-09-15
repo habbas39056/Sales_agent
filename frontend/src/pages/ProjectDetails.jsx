@@ -56,12 +56,15 @@ export default function ProjectDetails() {
   const [isReassignModalOpen, setIsReassignModalOpen] = useState(false);
   const [stepToReassign, setStepToReassign] = useState(null);
   const [newDeadline, setNewDeadline] = useState('');
+  const [reassignAssigneeId, setReassignAssigneeId] = useState('');
   const [reassignTodos, setReassignTodos] = useState([{ id: Date.now(), text: '', file: null }]);
+  const [specialists, setSpecialists] = useState([]);
 
   // Reject Modal State
   const [isRejectModalOpen, setIsRejectModalOpen] = useState(false);
   const [stepToReject, setStepToReject] = useState(null);
   const [rejectDeadline, setRejectDeadline] = useState('');
+  const [rejectAssigneeId, setRejectAssigneeId] = useState('');
   const [rejectTodos, setRejectTodos] = useState([{ id: Date.now(), text: '', file: null }]);
 
   // Submit Deliverable Modal State
@@ -84,6 +87,9 @@ export default function ProjectDetails() {
   useEffect(() => {
     fetchProjectDetails();
     fetchClientReviews();
+    axios.get('/api/users/specialists')
+      .then(res => setSpecialists(res.data))
+      .catch(err => console.error('Failed to fetch specialists:', err));
     if (currentUser) {
       axios.put(`/api/notifications/read-project/${id}`, { user_id: currentUser.id })
         .catch(err => console.error('Failed to mark notifications as read', err));
@@ -275,6 +281,7 @@ export default function ProjectDetails() {
     const formData = new FormData();
     formData.append('new_deadline', newDeadline);
     formData.append('user_id', currentUser ? currentUser.id : '');
+    formData.append('assignee_id', reassignAssigneeId || '');
 
     let fileIndex = 0;
     reassignTodos.forEach(todo => {
@@ -324,6 +331,7 @@ export default function ProjectDetails() {
     const formData = new FormData();
     formData.append('new_deadline', rejectDeadline);
     formData.append('user_id', currentUser ? currentUser.id : '');
+    formData.append('assignee_id', rejectAssigneeId || '');
 
     let fileIndex = 0;
     rejectTodos.forEach(todo => {
@@ -811,6 +819,8 @@ export default function ProjectDetails() {
                                 onClick={(e) => {
                                   e.stopPropagation();
                                   setStepToReject(step);
+                                  setRejectAssigneeId(step.assignee_id ? String(step.assignee_id) : '');
+                                  setRejectDeadline(step.deadline ? step.deadline.split('T')[0] : '');
                                   setIsRejectModalOpen(true);
                                 }}
                                 style={{ padding: '0.4rem 0.75rem', borderRadius: '6px', border: '1px solid #ef4444', backgroundColor: '#fef2f2', color: '#ef4444', fontWeight: '600', cursor: 'pointer' }}
@@ -904,6 +914,8 @@ export default function ProjectDetails() {
                               onClick={(e) => {
                                 e.stopPropagation();
                                 setStepToReassign(step);
+                                setReassignAssigneeId(step.assignee_id ? String(step.assignee_id) : '');
+                                setNewDeadline(step.deadline ? step.deadline.split('T')[0] : '');
                                 setIsReassignModalOpen(true);
                               }}
                               style={{
@@ -1459,6 +1471,24 @@ export default function ProjectDetails() {
 
               <div className="form-group" style={{ marginBottom: '1rem' }}>
                 <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: '600' }}>
+                  Assigned Team Member (Production)
+                </label>
+                <select
+                  value={rejectAssigneeId}
+                  onChange={(e) => setRejectAssigneeId(e.target.value)}
+                  style={{ width: '100%', padding: '0.6rem', borderRadius: '6px', border: '1px solid #cbd5e1', backgroundColor: '#ffffff' }}
+                >
+                  <option value="">Select Team Member</option>
+                  {specialists.map(u => (
+                    <option key={u.id} value={u.id}>
+                      {u.full_name || u.name} ({u.role})
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="form-group" style={{ marginBottom: '1rem' }}>
+                <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: '600' }}>
                   New Deadline for "{stepToReject.title}"
                 </label>
                 <input 
@@ -1585,6 +1615,24 @@ export default function ProjectDetails() {
                     <strong>Submitted Deliverable:</strong> {stepToReassign.deliverable_name || stepToReassign.deliverable_url}
                   </div>
                 )}
+              </div>
+
+              <div className="form-group" style={{ marginBottom: '1rem' }}>
+                <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: '600' }}>
+                  Assigned Team Member (Production)
+                </label>
+                <select
+                  value={reassignAssigneeId}
+                  onChange={(e) => setReassignAssigneeId(e.target.value)}
+                  style={{ width: '100%', padding: '0.6rem', borderRadius: '6px', border: '1px solid #cbd5e1', backgroundColor: '#ffffff' }}
+                >
+                  <option value="">Select Team Member</option>
+                  {specialists.map(u => (
+                    <option key={u.id} value={u.id}>
+                      {u.full_name || u.name} ({u.role})
+                    </option>
+                  ))}
+                </select>
               </div>
 
               <div className="form-group" style={{ marginBottom: '1rem' }}>
