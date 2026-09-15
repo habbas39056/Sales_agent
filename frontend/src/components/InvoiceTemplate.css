@@ -1,0 +1,323 @@
+/* Professional Modern Invoice Template matching POS / ERP standard */
+.inv-tpl-container {
+  background-color: #ffffff;
+  color: #0f172a;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  padding: 2.5rem;
+  box-sizing: border-box;
+  max-width: 850px;
+  margin: 0 auto;
+  position: relative;
+}
+
+/* Header Section */
+.inv-tpl-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 1.25rem;
+}
+
+.inv-tpl-title {
+  font-size: 1.85rem;
+  font-weight: 800;
+  letter-spacing: -0.5px;
+  color: #0f172a;
+  margin: 0 0 0.2rem 0;
+  text-transform: uppercase;
+}
+
+.inv-tpl-number {
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: #2563eb;
+  margin-bottom: 0.35rem;
+}
+
+.inv-tpl-status {
+  font-size: 0.85rem;
+  font-weight: 700;
+  letter-spacing: 0.3px;
+  text-transform: uppercase;
+}
+
+.inv-tpl-status.paid {
+  color: #16a34a;
+}
+
+.inv-tpl-status.unpaid,
+.inv-tpl-status.overdue {
+  color: #dc2626;
+}
+
+.inv-tpl-status.partial {
+  color: #d97706;
+}
+
+.inv-tpl-company-info {
+  text-align: right;
+  max-width: 340px;
+}
+
+.inv-tpl-logo {
+  max-width: 170px;
+  max-height: 55px;
+  object-fit: contain;
+  margin-bottom: 0.5rem;
+  display: inline-block;
+}
+
+.inv-tpl-company-name {
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: #1e293b;
+  margin-bottom: 0.2rem;
+}
+
+.inv-tpl-company-address {
+  font-size: 0.8rem;
+  color: #64748b;
+  line-height: 1.45;
+}
+
+/* Divider */
+.inv-tpl-divider {
+  border: 0;
+  border-top: 1px solid #e2e8f0;
+  margin: 1.25rem 0 1.5rem 0;
+}
+
+/* Details Grid: Billed To & Invoice Details */
+.inv-tpl-meta-grid {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 2rem;
+  margin-bottom: 1.75rem;
+}
+
+.inv-tpl-meta-col {
+  flex: 1;
+}
+
+.inv-tpl-section-label {
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: #94a3b8;
+  letter-spacing: 0.6px;
+  text-transform: uppercase;
+  margin-bottom: 0.4rem;
+}
+
+.inv-tpl-client-name {
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: #0f172a;
+  margin-bottom: 0.15rem;
+}
+
+.inv-tpl-client-business {
+  font-size: 0.88rem;
+  font-weight: 600;
+  color: #475569;
+  margin-bottom: 0.35rem;
+}
+
+.inv-tpl-client-detail {
+  font-size: 0.82rem;
+  color: #64748b;
+  line-height: 1.45;
+}
+
+.inv-tpl-details-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-left: auto;
+}
+
+.inv-tpl-details-table td {
+  padding: 0.25rem 0;
+  font-size: 0.85rem;
+}
+
+.inv-tpl-details-table td.label {
+  color: #64748b;
+  text-align: left;
+  padding-right: 1rem;
+}
+
+.inv-tpl-details-table td.value {
+  text-align: right;
+  font-weight: 600;
+  color: #1e293b;
+}
+
+.inv-tpl-details-table tr.amount-due-row td {
+  padding-top: 0.5rem;
+  font-size: 0.95rem;
+}
+
+.inv-tpl-details-table tr.amount-due-row td.label {
+  font-weight: 700;
+  color: #0f172a;
+}
+
+.inv-tpl-details-table tr.amount-due-row td.value {
+  font-weight: 800;
+  font-size: 1.05rem;
+  color: #0f172a;
+}
+
+/* Items Table */
+.inv-tpl-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-bottom: 1.75rem;
+}
+
+.inv-tpl-table th {
+  border-top: 1px solid #e2e8f0;
+  border-bottom: 1px solid #e2e8f0;
+  padding: 0.65rem 0.5rem;
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: #64748b;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  background-color: #ffffff;
+}
+
+.inv-tpl-table th.col-desc { text-align: left; width: 42%; }
+.inv-tpl-table th.col-qty { text-align: center; width: 10%; }
+.inv-tpl-table th.col-price { text-align: right; width: 16%; }
+.inv-tpl-table th.col-disc { text-align: center; width: 8%; }
+.inv-tpl-table th.col-tax { text-align: center; width: 8%; }
+.inv-tpl-table th.col-total { text-align: right; width: 16%; }
+
+.inv-tpl-table td {
+  padding: 0.85rem 0.5rem;
+  border-bottom: 1px solid #f1f5f9;
+  font-size: 0.85rem;
+  color: #1e293b;
+  vertical-align: top;
+}
+
+.inv-tpl-item-title {
+  font-weight: 700;
+  color: #0f172a;
+  margin-bottom: 0.15rem;
+}
+
+.inv-tpl-item-sku {
+  font-size: 0.75rem;
+  color: #94a3b8;
+}
+
+/* Bottom Section: Bank details & Payment summary */
+.inv-tpl-footer-grid {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 2rem;
+  margin-top: 1.25rem;
+}
+
+.inv-tpl-summary-table {
+  width: 100%;
+  max-width: 320px;
+  margin-left: auto;
+  border-collapse: collapse;
+}
+
+.inv-tpl-summary-table td {
+  padding: 0.35rem 0;
+  font-size: 0.88rem;
+}
+
+.inv-tpl-summary-table td.label {
+  color: #64748b;
+  text-align: left;
+}
+
+.inv-tpl-summary-table td.value {
+  text-align: right;
+  font-weight: 700;
+  color: #0f172a;
+}
+
+.inv-tpl-summary-table tr.total-row td {
+  font-size: 0.95rem;
+}
+
+.inv-tpl-summary-table tr.total-row td.label {
+  font-weight: 700;
+  color: #0f172a;
+}
+
+.inv-tpl-summary-table tr.paid-row td.value {
+  color: #16a34a;
+}
+
+.inv-tpl-summary-table tr.balance-row td {
+  padding-top: 0.5rem;
+  border-top: 1px dashed #cbd5e1;
+  font-size: 1rem;
+}
+
+.inv-tpl-summary-table tr.balance-row td.label {
+  font-weight: 800;
+  color: #0f172a;
+}
+
+.inv-tpl-summary-table tr.balance-row td.value {
+  font-weight: 800;
+}
+
+.inv-tpl-summary-table tr.balance-row.zero td.value {
+  color: #16a34a;
+}
+
+.inv-tpl-summary-table tr.balance-row.due td.value {
+  color: #dc2626;
+}
+
+/* Terms section */
+.inv-tpl-terms-container {
+  margin-top: 3rem;
+  page-break-before: always;
+}
+
+.inv-tpl-terms-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-bottom: 2px solid #0f172a;
+  padding-bottom: 0.75rem;
+  margin-bottom: 1.5rem;
+}
+
+.inv-tpl-terms-title {
+  font-size: 1.15rem;
+  font-weight: 700;
+  color: #0f172a;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin: 0;
+}
+
+.inv-tpl-terms-content {
+  font-size: 0.85rem;
+  color: #334155;
+  line-height: 1.7;
+  white-space: pre-wrap;
+}
+
+/* Print Specific Rules */
+@media print {
+  .inv-tpl-container {
+    padding: 0 !important;
+    max-width: 100% !important;
+    width: 100% !important;
+    box-shadow: none !important;
+  }
+}

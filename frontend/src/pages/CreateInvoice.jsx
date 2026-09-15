@@ -5,6 +5,7 @@ import { Plus, Trash2, ArrowLeft, Printer, Edit } from 'lucide-react';
 import Select from 'react-select';
 import CreatableSelect from 'react-select/creatable';
 import TermsTemplateSelector from '../components/TermsTemplateSelector';
+import InvoiceTemplate from '../components/InvoiceTemplate';
 import './InvoiceManagement.css'; // Reuse existing styles
 
 export default function CreateInvoice() {
@@ -893,100 +894,25 @@ export default function CreateInvoice() {
           if (totalPaid >= invoiceTotal && invoiceTotal > 0) invoiceStatus = 'PAID';
           else if (formData.due_date && new Date(formData.due_date) < new Date() && totalPaid < invoiceTotal) invoiceStatus = 'OVERDUE';
 
-          return (
-            <div className={`invoice-document ${invoiceStatus === 'PAID' ? 'is-paid' : 'is-unpaid'}`} id="printable-invoice" style={{ padding: '2rem', fontFamily: 'Arial, sans-serif' }}>
-              
-              <div className="invoice-stamp">
-                {invoiceStatus}
-              </div>
-              
-              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '2rem' }}>
-                <div style={{ flex: 1 }}>
-                  <div style={{ marginBottom: '1.5rem' }}>
-                    <img src="/logo.webp" alt="Adwise Labs Logo" style={{ maxWidth: '220px', height: 'auto', display: 'block' }} />
-                  </div>
-                  <h2 style={{ fontSize: '1.2rem', marginBottom: '1.5rem' }}>Invoice {formData.invoice_number}</h2>
-                  
-                  <div style={{ fontSize: '0.9rem', lineHeight: '1.5' }}>
-                    <div style={{ fontWeight: 'bold', marginBottom: '0.25rem' }}>Invoice To,</div>
-                    <div>{selectedClient.full_name || 'Select Client'}</div>
-                    {selectedClient.business_name && <div>{selectedClient.business_name}</div>}
-                    {selectedClient.physical_address && <div style={{ maxWidth: '250px' }}>{selectedClient.physical_address}</div>}
-                    <div>{selectedClient.email || ''}</div>
-                  </div>
-                </div>
-                
-                <div style={{ flex: 1, textAlign: 'right', fontSize: '0.9rem', lineHeight: '1.5' }}>
-                  <div style={{ fontWeight: 'bold', marginBottom: '1rem' }}>Date: {formData.issue_date ? new Date(formData.issue_date).toLocaleDateString() : ''}</div>
-                  <div style={{ letterSpacing: '2px', marginBottom: '1rem' }}>******************************</div>
-                  
-                  <div style={{ fontWeight: 'bold' }}>Account Title: Adwise labs</div>
-                  <div style={{ fontWeight: 'bold' }}>Bank Al Falah</div>
-                  <div style={{ fontWeight: 'bold' }}>Account Number: 56395002519988</div>
-                  <div style={{ fontWeight: 'bold' }}>info@adwiselabs.com</div>
-                  <div style={{ fontWeight: 'bold' }}>www.adwiselabs.com</div>
-                </div>
-              </div>
+          const invData = {
+            invoice_number: formData.invoice_number,
+            status: invoiceStatus,
+            issue_date: formData.issue_date,
+            due_date: formData.due_date,
+            client_name: selectedClient.full_name,
+            business_name: selectedClient.business_name,
+            physical_address: selectedClient.physical_address,
+            client_email: selectedClient.email,
+            client_phone: selectedClient.whatsapp_number,
+            items: formData.items,
+            amount: invoiceTotal,
+            subtotal: calculateTotal(),
+            totalPaid: totalPaid,
+            balance: remainingBalance,
+            terms_and_conditions: formData.terms_and_conditions
+          };
 
-              <table className="invoice-table" style={{ border: '1px solid #000', marginBottom: '2rem', width: '100%', borderCollapse: 'collapse' }}>
-                <thead>
-                  <tr>
-                    <th style={{ border: '1px solid #000', padding: '0.75rem 1rem', textAlign: 'left', backgroundColor: 'transparent', color: '#000', fontWeight: 'bold' }}>Description</th>
-                    <th style={{ border: '1px solid #000', padding: '0.75rem 1rem', textAlign: 'center', backgroundColor: 'transparent', color: '#000', fontWeight: 'bold' }}>Qty</th>
-                    <th style={{ border: '1px solid #000', padding: '0.75rem 1rem', textAlign: 'center', backgroundColor: 'transparent', color: '#000', fontWeight: 'bold' }}>Rate</th>
-                    <th style={{ border: '1px solid #000', padding: '0.75rem 1rem', textAlign: 'right', backgroundColor: 'transparent', color: '#000', fontWeight: 'bold' }}>Amount</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {formData.items.map((item, idx) => (
-                    <tr key={idx}>
-                      <td style={{ border: '1px solid #000', padding: '0.75rem 1rem' }}>
-                        <div>{item.description}</div>
-                        {item.details && <div style={{ fontSize: '0.85rem', color: '#475569', marginTop: '0.25rem', whiteSpace: 'pre-wrap' }}>{item.details}</div>}
-                      </td>
-                      <td style={{ border: '1px solid #000', padding: '0.75rem 1rem', textAlign: 'center' }}>{item.quantity} {item.unit}</td>
-                      <td style={{ border: '1px solid #000', padding: '0.75rem 1rem', textAlign: 'center' }}>PKR {Number(item.unit_price).toFixed(2)}</td>
-                      <td style={{ border: '1px solid #000', padding: '0.75rem 1rem', textAlign: 'right' }}>PKR {(Number(item.quantity) * Number(item.unit_price)).toFixed(2)}</td>
-                    </tr>
-                  ))}
-                  <tr>
-                    <td colSpan="3" style={{ border: '1px solid #000', padding: '0.75rem 1rem', textAlign: 'right', fontWeight: 'bold' }}>Sub Total</td>
-                    <td style={{ border: '1px solid #000', padding: '0.75rem 1rem', textAlign: 'right', fontWeight: 'bold' }}>PKR {calculateTotal().toFixed(2)}</td>
-                  </tr>
-                  <tr>
-                    <td colSpan="3" style={{ border: '1px solid #000', padding: '0.75rem 1rem', textAlign: 'right', fontWeight: 'bold' }}>Total Paid</td>
-                    <td style={{ border: '1px solid #000', padding: '0.75rem 1rem', textAlign: 'right', fontWeight: 'bold' }}>PKR {totalPaid.toFixed(2)}</td>
-                  </tr>
-                  <tr>
-                    <td colSpan="3" style={{ border: '1px solid #000', padding: '0.75rem 1rem', textAlign: 'right', fontWeight: 'bold' }}>Total Amount Receivable</td>
-                    <td style={{ border: '1px solid #000', padding: '0.75rem 1rem', textAlign: 'right', fontWeight: 'bold' }}>PKR {remainingBalance.toFixed(2)}</td>
-                  </tr>
-                </tbody>
-              </table>
-
-              <div style={{ textAlign: 'center', color: '#0369a1', fontSize: '0.9rem', fontWeight: 'bold', lineHeight: '1.6', marginTop: '3rem' }}>
-                <div style={{ marginBottom: '0.5rem' }}>Prompt Payments are Appreciated!</div>
-                <div style={{ marginBottom: '0.5rem' }}>Thank You</div>
-                <div style={{ marginBottom: '0.5rem' }}>Accounts Department – Adwise Labs</div>
-                <div style={{ color: '#000', fontSize: '0.8rem' }}>ADWISE LABS | A-205/II Saba Ave, DHA Karachi Phase VIII Zone A, 76500</div>
-                <div style={{ color: '#000', fontSize: '0.8rem', fontWeight: 'normal' }}>Contact No. +1 (774) 674-1872 | +92 329 2371279 | Email: info@adwiselabs.com</div>
-              </div>
-
-              {/* SEPARATE PAGE: TERMS & CONDITIONS */}
-              {formData.terms_and_conditions && (
-                <div className="terms-page-break">
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem', borderBottom: '2px solid #0f172a', paddingBottom: '1rem' }}>
-                    <img src="/logo.webp" alt="Adwise Labs Logo" style={{ maxWidth: '180px', height: 'auto' }} />
-                    <h2 style={{ fontSize: '1.3rem', color: '#0f172a', margin: 0, textTransform: 'uppercase', letterSpacing: '1px' }}>Terms & Conditions</h2>
-                  </div>
-                  
-                  <div style={{ fontSize: '0.92rem', color: '#334155', lineHeight: '1.8', whiteSpace: 'pre-wrap' }}>
-                    {formData.terms_and_conditions}
-                  </div>
-                </div>
-              )}
-            </div>
-          );
+          return <InvoiceTemplate invoice={invData} />;
         })()}
       </div>
     </div>
