@@ -3,6 +3,7 @@ import axios from 'axios';
 import { useNavigate, useParams } from 'react-router-dom';
 import { Plus, Trash2, ArrowLeft, Printer, Edit } from 'lucide-react';
 import Select from 'react-select';
+import CreatableSelect from 'react-select/creatable';
 import TermsTemplateSelector from '../components/TermsTemplateSelector';
 import './InvoiceManagement.css'; // Reuse existing styles
 
@@ -442,82 +443,12 @@ export default function CreateInvoice() {
             </div>
           </div>
 
-          {/* ITEM TEMPLATE SELECTOR BAR */}
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '1rem', marginBottom: '1.25rem', background: '#f8fafc', padding: '0.85rem 1.25rem', borderRadius: '8px', border: '1px solid #e2e8f0' }} className="print-hide">
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flex: 1, maxWidth: '650px' }}>
-              <label style={{ fontWeight: '700', fontSize: '0.85rem', color: '#0f172a', whiteSpace: 'nowrap', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-                📦 Select Item Template:
-              </label>
-              <div style={{ flex: 1 }}>
-                <Select
-                  options={(products || []).map(p => ({
-                    value: p.id,
-                    label: `(${Number(p.default_price || 0).toLocaleString('en-PK', { minimumFractionDigits: 2 })}) ${p.name}${p.description ? ` - ${p.description.slice(0, 50)}...` : ''}`,
-                    product: p
-                  }))}
-                  onChange={(selectedOption) => {
-                    if (selectedOption?.product) {
-                      addProductFromCatalog(selectedOption.product);
-                    }
-                  }}
-                  placeholder="Select item template to auto-insert..."
-                  isSearchable={true}
-                  isClearable={true}
-                  styles={{
-                    control: (base) => ({
-                      ...base,
-                      borderColor: '#cbd5e1',
-                      fontSize: '0.85rem',
-                      fontWeight: '600',
-                      backgroundColor: '#ffffff'
-                    }),
-                    menu: (base) => ({
-                      ...base,
-                      zIndex: 9999
-                    })
-                  }}
-                />
-              </div>
-            </div>
-
-            <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
-              <button
-                type="button"
-                onClick={addItem}
-                className="btn-purple"
-                style={{ padding: '0.45rem 0.85rem', fontSize: '0.8rem', gap: '0.35rem' }}
-              >
-                <Plus size={14} /> Add Blank Row
-              </button>
-              <a
-                href="/items"
-                target="_blank"
-                rel="noreferrer"
-                style={{
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  gap: '0.35rem',
-                  padding: '0.45rem 0.85rem',
-                  fontSize: '0.8rem',
-                  fontWeight: '700',
-                  color: '#0284c7',
-                  background: '#e0f2fe',
-                  border: '1px solid #bae6fd',
-                  borderRadius: '6px',
-                  textDecoration: 'none'
-                }}
-              >
-                ⚙️ Items Catalog
-              </a>
-            </div>
-          </div>
-
           {/* TABLE */}
           <table className="invoice-table-modern">
             <thead>
               <tr>
                 <th style={{ width: '40px' }}>#</th>
-                <th style={{ width: '30%' }}>ITEM</th>
+                <th style={{ width: '38%' }}>ITEM</th>
                 <th style={{ width: '15%' }}>CATEGORY</th>
                 <th style={{ width: '8%', textAlign: 'center' }}>QTY</th>
                 <th style={{ width: '15%', textAlign: 'center' }}>RATE</th>
@@ -539,14 +470,57 @@ export default function CreateInvoice() {
                 <tr key={index}>
                   <td style={{ color: '#94a3b8', fontWeight: 'bold' }}>{index + 1}</td>
                   <td>
-                    <input 
-                      type="text" 
-                      placeholder="Item name" 
-                      value={item.description} 
-                      onChange={(e) => updateItem(index, 'description', e.target.value)} 
-                      required 
-                      className="border-bottom"
-                      style={{ fontWeight: '600', color: '#1e293b', fontSize: '0.95rem', marginBottom: '0.5rem' }}
+                    <CreatableSelect
+                      isClearable
+                      isSearchable
+                      placeholder="Search item catalog or type name..."
+                      value={item.description ? { label: item.description, value: item.description } : null}
+                      options={(products || []).map(p => ({
+                        label: `(${Number(p.default_price || 0).toLocaleString('en-PK', { minimumFractionDigits: 2 })}) ${p.name}`,
+                        value: p.name,
+                        product: p
+                      }))}
+                      onChange={(selectedOption) => {
+                        if (selectedOption?.product) {
+                          const p = selectedOption.product;
+                          const newItems = [...formData.items];
+                          newItems[index] = {
+                            ...newItems[index],
+                            description: p.name,
+                            details: p.description || newItems[index].details || '',
+                            unit_price: Number(p.default_price || 0),
+                            unit: p.unit || newItems[index].unit || '',
+                            category: p.group_name || newItems[index].category || 'SERVICE'
+                          };
+                          setFormData({ ...formData, items: newItems });
+                        } else if (selectedOption) {
+                          updateItem(index, 'description', selectedOption.value || selectedOption.label);
+                        } else {
+                          updateItem(index, 'description', '');
+                        }
+                      }}
+                      onCreateOption={(inputValue) => {
+                        updateItem(index, 'description', inputValue);
+                      }}
+                      formatCreateLabel={(inputValue) => `✍️ Use "${inputValue}"`}
+                      styles={{
+                        control: (base) => ({
+                          ...base,
+                          borderColor: '#e2e8f0',
+                          minHeight: '36px',
+                          fontSize: '0.88rem',
+                          fontWeight: '600',
+                          marginBottom: '0.4rem',
+                          backgroundColor: '#ffffff',
+                          borderRadius: '6px',
+                          boxShadow: 'none',
+                          '&:hover': { borderColor: '#cbd5e1' }
+                        }),
+                        menu: (base) => ({
+                          ...base,
+                          zIndex: 9999
+                        })
+                      }}
                     />
                     <textarea 
                       placeholder="Add detailed product description..." 
@@ -635,6 +609,38 @@ export default function CreateInvoice() {
               ))}
             </tbody>
           </table>
+
+          {/* ITEM ACTIONS BAR BELOW TABLE */}
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '0.75rem', marginBottom: '1.5rem' }} className="print-hide">
+            <button
+              type="button"
+              onClick={addItem}
+              className="btn-purple"
+              style={{ padding: '0.45rem 1rem', fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: '0.4rem', fontWeight: '700' }}
+            >
+              <Plus size={15} /> Add Line Item
+            </button>
+            <a
+              href="/items"
+              target="_blank"
+              rel="noreferrer"
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '0.35rem',
+                padding: '0.45rem 0.85rem',
+                fontSize: '0.8rem',
+                fontWeight: '700',
+                color: '#0284c7',
+                background: '#e0f2fe',
+                border: '1px solid #bae6fd',
+                borderRadius: '6px',
+                textDecoration: 'none'
+              }}
+            >
+              ⚙️ Items Catalog
+            </a>
+          </div>
 
           {/* TOTALS */}
           <div className="totals-section">
