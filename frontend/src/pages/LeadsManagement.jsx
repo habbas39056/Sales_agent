@@ -654,48 +654,63 @@ export default function LeadsManagement() {
               </tr>
             </thead>
             <tbody>
-              {leads.map(lead => (
-                <tr key={lead.id}>
-                  <td>
-                    <div className="lead-cell-title">
-                      <strong onClick={() => openLeadActivities(lead.id)} className="clickable-lead">
-                        {lead.title}
-                      </strong>
-                      <span className="lead-number-sub">{lead.lead_number || `#${lead.id}`}</span>
-                    </div>
-                  </td>
+              {leads.map(lead => {
+                const matchedStage = stages.find(s => s.id === lead.status) || { color: '#3b82f6', bg: '#eff6ff' };
+                return (
+                  <tr 
+                    key={lead.id}
+                    className="stage-colored-row"
+                    style={{
+                      backgroundColor: matchedStage.bg || '#ffffff',
+                      borderLeft: `5px solid ${matchedStage.color || '#cbd5e1'}`
+                    }}
+                  >
+                    <td>
+                      <div className="lead-cell-title">
+                        <strong onClick={() => openLeadActivities(lead.id)} className="clickable-lead">
+                          {lead.title}
+                        </strong>
+                        <span className="lead-number-sub">{lead.lead_number || `#${lead.id}`}</span>
+                      </div>
+                    </td>
 
-                  <td>
-                    <div className="contact-cell">
-                      <span><strong>{lead.contact_name}</strong></span>
-                      {lead.company_name && <span className="text-sub"><Building size={12} /> {lead.company_name}</span>}
-                      {(lead.phone || lead.whatsapp_number) && <span className="text-sub"><Phone size={12} /> {lead.phone || lead.whatsapp_number}</span>}
-                      {lead.email && <span className="text-sub"><Mail size={12} /> {lead.email}</span>}
-                    </div>
-                  </td>
+                    <td>
+                      <div className="contact-cell">
+                        <span><strong>{lead.contact_name}</strong></span>
+                        {lead.company_name && <span className="text-sub"><Building size={12} /> {lead.company_name}</span>}
+                        {(lead.phone || lead.whatsapp_number) && <span className="text-sub"><Phone size={12} /> {lead.phone || lead.whatsapp_number}</span>}
+                        {lead.email && <span className="text-sub"><Mail size={12} /> {lead.email}</span>}
+                      </div>
+                    </td>
 
-                  <td>
-                    <div className="source-cell">
-                      <span className="source-pill">{lead.source}</span>
-                      {lead.category_name && <span className="cat-pill">{lead.category_name}</span>}
-                    </div>
-                  </td>
+                    <td>
+                      <div className="source-cell">
+                        <span className="source-pill">{lead.source}</span>
+                        {lead.category_name && <span className="cat-pill">{lead.category_name}</span>}
+                      </div>
+                    </td>
 
-                  <td>
-                    <strong className="deal-value-text">{formatCurrency(lead.estimated_value)}</strong>
-                  </td>
+                    <td>
+                      <strong className="deal-value-text">{formatCurrency(lead.estimated_value)}</strong>
+                    </td>
 
-                  <td>
-                    <select 
-                      className="stage-select-dropdown"
-                      value={lead.status}
-                      onChange={(e) => handleQuickStatusChange(lead.id, e.target.value)}
-                    >
-                      {stages.map(s => (
-                        <option key={s.id} value={s.id}>{s.name}</option>
-                      ))}
-                    </select>
-                  </td>
+                    <td>
+                      <select 
+                        className="stage-select-dropdown"
+                        style={{
+                          color: matchedStage.color,
+                          borderColor: matchedStage.color,
+                          backgroundColor: '#ffffff',
+                          fontWeight: 700
+                        }}
+                        value={lead.status}
+                        onChange={(e) => handleQuickStatusChange(lead.id, e.target.value)}
+                      >
+                        {stages.map(s => (
+                          <option key={s.id} value={s.id}>{s.name}</option>
+                        ))}
+                      </select>
+                    </td>
 
                   <td>
                     {lead.next_followup_date ? (
@@ -748,7 +763,8 @@ export default function LeadsManagement() {
                     </div>
                   </td>
                 </tr>
-              ))}
+              );
+            })}
             </tbody>
           </table>
         </div>
