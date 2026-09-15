@@ -627,9 +627,6 @@ export default function LeadsManagement() {
         </div>
 
         <div className="header-actions">
-          <button className="btn-start-lead" onClick={startCallingSession} title="Start daily lead follow-up session">
-            <PhoneCall size={18} /> Start Lead Session
-          </button>
           <button className="btn-secondary" onClick={() => setIsSettingsModalOpen(true)}>
             <SettingsIcon size={16} /> Manage Pipeline Settings
           </button>
@@ -645,6 +642,9 @@ export default function LeadsManagement() {
           </button>
           <button className="btn-primary" onClick={openCreateModal}>
             <Plus size={18} /> Create New Lead
+          </button>
+          <button className="btn-start-lead" onClick={startCallingSession} title="Start daily lead follow-up session">
+            <PhoneCall size={18} /> Start Lead Session
           </button>
         </div>
       </div>
