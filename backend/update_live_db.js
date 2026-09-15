@@ -555,7 +555,51 @@ async function updateLiveDb() {
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
     `);
 
-    // 30. future_payables
+    // 30. leads
+    await connection.query(`
+      CREATE TABLE IF NOT EXISTS \`leads\` (
+        \`id\` INT AUTO_INCREMENT PRIMARY KEY,
+        \`lead_number\` VARCHAR(50) UNIQUE NULL,
+        \`title\` VARCHAR(255) NOT NULL,
+        \`contact_name\` VARCHAR(255) NOT NULL,
+        \`company_name\` VARCHAR(255) NULL,
+        \`email\` VARCHAR(255) NULL,
+        \`phone\` VARCHAR(100) NULL,
+        \`whatsapp_number\` VARCHAR(100) NULL,
+        \`source\` VARCHAR(100) DEFAULT 'Website',
+        \`status\` VARCHAR(50) DEFAULT 'New Lead',
+        \`priority\` VARCHAR(50) DEFAULT 'Medium',
+        \`estimated_value\` DECIMAL(12,2) DEFAULT 0.00,
+        \`category_id\` INT NULL,
+        \`assigned_to\` INT NULL,
+        \`client_id\` INT NULL,
+        \`next_followup_date\` DATETIME NULL,
+        \`notes\` TEXT NULL,
+        \`created_by\` INT NULL,
+        \`created_at\` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        \`updated_at\` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        KEY \`assigned_to\` (\`assigned_to\`),
+        KEY \`category_id\` (\`category_id\`),
+        CONSTRAINT \`leads_user_fk\` FOREIGN KEY (\`assigned_to\`) REFERENCES \`users\` (\`id\`) ON DELETE SET NULL
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+    `);
+
+    // 31. lead_activities
+    await connection.query(`
+      CREATE TABLE IF NOT EXISTS \`lead_activities\` (
+        \`id\` INT AUTO_INCREMENT PRIMARY KEY,
+        \`lead_id\` INT NOT NULL,
+        \`user_id\` INT NULL,
+        \`type\` VARCHAR(50) DEFAULT 'Note',
+        \`summary\` TEXT NOT NULL,
+        \`created_at\` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        KEY \`lead_id\` (\`lead_id\`),
+        CONSTRAINT \`lead_act_fk\` FOREIGN KEY (\`lead_id\`) REFERENCES \`leads\` (\`id\`) ON DELETE CASCADE
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+    `);
+    await safeExec("DELETE FROM lead_activities WHERE summary = 'Lead details updated'", "Cleaned up legacy generic lead update notes");
+
+    // 32. future_payables
     await connection.query(`
       CREATE TABLE IF NOT EXISTS \`future_payables\` (
         \`id\` INT AUTO_INCREMENT PRIMARY KEY,

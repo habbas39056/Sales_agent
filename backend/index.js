@@ -40,6 +40,7 @@ app.use('/api/notifications', authMiddleware, require('./routes/notifications'))
 app.use('/api/client-reviews', authMiddleware, require('./routes/client_reviews'));
 app.use('/api/quotations', authMiddleware, require('./routes/quotations'));
 app.use('/api/terms-templates', authMiddleware, require('./routes/terms_templates'));
+app.use('/api/leads', authMiddleware, require('./routes/leads'));
 const { router: futurePayablesRouter, checkAndSendPayableAlerts } = require('./routes/future_payables');
 app.use('/api/future-payables', authMiddleware, futurePayablesRouter);
 

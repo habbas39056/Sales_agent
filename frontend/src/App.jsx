@@ -1,9 +1,10 @@
 import React from 'react';
 import { BrowserRouter as Router, Routes, Route, Link, useLocation, useNavigate, Navigate } from 'react-router-dom';
-import { LayoutDashboard, Users, FileText, PlusCircle, Calendar, Clock, CheckSquare, MessageSquare, RotateCcw, CreditCard, Banknote, LogOut, Shield, Settings as SettingsIcon, CheckCircle2, FolderKanban, TrendingUp, FileSpreadsheet, Package, CheckCircle, Activity, PieChart, ChevronDown, Briefcase } from 'lucide-react';
+import { LayoutDashboard, Users, FileText, PlusCircle, Calendar, Clock, CheckSquare, MessageSquare, RotateCcw, CreditCard, Banknote, LogOut, Shield, Settings as SettingsIcon, CheckCircle2, FolderKanban, TrendingUp, FileSpreadsheet, Package, CheckCircle, Activity, PieChart, ChevronDown, Briefcase, Target } from 'lucide-react';
 import Dashboard from './pages/Dashboard';
 import Login from './pages/Login';
 import ClientsList from './pages/ClientsList';
+import LeadsManagement from './pages/LeadsManagement';
 import ClientProfile from './pages/ClientProfile';
 import InvoiceManagement from './pages/InvoiceManagement';
 import CreateInvoice from './pages/CreateInvoice';
@@ -91,6 +92,7 @@ function AppContent() {
     const path = window.location.pathname;
     return {
       users: path.startsWith('/clients') || path.startsWith('/team'),
+      sales: path.startsWith('/leads'),
       operations: path.startsWith('/projects') || path.startsWith('/tasks') || path.startsWith('/project-management') || path.startsWith('/deadlines'),
       finance: path.startsWith('/invoices') || path.startsWith('/quotations') || path.startsWith('/expenses') || path.startsWith('/commissions') || path.startsWith('/payroll'),
       reports: path.startsWith('/reports')
@@ -102,6 +104,8 @@ function AppContent() {
     const path = location.pathname;
     if (path.startsWith('/clients') || path.startsWith('/team')) {
       setExpandedModules(prev => ({ ...prev, users: true }));
+    } else if (path.startsWith('/leads')) {
+      setExpandedModules(prev => ({ ...prev, sales: true }));
     } else if (path.startsWith('/projects') || path.startsWith('/tasks') || path.startsWith('/project-management') || path.startsWith('/deadlines')) {
       setExpandedModules(prev => ({ ...prev, operations: true }));
     } else if (path.startsWith('/invoices') || path.startsWith('/quotations') || path.startsWith('/expenses') || path.startsWith('/commissions') || path.startsWith('/payroll')) {
@@ -119,6 +123,8 @@ function AppContent() {
   const canAccessClients = !user || user.role === 'Admin' || (user.modules_access && user.modules_access.includes('CLIENTS'));
   const canAccessTeam = !user || user.role === 'Admin' || (user.modules_access && user.modules_access.includes('STAFF MANAGEMENT'));
   const hasUserManagement = canAccessClients || canAccessTeam;
+
+  const canAccessLeads = !user || user.role === 'Admin' || (user.modules_access && (user.modules_access.includes('LEADS') || user.modules_access.includes('SALES')));
 
   const canAccessProjects = !user || user.role === 'Admin' || (user.modules_access && (
     user.modules_access.includes('PROJECTS') || 
@@ -159,6 +165,7 @@ function AppContent() {
 
   // Active module checks
   const isUsersActive = location.pathname.startsWith('/clients') || location.pathname.startsWith('/team');
+  const isSalesActive = location.pathname.startsWith('/leads');
   const isOperationsActive = location.pathname.startsWith('/projects') || location.pathname.startsWith('/tasks') || location.pathname.startsWith('/project-management') || location.pathname.startsWith('/deadlines');
   const isFinanceActive = location.pathname.startsWith('/invoices') || location.pathname.startsWith('/quotations') || location.pathname.startsWith('/expenses') || location.pathname.startsWith('/commissions') || location.pathname.startsWith('/payroll');
   const isReportsActive = location.pathname.startsWith('/reports');
@@ -253,6 +260,39 @@ function AppContent() {
                         </Link>
                       </li>
                     )}
+                  </ul>
+                )}
+              </li>
+            )}
+
+            {/* Sales & Leads Module */}
+            {canAccessLeads && (
+              <li className="module-group">
+                <button 
+                  type="button"
+                  onClick={() => toggleModule('sales')}
+                  className={`module-header-btn ${isSalesActive ? 'is-active' : ''}`}
+                >
+                  <div className="module-header-content">
+                    <Target size={20} />
+                    <span className="module-title">Sales & Leads</span>
+                  </div>
+                  <div className="module-header-right">
+                    {isSalesActive && <div className="module-active-pill" />}
+                    <ChevronDown size={16} className={`module-chevron ${expandedModules.sales ? 'rotated' : ''}`} />
+                  </div>
+                </button>
+                {expandedModules.sales && (
+                  <ul className="submodule-list">
+                    <li>
+                      <Link 
+                        to="/leads" 
+                        className={`submodule-link ${location.pathname === '/leads' ? 'active' : ''}`}
+                      >
+                        <div className="submodule-dot" />
+                        <span>Leads Management</span>
+                      </Link>
+                    </li>
                   </ul>
                 )}
               </li>
@@ -571,6 +611,7 @@ function AppContent() {
             <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
             <Route path="/clients" element={<ProtectedRoute><ClientsList /></ProtectedRoute>} />
             <Route path="/clients/:id" element={<ProtectedRoute><ClientProfile /></ProtectedRoute>} />
+            <Route path="/leads" element={<ProtectedRoute><LeadsManagement /></ProtectedRoute>} />
             <Route path="/team" element={<ProtectedRoute><TeamManagement /></ProtectedRoute>} />
             <Route path="/invoices" element={<ProtectedRoute><InvoiceManagement /></ProtectedRoute>} />
             <Route path="/invoices/new" element={<ProtectedRoute><CreateInvoice /></ProtectedRoute>} />

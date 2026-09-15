@@ -19,8 +19,6 @@ import {
   FileText,
   LayoutDashboard,
   MessageSquare,
-  Send,
-  Users,
   Wifi
 } from 'lucide-react';
 import './Settings.css';
@@ -34,14 +32,12 @@ export default function Settings() {
   // Agent Config State
   const [qrCodeData, setQrCodeData] = useState(null);
   const [testingWhatsApp, setTestingWhatsApp] = useState(false);
-  const [testingGroupMsg, setTestingGroupMsg] = useState(false);
   const [fetchingQr, setFetchingQr] = useState(false);
   const [whatsappStatus, setWhatsappStatus] = useState({
     connected: false,
     state: 'checking',
     instance_name: 'Adwise ERP',
-    api_url: 'https://evolution-evolution-api.o1nqjj.easypanel.host',
-    group_jid: ''
+    api_url: 'https://evolution-evolution-api.o1nqjj.easypanel.host'
   });
 
   // Project Categories State
@@ -278,33 +274,6 @@ export default function Settings() {
       showAlert('error', err.response?.data?.error || 'Failed to fetch QR code');
     } finally {
       setFetchingQr(false);
-    }
-  };
-
-  const handleSaveGroupJid = async () => {
-    setSaving(true);
-    try {
-      await axios.post('/api/settings', { whatsapp_delivery_group_jid: whatsappStatus.group_jid });
-      showAlert('success', 'WhatsApp Delivery Group JID saved successfully!');
-    } catch (err) {
-      showAlert('error', 'Failed to save Group JID');
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const handleTestGroupMessage = async () => {
-    if (!whatsappStatus.group_jid) {
-      return showAlert('error', 'Please enter a WhatsApp Group JID first.');
-    }
-    setTestingGroupMsg(true);
-    try {
-      const res = await axios.post('/api/settings/test-whatsapp', { whatsapp_number: whatsappStatus.group_jid });
-      showAlert('success', res.data?.message || 'Test group message sent successfully!');
-    } catch (err) {
-      showAlert('error', err.response?.data?.error || 'Failed to send test message to group');
-    } finally {
-      setTestingGroupMsg(false);
     }
   };
 
@@ -695,7 +664,7 @@ export default function Settings() {
             <MessageSquare size={24} style={{ color: 'var(--primary-color)' }} />
             <div>
               <h3 className="card-title">WhatsApp & Evolution API Configuration</h3>
-              <p className="card-description">Live integration status, group delivery broadcasts, and Evolution API instance management.</p>
+              <p className="card-description">Live integration status and Evolution API instance management.</p>
             </div>
           </div>
 
@@ -759,81 +728,6 @@ export default function Settings() {
             >
               <RefreshCw size={14} /> Re-check Status
             </button>
-          </div>
-
-          {/* Group Delivery Configuration */}
-          <div style={{
-            padding: '1.25rem',
-            borderRadius: '12px',
-            backgroundColor: '#f8fafc',
-            border: '1px solid #e2e8f0',
-            marginBottom: '1.5rem'
-          }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.75rem' }}>
-              <Users size={18} style={{ color: 'var(--primary-color)' }} />
-              <h4 style={{ margin: 0, fontSize: '1rem', color: '#1e293b' }}>
-                WhatsApp Delivery Broadcast Group (JID)
-              </h4>
-            </div>
-            <p style={{ fontSize: '0.875rem', color: '#64748b', marginBottom: '1rem' }}>
-              When a delivery is submitted via the Production Portal, the official notification template 
-              (<em>"Hi [Client] 👋, [Task] has been delivered on your Client Portal..."</em>) is automatically dispatched to this WhatsApp group.
-            </p>
-
-            <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap', alignItems: 'center' }}>
-              <input 
-                type="text"
-                placeholder="e.g. 1203630248234@g.us or Group Link / JID"
-                value={whatsappStatus.group_jid || ''}
-                onChange={(e) => setWhatsappStatus(prev => ({ ...prev, group_jid: e.target.value }))}
-                style={{
-                  flex: 1,
-                  minWidth: '280px',
-                  padding: '0.75rem 1rem',
-                  borderRadius: '8px',
-                  border: '1px solid #cbd5e1',
-                  fontSize: '0.9rem'
-                }}
-              />
-              <button 
-                type="button"
-                onClick={handleSaveGroupJid}
-                disabled={saving}
-                style={{
-                  padding: '0.75rem 1.25rem',
-                  borderRadius: '8px',
-                  backgroundColor: 'var(--primary-color, #2563eb)',
-                  color: '#fff',
-                  border: 'none',
-                  fontWeight: 600,
-                  cursor: 'pointer',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '0.5rem'
-                }}
-              >
-                <Save size={16} /> Save Group JID
-              </button>
-              <button 
-                type="button"
-                onClick={handleTestGroupMessage}
-                disabled={testingGroupMsg}
-                style={{
-                  padding: '0.75rem 1.25rem',
-                  borderRadius: '8px',
-                  backgroundColor: '#0f172a',
-                  color: '#fff',
-                  border: 'none',
-                  fontWeight: 600,
-                  cursor: 'pointer',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '0.5rem'
-                }}
-              >
-                <Send size={16} /> {testingGroupMsg ? 'Sending...' : 'Test Group Alert'}
-              </button>
-            </div>
           </div>
 
           {/* QR Code Connection Section */}
