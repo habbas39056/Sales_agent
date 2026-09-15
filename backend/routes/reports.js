@@ -3270,6 +3270,229 @@ const handleIncomeVsExpense = async (req, res) => {
 
 router.get('/income-vs-expense', handleIncomeVsExpense);
 
+// GET /api/reports/salesperson-leads
+// Detailed sales performance & lead analytics per salesperson
+router.get('/salesperson-leads', async (req, res) => {
+    try {
+        const { start_date, end_date, agent_id, quick_preset } = req.query;
+
+        let startDate = start_date || '';
+        let endDate = end_date || '';
+
+        if (quick_preset) {
+            const today = new Date();
+            if (quick_preset === 'today') {
+                const dateStr = today.toISOString().split('T')[0];
+                startDate = dateStr;
+                endDate = dateStr;
+            } else if (quick_preset === 'yesterday') {
+                const yest = new Date(today);
+                yest.setDate(yest.getDate() - 1);
+                const dateStr = yest.toISOString().split('T')[0];
+                startDate = dateStr;
+                endDate = dateStr;
+            } else if (quick_preset === 'this_week') {
+                const dayOfWeek = today.getDay(); // 0 is Sunday
+                const diff = today.getDate() - dayOfWeek + (dayOfWeek === 0 ? -6 : 1);
+                const monday = new Date(today);
+                monday.setDate(diff);
+                startDate = monday.toISOString().split('T')[0];
+                endDate = new Date().toISOString().split('T')[0];
+            } else if (quick_preset === 'this_month') {
+                startDate = new Date(today.getFullYear(), today.getMonth(), 1).toISOString().split('T')[0];
+                endDate = new Date(today.getFullYear(), today.getMonth() + 1, 0).toISOString().split('T')[0];
+            } else if (quick_preset === 'last_month') {
+                startDate = new Date(today.getFullYear(), today.getMonth() - 1, 1).toISOString().split('T')[0];
+                endDate = new Date(today.getFullYear(), today.getMonth(), 0).toISOString().split('T')[0];
+            } else if (quick_preset === 'this_year') {
+                startDate = new Date(today.getFullYear(), 0, 1).toISOString().split('T')[0];
+                endDate = new Date(today.getFullYear(), 11, 31).toISOString().split('T')[0];
+            }
+        }
+
+        // 1. Fetch Salespeople (Users with non-Client role)
+        let userQuery = `SELECT id, name, email, role, profile_image_url FROM users WHERE role != 'Client'`;
+        const userParams = [];
+        if (agent_id && agent_id !== 'all') {
+            userQuery += ` AND id = ?`;
+            userParams.push(agent_id);
+        }
+        userQuery += ` ORDER BY name ASC`;
+        const [users] = await db.query(userQuery, userParams);
+
+        // 2. Fetch Leads created/assigned in date range
+        let leadsQuery = `
+            SELECT 
+                l.id, l.lead_number, l.title, l.contact_name, l.company_name, l.email, l.phone, 
+                l.status, l.priority, l.estimated_value, l.assigned_to, l.created_by, l.created_at, l.client_id,
+                u.name as assigned_name
+            FROM leads l
+            LEFT JOIN users u ON l.assigned_to = u.id
+            WHERE 1=1
+        `;
+        const leadsParams = [];
+        if (startDate) {
+            leadsQuery += ` AND DATE(l.created_at) >= ?`;
+            leadsParams.push(startDate);
+        }
+        if (endDate) {
+            leadsQuery += ` AND DATE(l.created_at) <= ?`;
+            leadsParams.push(endDate);
+        }
+        leadsQuery += ` ORDER BY l.created_at DESC`;
+        const [leads] = await db.query(leadsQuery, leadsParams);
+
+        // 3. Fetch Lead Activities / Followups safely
+        let activities = [];
+        try {
+            let actQuery = `
+                SELECT id, lead_id, user_id, created_at, summary
+                FROM lead_activities
+                WHERE 1=1
+            `;
+            const actParams = [];
+            if (startDate) {
+                actQuery += ` AND DATE(created_at) >= ?`;
+                actParams.push(startDate);
+            }
+            if (endDate) {
+                actQuery += ` AND DATE(created_at) <= ?`;
+                actParams.push(endDate);
+            }
+            const [actRows] = await db.query(actQuery, actParams);
+            activities = actRows;
+        } catch (e) {
+            activities = [];
+        }
+
+        // 4. Fetch Quotations created in date range
+        let quotQuery = `
+            SELECT id, quotation_number, client_id, created_by, agent_id, amount, status, created_at, issue_date
+            FROM quotations
+            WHERE 1=1
+        `;
+        const quotParams = [];
+        if (startDate) {
+            quotQuery += ` AND DATE(COALESCE(issue_date, created_at)) >= ?`;
+            quotParams.push(startDate);
+        }
+        if (endDate) {
+            quotQuery += ` AND DATE(COALESCE(issue_date, created_at)) <= ?`;
+            quotParams.push(endDate);
+        }
+        const [quotations] = await db.query(quotQuery, quotParams);
+
+        // 5. Fetch Invoices created in date range
+        let invQuery = `
+            SELECT id, invoice_number, client_id, created_by, agent_id, amount, balance, (amount - balance) as paid_amount, status, created_at, issue_date
+            FROM invoices
+            WHERE 1=1
+        `;
+        const invParams = [];
+        if (startDate) {
+            invQuery += ` AND DATE(COALESCE(issue_date, created_at)) >= ?`;
+            invParams.push(startDate);
+        }
+        if (endDate) {
+            invQuery += ` AND DATE(COALESCE(issue_date, created_at)) <= ?`;
+            invParams.push(endDate);
+        }
+        const [invoices] = await db.query(invQuery, invParams);
+
+        // Map metrics per salesperson
+        const salespeopleReport = users.map(user => {
+            const uid = Number(user.id);
+            
+            // Leads assigned or created by this user
+            const userLeads = leads.filter(l => Number(l.assigned_to) === uid || Number(l.created_by) === uid);
+            const leadsAdded = userLeads.length;
+            const leadsWon = userLeads.filter(l => l.status === 'Won' || l.client_id).length;
+            const leadsLost = userLeads.filter(l => l.status === 'Lost' || l.status === 'Not Interested').length;
+            const leadsInterested = userLeads.filter(l => ['Interested', 'Qualified', 'Negotiation', 'Proposal Sent', 'Contacted'].includes(l.status)).length;
+            const leadsInProgress = userLeads.filter(l => !['Won', 'Lost', 'Not Interested'].includes(l.status)).length;
+            const conversionRate = leadsAdded > 0 ? Number(((leadsWon / leadsAdded) * 100).toFixed(1)) : 0;
+
+            // Status breakdown counts
+            const statusBreakdown = {};
+            userLeads.forEach(l => {
+                const st = l.status || 'New Lead';
+                statusBreakdown[st] = (statusBreakdown[st] || 0) + 1;
+            });
+
+            // Follow-ups / Activities by this user
+            const userFollowups = activities.filter(a => Number(a.user_id) === uid);
+
+            // Quotations by this user
+            const userQuotations = quotations.filter(q => Number(q.agent_id) === uid || Number(q.created_by) === uid);
+            const quotationsAmount = userQuotations.reduce((sum, q) => sum + parseFloat(q.amount || 0), 0);
+
+            // Invoices by this user
+            const userInvoices = invoices.filter(i => Number(i.agent_id) === uid || Number(i.created_by) === uid);
+            const invoicesAmount = userInvoices.reduce((sum, i) => sum + parseFloat(i.amount || 0), 0);
+            const paidAmount = userInvoices.reduce((sum, i) => sum + parseFloat(i.paid_amount || 0), 0);
+
+            return {
+                id: user.id,
+                name: user.name,
+                email: user.email,
+                role: user.role,
+                avatar: user.profile_image_url,
+                leads_added: leadsAdded,
+                leads_won: leadsWon,
+                leads_lost: leadsLost,
+                leads_interested: leadsInterested,
+                leads_in_progress: leadsInProgress,
+                conversion_rate: conversionRate,
+                status_breakdown: statusBreakdown,
+                followups_count: userFollowups.length,
+                quotations_count: userQuotations.length,
+                quotations_amount: Number(quotationsAmount.toFixed(2)),
+                invoices_count: userInvoices.length,
+                invoices_amount: Number(invoicesAmount.toFixed(2)),
+                paid_amount: Number(paidAmount.toFixed(2))
+            };
+        });
+
+        // Compute Grand Totals across all salespeople
+        const totalLeadsAdded = leads.length;
+        const totalLeadsWon = leads.filter(l => l.status === 'Won' || l.client_id).length;
+        const totalLeadsLost = leads.filter(l => l.status === 'Lost' || l.status === 'Not Interested').length;
+        const totalLeadsInterested = leads.filter(l => ['Interested', 'Qualified', 'Negotiation', 'Proposal Sent', 'Contacted'].includes(l.status)).length;
+        const overallConversionRate = totalLeadsAdded > 0 ? Number(((totalLeadsWon / totalLeadsAdded) * 100).toFixed(1)) : 0;
+        const totalFollowups = activities.length;
+        const totalQuotationsCount = quotations.length;
+        const totalQuotationsVal = quotations.reduce((sum, q) => sum + parseFloat(q.amount || 0), 0);
+        const totalInvoicesCount = invoices.length;
+        const totalInvoicesVal = invoices.reduce((sum, i) => sum + parseFloat(i.amount || 0), 0);
+        const totalPaidVal = invoices.reduce((sum, i) => sum + parseFloat(i.paid_amount || 0), 0);
+
+        res.json({
+            start_date: startDate,
+            end_date: endDate,
+            summary: {
+                total_salespeople: users.length,
+                total_leads_added: totalLeadsAdded,
+                total_leads_won: totalLeadsWon,
+                total_leads_lost: totalLeadsLost,
+                total_leads_interested: totalLeadsInterested,
+                overall_conversion_rate: overallConversionRate,
+                total_followups: totalFollowups,
+                total_quotations_count: totalQuotationsCount,
+                total_quotations_val: Number(totalQuotationsVal.toFixed(2)),
+                total_invoices_count: totalInvoicesCount,
+                total_invoices_val: Number(totalInvoicesVal.toFixed(2)),
+                total_paid_val: Number(totalPaidVal.toFixed(2))
+            },
+            salespeople: salespeopleReport,
+            recent_leads: leads.slice(0, 100)
+        });
+
+    } catch (err) {
+        console.error('Error fetching salesperson lead report:', err);
+        res.status(500).json({ error: 'Failed to fetch salesperson lead report' });
+    }
+});
+
 module.exports = router;
 
 

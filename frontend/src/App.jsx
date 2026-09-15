@@ -509,6 +509,15 @@ function AppContent() {
                     </li>
                     <li>
                       <Link 
+                        to="/reports?tab=salesperson-leads" 
+                        className={`submodule-link ${location.pathname === '/reports' && location.search.includes('tab=salesperson-leads') ? 'active' : ''}`}
+                      >
+                        <div className="submodule-dot" />
+                        <span>Salesperson Performance</span>
+                      </Link>
+                    </li>
+                    <li>
+                      <Link 
                         to="/reports?tab=clients" 
                         className={`submodule-link ${location.pathname === '/reports' && location.search.includes('tab=clients') ? 'active' : ''}`}
                       >

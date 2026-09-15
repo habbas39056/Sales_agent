@@ -19,6 +19,7 @@ import ProjectReportView from './ReportsViews/ProjectReportView';
 import InvoiceAgingReportView from './ReportsViews/InvoiceAgingReportView';
 import CashFlowReportView from './ReportsViews/CashFlowReportView';
 import RevenueConcentrationReportView from './ReportsViews/RevenueConcentrationReportView';
+import SalespersonLeadReportView from './ReportsViews/SalespersonLeadReportView';
 import './Reports.css';
 
 const API_URL = import.meta.env.VITE_API_URL || '/api';
@@ -181,7 +182,7 @@ export default function Reports() {
     setLoading(true);
     setError('');
     try {
-      if (['sales', 'clients', 'expenses', 'products', 'services', 'projects', 'project-management', 'projects-health', 'accounting', 'invoices-aging', 'invoicing', 'cash-flow', 'cashflow', 'revenue-concentration', 'concentration', 'profit', 'income-vs-expense'].includes(activeTab)) {
+      if (['sales', 'salesperson-leads', 'sales-rep', 'clients', 'team', 'expenses', 'products', 'services', 'projects', 'project-management', 'projects-health', 'accounting', 'invoices-aging', 'invoicing', 'cash-flow', 'cashflow', 'revenue-concentration', 'concentration', 'profit', 'income-vs-expense'].includes(activeTab)) {
         setLoading(false);
         return;
       }
@@ -443,6 +444,8 @@ export default function Reports() {
     <div className="reports-container">
       {activeTab === 'sales' ? (
         <SalesReportView />
+      ) : (activeTab === 'salesperson-leads' || activeTab === 'sales-rep' || activeTab === 'salesperson') ? (
+        <SalespersonLeadReportView />
       ) : activeTab === 'clients' ? (
         <ClientReportView />
       ) : activeTab === 'team' ? (

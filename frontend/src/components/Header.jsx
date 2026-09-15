@@ -179,8 +179,13 @@ export default function Header() {
     title = 'Payroll & Salary Management';
     subtitle = 'Generate monthly employee salaries, manage bonuses, process payments, and generate payslips.';
   } else if (location.pathname === '/reports') {
-    title = 'System Reports';
-    subtitle = '360-degree view of clients and team performance';
+    if (location.search.includes('tab=salesperson-leads')) {
+      title = 'Salesperson Performance & Lead Analytics 🎯';
+      subtitle = 'Detailed sales representative conversion rates, follow-ups, quotations, and revenue generated';
+    } else {
+      title = 'System Reports';
+      subtitle = '360-degree view of clients, sales performance, and team activity';
+    }
   }
 
   return (
