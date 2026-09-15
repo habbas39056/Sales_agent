@@ -115,7 +115,7 @@ export default function LeadsManagement() {
   const [sessionStatus, setSessionStatus] = useState('');
   const [sessionNextFollowup, setSessionNextFollowup] = useState('');
   const [sessionRemarks, setSessionRemarks] = useState('');
-  const [sessionRecentActivity, setSessionRecentActivity] = useState('');
+  const [sessionRecentActivities, setSessionRecentActivities] = useState([]);
   const [sessionSaving, setSessionSaving] = useState(false);
 
   // Activity Drawer State
@@ -361,10 +361,9 @@ export default function LeadsManagement() {
   const loadSessionLeadDetails = async (leadId) => {
     try {
       const res = await axios.get(`/api/leads/${leadId}`);
-      const latest = res.data.activities?.[0];
-      setSessionRecentActivity(latest ? `${latest.type} (${new Date(latest.created_at).toLocaleDateString()}): ${latest.summary}` : 'No recent activity.');
+      setSessionRecentActivities(res.data.activities || []);
     } catch (err) {
-      setSessionRecentActivity('No recent activity.');
+      setSessionRecentActivities([]);
     }
   };
 
@@ -1554,28 +1553,28 @@ export default function LeadsManagement() {
 
               {/* Body */}
               <form onSubmit={handleSaveAndNextSession}>
-                <div className="session-modal-body" style={{ padding: '1.5rem', display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+                <div className="session-modal-body" style={{ padding: '1.25rem 1.5rem', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
                   
-                  {/* 4 Stat Cards Grid */}
-                  <div className="session-stats-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.85rem' }}>
+                  {/* 4 Stat Cards Grid (Short Compact Height) */}
+                  <div className="session-stats-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.65rem' }}>
                     
-                    <div className="session-card-box" style={{ background: '#f8fafc', padding: '1rem', borderRadius: '12px', border: '1px solid #e2e8f0' }}>
-                      <span style={{ fontSize: '0.72rem', fontWeight: 700, textTransform: 'uppercase', color: '#64748b', letterSpacing: '0.04em' }}>SERVICE</span>
-                      <div style={{ fontSize: '1.05rem', fontWeight: 700, color: '#0f172a', marginTop: '0.3rem' }}>
+                    <div className="session-card-box" style={{ background: '#f8fafc', padding: '0.65rem 0.85rem', borderRadius: '10px', border: '1px solid #e2e8f0' }}>
+                      <span style={{ fontSize: '0.68rem', fontWeight: 700, textTransform: 'uppercase', color: '#64748b', letterSpacing: '0.04em' }}>SERVICE</span>
+                      <div style={{ fontSize: '0.95rem', fontWeight: 700, color: '#0f172a', marginTop: '0.15rem' }}>
                         {currentLead.category_name || currentLead.title || 'General Inquiry'}
                       </div>
                     </div>
 
-                    <div className="session-card-box" style={{ background: '#f8fafc', padding: '1rem', borderRadius: '12px', border: '1px solid #e2e8f0' }}>
-                      <span style={{ fontSize: '0.72rem', fontWeight: 700, textTransform: 'uppercase', color: '#64748b', letterSpacing: '0.04em' }}>DEAL VALUE</span>
-                      <div style={{ fontSize: '1.05rem', fontWeight: 700, color: '#059669', marginTop: '0.3rem' }}>
+                    <div className="session-card-box" style={{ background: '#f8fafc', padding: '0.65rem 0.85rem', borderRadius: '10px', border: '1px solid #e2e8f0' }}>
+                      <span style={{ fontSize: '0.68rem', fontWeight: 700, textTransform: 'uppercase', color: '#64748b', letterSpacing: '0.04em' }}>DEAL VALUE</span>
+                      <div style={{ fontSize: '0.95rem', fontWeight: 700, color: '#059669', marginTop: '0.15rem' }}>
                         {formatCurrency(currentLead.estimated_value)}
                       </div>
                     </div>
 
-                    <div className="session-card-box" style={{ background: '#f8fafc', padding: '1rem', borderRadius: '12px', border: '1px solid #e2e8f0' }}>
-                      <span style={{ fontSize: '0.72rem', fontWeight: 700, textTransform: 'uppercase', color: '#64748b', letterSpacing: '0.04em' }}>WHATSAPP / PHONE</span>
-                      <div style={{ fontSize: '1.05rem', fontWeight: 700, color: '#0f172a', marginTop: '0.3rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                    <div className="session-card-box" style={{ background: '#f8fafc', padding: '0.65rem 0.85rem', borderRadius: '10px', border: '1px solid #e2e8f0' }}>
+                      <span style={{ fontSize: '0.68rem', fontWeight: 700, textTransform: 'uppercase', color: '#64748b', letterSpacing: '0.04em' }}>WHATSAPP / PHONE</span>
+                      <div style={{ fontSize: '0.95rem', fontWeight: 700, color: '#0f172a', marginTop: '0.15rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                         <span>{rawPhone || 'N/A'}</span>
                         {phoneClean && (
                           <a 
@@ -1585,7 +1584,7 @@ export default function LeadsManagement() {
                             style={{ color: '#10b981', display: 'inline-flex', alignItems: 'center', textDecoration: 'none' }}
                             title="Open WhatsApp Chat"
                           >
-                            <MessageSquare size={16} />
+                            <MessageSquare size={15} />
                           </a>
                         )}
                         {rawPhone && (
@@ -1594,27 +1593,45 @@ export default function LeadsManagement() {
                             style={{ color: '#2563eb', display: 'inline-flex', alignItems: 'center', textDecoration: 'none' }}
                             title="Direct Call"
                           >
-                            <Phone size={15} />
+                            <Phone size={14} />
                           </a>
                         )}
                       </div>
                     </div>
 
-                    <div className="session-card-box" style={{ background: '#f8fafc', padding: '1rem', borderRadius: '12px', border: '1px solid #e2e8f0' }}>
-                      <span style={{ fontSize: '0.72rem', fontWeight: 700, textTransform: 'uppercase', color: '#64748b', letterSpacing: '0.04em' }}>FOLLOW-UP</span>
-                      <div style={{ fontSize: '1.05rem', fontWeight: 700, color: currentLead.next_followup_date ? '#dc2626' : '#64748b', marginTop: '0.3rem' }}>
+                    <div className="session-card-box" style={{ background: '#f8fafc', padding: '0.65rem 0.85rem', borderRadius: '10px', border: '1px solid #e2e8f0' }}>
+                      <span style={{ fontSize: '0.68rem', fontWeight: 700, textTransform: 'uppercase', color: '#64748b', letterSpacing: '0.04em' }}>FOLLOW-UP</span>
+                      <div style={{ fontSize: '0.95rem', fontWeight: 700, color: currentLead.next_followup_date ? '#dc2626' : '#64748b', marginTop: '0.15rem' }}>
                         {currentLead.next_followup_date ? new Date(currentLead.next_followup_date).toLocaleDateString() : 'None Scheduled'}
                       </div>
                     </div>
 
                   </div>
 
-                  {/* Recent Activity Section */}
-                  <div className="session-section">
-                    <span style={{ fontSize: '0.75rem', fontWeight: 700, textTransform: 'uppercase', color: '#64748b', letterSpacing: '0.04em' }}>RECENT ACTIVITY</span>
-                    <div style={{ fontSize: '0.88rem', color: '#475569', fontStyle: 'italic', marginTop: '0.35rem', background: '#ffffff', padding: '0.75rem 1rem', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
-                      {sessionRecentActivity || 'No recent activity.'}
-                    </div>
+                  {/* Recent Activity Section (Bullet List matching reference) */}
+                  <div className="session-section" style={{ marginTop: '0.2rem' }}>
+                    <span style={{ fontSize: '0.72rem', fontWeight: 700, textTransform: 'uppercase', color: '#64748b', letterSpacing: '0.04em' }}>RECENT ACTIVITY</span>
+                    {sessionRecentActivities.length === 0 ? (
+                      <div style={{ fontSize: '0.85rem', color: '#64748b', fontStyle: 'italic', marginTop: '0.35rem' }}>
+                        No recent activity.
+                      </div>
+                    ) : (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', marginTop: '0.35rem' }}>
+                        {sessionRecentActivities.slice(0, 2).map((act, idx) => (
+                          <div key={act.id || idx} style={{ display: 'flex', gap: '0.6rem', alignItems: 'flex-start' }}>
+                            <span style={{ color: '#3b82f6', fontSize: '0.75rem', marginTop: '0.2rem', lineHeight: 1 }}>●</span>
+                            <div>
+                              <div style={{ fontSize: '0.88rem', color: '#1e293b', fontWeight: 500, lineHeight: 1.35 }}>
+                                {act.summary}
+                              </div>
+                              <div style={{ fontSize: '0.75rem', color: '#94a3b8', marginTop: '0.1rem' }}>
+                                {act.type || 'Note'} · {new Date(act.created_at).toLocaleString()}
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </div>
 
                   {/* Log Interaction Form */}
