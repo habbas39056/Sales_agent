@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const db = require('../db');
+const { sendWhatsAppMessage } = require('../utils/whatsapp');
 
 // Helper to generate next Lead Number (e.g., LEAD-1001)
 async function generateLeadNumber() {
@@ -377,6 +378,49 @@ router.delete('/:id', async (req, res) => {
   } catch (err) {
     console.error('Error deleting lead:', err);
     res.status(500).json({ error: 'Failed to delete lead' });
+  }
+});
+
+// 8. SEND WHATSAPP MESSAGE TO LEAD VIA EVOLUTION API
+router.post('/:id/send-whatsapp', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const [rows] = await db.query('SELECT * FROM leads WHERE id = ?', [id]);
+    if (rows.length === 0) {
+      return res.status(404).json({ error: 'Lead not found' });
+    }
+    const lead = rows[0];
+
+    const phoneRaw = lead.phone || lead.whatsapp_number;
+    if (!phoneRaw) {
+      return res.status(400).json({ error: 'Lead has no phone or WhatsApp number' });
+    }
+
+    const clientName = lead.contact_name || 'Valued Client';
+    const serviceName = lead.category_name || lead.title || 'our services';
+    const refId = lead.lead_number || `#${lead.id}`;
+
+    const defaultMsg = `Dear ${clientName},\n\nGreetings from Adwise Sales!\n\nWe are reaching out regarding your inquiry for ${serviceName} (Ref: ${refId}). We would love to discuss how we can best assist you with your project requirements.\n\nPlease let us know a convenient time for a brief call or chat.\n\nBest regards,\nSales Team | Adwise`;
+
+    const message = req.body.message || defaultMsg;
+
+    const sent = await sendWhatsAppMessage(phoneRaw, message);
+
+    if (sent) {
+      // Log activity in database
+      const currentUserId = req.user?.id || null;
+      await db.query(`
+        INSERT INTO lead_activities (lead_id, user_id, type, summary)
+        VALUES (?, ?, 'Call', ?)
+      `, [id, currentUserId, `Auto-sent WhatsApp message via Evolution API: "${message.substring(0, 50)}..."`]);
+
+      res.json({ success: true, message: `WhatsApp message automatically sent to ${clientName} via Evolution API!` });
+    } else {
+      res.status(502).json({ error: 'Evolution API delivery failed. Check Evolution API instance status.' });
+    }
+  } catch (err) {
+    console.error('Error sending WhatsApp message via Evolution API:', err);
+    res.status(500).json({ error: 'Failed to send WhatsApp message via Evolution API' });
   }
 });
 

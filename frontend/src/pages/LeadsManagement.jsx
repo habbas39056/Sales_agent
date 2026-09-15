@@ -368,21 +368,28 @@ export default function LeadsManagement() {
     }
   };
 
-  const handleOpenWhatsApp = (lead) => {
+  const handleOpenWhatsApp = async (lead) => {
     const phoneRaw = lead.phone || lead.whatsapp_number || '';
     const phoneClean = phoneRaw.replace(/[^0-9]/g, '');
     if (!phoneClean) {
       return showAlert('error', `No phone/WhatsApp number recorded for ${lead.contact_name}.`);
     }
 
-    const clientName = lead.contact_name || 'Valued Client';
-    const serviceName = lead.category_name || lead.title || 'our services';
-    const refId = lead.lead_number || `#${lead.id}`;
-
-    const text = `Dear ${clientName},\n\nGreetings from Adwise Sales!\n\nWe are reaching out regarding your inquiry for ${serviceName} (Ref: ${refId}). We would love to discuss how we can best assist you with your project requirements.\n\nPlease let us know a convenient time for a brief call or chat.\n\nBest regards,\nSales Team | Adwise`;
-
-    const url = `https://wa.me/${phoneClean}?text=${encodeURIComponent(text)}`;
-    window.open(url, '_blank', 'noopener,noreferrer');
+    try {
+      showAlert('success', `Sending WhatsApp message to ${lead.contact_name} via Evolution API...`);
+      const res = await axios.post(`/api/leads/${lead.id}/send-whatsapp`);
+      showAlert('success', res.data.message || `WhatsApp message sent to ${lead.contact_name}!`);
+      loadLeads();
+    } catch (err) {
+      console.warn('Evolution API auto-send failed, falling back to wa.me link:', err);
+      const clientName = lead.contact_name || 'Valued Client';
+      const serviceName = lead.category_name || lead.title || 'our services';
+      const refId = lead.lead_number || `#${lead.id}`;
+      const text = `Dear ${clientName},\n\nGreetings from Adwise Sales!\n\nWe are reaching out regarding your inquiry for ${serviceName} (Ref: ${refId}). We would love to discuss how we can best assist you with your project requirements.\n\nPlease let us know a convenient time for a brief call or chat.\n\nBest regards,\nSales Team | Adwise`;
+      const url = `https://wa.me/${phoneClean}?text=${encodeURIComponent(text)}`;
+      window.open(url, '_blank', 'noopener,noreferrer');
+      showAlert('error', err.response?.data?.error || 'Opened WhatsApp Web fallback.');
+    }
   };
 
   const startCallingSession = () => {
