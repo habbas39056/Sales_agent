@@ -219,7 +219,7 @@ export default function ItemsList() {
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
             <h1>Items Inventory</h1>
             <span style={{ background: '#e0f2fe', color: '#0369a1', fontSize: '0.75rem', fontWeight: '800', padding: '0.25rem 0.65rem', borderRadius: '12px' }}>
-              {filteredItems.length} {filteredItems.length === 1 ? 'Item' : 'Items'}
+              {items.length} {items.length === 1 ? 'Item' : 'Items'}
             </span>
           </div>
           <p>Create and manage reusable item templates for Quotations & Invoices</p>
