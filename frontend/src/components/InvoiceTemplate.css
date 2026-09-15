@@ -187,10 +187,12 @@
   background-color: #ffffff;
 }
 
-.inv-tpl-table th.col-desc { text-align: left; width: 55%; }
-.inv-tpl-table th.col-qty { text-align: center; width: 12%; }
-.inv-tpl-table th.col-price { text-align: right; width: 16%; }
-.inv-tpl-table th.col-total { text-align: right; width: 17%; }
+.inv-tpl-table th.col-desc { text-align: left; width: 45%; }
+.inv-tpl-table th.col-qty { text-align: center; width: 10%; }
+.inv-tpl-table th.col-price { text-align: right; width: 15%; }
+.inv-tpl-table th.col-disc { text-align: center; width: 8%; }
+.inv-tpl-table th.col-tax { text-align: center; width: 8%; }
+.inv-tpl-table th.col-total { text-align: right; width: 14%; }
 
 .inv-tpl-table td {
   padding: 0.85rem 0.5rem;
@@ -204,11 +206,25 @@
   font-weight: 700;
   color: #0f172a;
   margin-bottom: 0.15rem;
+  text-transform: uppercase;
 }
 
 .inv-tpl-item-sku {
   font-size: 0.75rem;
   color: #94a3b8;
+}
+
+.inv-tpl-currency-tag {
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: #0f172a;
+  line-height: 1;
+}
+
+.inv-tpl-line-total {
+  font-size: 0.92rem;
+  font-weight: 800;
+  color: #0f172a;
 }
 
 /* Bottom Section: Bank details & Payment summary */
@@ -279,6 +295,51 @@
   color: #dc2626;
 }
 
+/* Payments Received Section */
+.inv-tpl-payments-section {
+  margin-top: 1rem;
+}
+
+.inv-tpl-payments-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 0.5rem;
+}
+
+.inv-tpl-payments-table th {
+  border-top: 1px solid #e2e8f0;
+  border-bottom: 1px solid #e2e8f0;
+  padding: 0.5rem;
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: #64748b;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  text-align: left;
+}
+
+.inv-tpl-payments-table td {
+  padding: 0.65rem 0.5rem;
+  border-bottom: 1px solid #f1f5f9;
+  font-size: 0.85rem;
+  color: #1e293b;
+}
+
+/* Credits & Footer Box */
+.inv-tpl-credits-box {
+  text-align: center;
+  font-size: 0.78rem;
+  color: #94a3b8;
+  margin-top: 1.5rem;
+  line-height: 1.6;
+}
+
+.inv-tpl-credits-author {
+  font-weight: 700;
+  color: #64748b;
+  margin-top: 0.2rem;
+}
+
 /* Terms section */
 .inv-tpl-terms-container {
   margin-top: 3rem;
@@ -319,3 +380,4 @@
     box-shadow: none !important;
   }
 }
+

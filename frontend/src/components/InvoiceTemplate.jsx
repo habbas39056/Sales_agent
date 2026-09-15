@@ -4,13 +4,13 @@ import './InvoiceTemplate.css';
 export default function InvoiceTemplate({ invoice = {}, companyDetails = {} }) {
   if (!invoice) return null;
 
-  // Format currency helper matching exact screenshot style (Rs. 4,000.00)
+  // Format currency helper matching exact screenshot style (Rs. 8,600.00)
   const formatMoney = (val) => {
     const num = parseFloat(val) || 0;
     return `Rs. ${num.toLocaleString('en-PK', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
   };
 
-  // Format date helper (e.g. 15-Sep-2026)
+  // Format date helper (e.g. 14-Sep-2026)
   const formatDate = (dateVal) => {
     if (!dateVal) return '-';
     try {
@@ -27,7 +27,7 @@ export default function InvoiceTemplate({ invoice = {}, companyDetails = {} }) {
   };
 
   // Extract Invoice Info
-  const invoiceNumber = invoice.invoice_number || 'INV-0000';
+  const invoiceNumber = invoice.invoice_number || 'INV-0004';
   
   // Status calculation
   const rawStatus = (invoice.status || 'UNPAID').toUpperCase();
@@ -47,19 +47,21 @@ export default function InvoiceTemplate({ invoice = {}, companyDetails = {} }) {
 
   // Company / Seller Details (Default to screenshot specs or system info)
   const companyLogo = companyDetails.logo || '/logo.webp';
-  const companyName = companyDetails.name || 'Adwise Labs';
+  const companyName = companyDetails.name || invoice.company_name || 'Adwise Labs';
   const companyAddress = companyDetails.address || 'A-205/II Saba Ave, DHA Karachi Phase VIII Zone A';
   const companyCountry = companyDetails.country || 'Pakistan';
   const companyPhone = companyDetails.phone || '+92 329 2371279';
   const companyEmail = companyDetails.email || 'info@adwiselabs.com';
 
   // Bank Details
-  const bankTitle = companyDetails.bankTitle || 'Adwise labs';
-  const bankName = companyDetails.bankName || 'Bank Al Falah';
-  const bankAccount = companyDetails.bankAccount || '56395002519988';
+  const bankTitle = companyDetails.bankTitle || invoice.bank_title || companyName;
+  const bankName = companyDetails.bankName || invoice.bank_name || 'Bank Al Falah';
+  const bankAccount = companyDetails.bankAccount || invoice.bank_account || '56395002519988';
+  const bankIban = companyDetails.bankIban || invoice.bank_iban || '';
 
   // Items
   const items = invoice.items || [];
+  const payments = invoice.payments || [];
 
   // Financial Calculations
   const subtotal = invoice.subtotal !== undefined && invoice.subtotal !== null
@@ -71,8 +73,8 @@ export default function InvoiceTemplate({ invoice = {}, companyDetails = {} }) {
     : (invoice.total !== undefined ? parseFloat(invoice.total) : subtotal);
 
   let totalPaid = 0;
-  if (invoice.payments && Array.isArray(invoice.payments)) {
-    totalPaid = invoice.payments.reduce((sum, p) => sum + parseFloat(p.amount || 0), 0);
+  if (payments && Array.isArray(payments) && payments.length > 0) {
+    totalPaid = payments.reduce((sum, p) => sum + parseFloat(p.amount || 0), 0);
   } else if (invoice.totalPaid !== undefined && invoice.totalPaid !== null) {
     totalPaid = parseFloat(invoice.totalPaid);
   } else if (isPaid) {
@@ -135,7 +137,7 @@ export default function InvoiceTemplate({ invoice = {}, companyDetails = {} }) {
               </tr>
               <tr>
                 <td className="label">Payment Due:</td>
-                <td className="value" style={{ color: !isPaid ? '#dc2626' : undefined }}>{dueDate}</td>
+                <td className="value" style={{ color: balanceDue > 0 ? '#dc2626' : '#1e293b' }}>{dueDate}</td>
               </tr>
               <tr className="amount-due-row">
                 <td className="label">Amount Due:</td>
@@ -153,6 +155,8 @@ export default function InvoiceTemplate({ invoice = {}, companyDetails = {} }) {
             <th className="col-desc">ITEM / DESCRIPTION</th>
             <th className="col-qty">QTY</th>
             <th className="col-price">UNIT PRICE</th>
+            <th className="col-disc">DISC %</th>
+            <th className="col-tax">TAX %</th>
             <th className="col-total">TOTAL</th>
           </tr>
         </thead>
@@ -161,7 +165,10 @@ export default function InvoiceTemplate({ invoice = {}, companyDetails = {} }) {
             items.map((item, idx) => {
               const qty = parseFloat(item.quantity) || 1;
               const unitPrice = parseFloat(item.unit_price || item.rate) || 0;
+              const disc = item.discount ? `${item.discount}%` : '-';
+              const tax = item.tax ? `${item.tax}%` : '-';
               const lineTotal = item.total !== undefined && item.total !== null ? parseFloat(item.total) : (qty * unitPrice);
+              const formattedLineTotal = lineTotal.toLocaleString('en-PK', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
               return (
                 <tr key={idx}>
@@ -175,13 +182,18 @@ export default function InvoiceTemplate({ invoice = {}, companyDetails = {} }) {
                   </td>
                   <td style={{ textAlign: 'center' }}>{qty.toFixed(2)}</td>
                   <td style={{ textAlign: 'right' }}>{formatMoney(unitPrice)}</td>
-                  <td style={{ textAlign: 'right', fontWeight: 700 }}>{formatMoney(lineTotal)}</td>
+                  <td style={{ textAlign: 'center' }}>{disc}</td>
+                  <td style={{ textAlign: 'center' }}>{tax}</td>
+                  <td style={{ textAlign: 'right' }}>
+                    <div className="inv-tpl-currency-tag">Rs.</div>
+                    <div className="inv-tpl-line-total">{formattedLineTotal}</div>
+                  </td>
                 </tr>
               );
             })
           ) : (
             <tr>
-              <td colSpan="4" style={{ textAlign: 'center', color: '#94a3b8', padding: '1.5rem' }}>
+              <td colSpan="6" style={{ textAlign: 'center', color: '#94a3b8', padding: '1.5rem' }}>
                 No line items available
               </td>
             </tr>
@@ -189,7 +201,7 @@ export default function InvoiceTemplate({ invoice = {}, companyDetails = {} }) {
         </tbody>
       </table>
 
-      <hr className="inv-tpl-divider" style={{ margin: '1rem 0' }} />
+      <hr className="inv-tpl-divider" style={{ margin: '1.25rem 0' }} />
 
       {/* FOOTER GRID: BANK DETAILS & PAYMENT SUMMARY */}
       <div className="inv-tpl-footer-grid">
@@ -197,11 +209,13 @@ export default function InvoiceTemplate({ invoice = {}, companyDetails = {} }) {
         <div style={{ flex: 1 }}>
           <div className="inv-tpl-section-label">BANK / PAYMENT DETAILS:</div>
           {bankTitle || bankName || bankAccount ? (
-            <div className="inv-tpl-client-detail" style={{ lineHeight: '1.6' }}>
+            <div className="inv-tpl-client-detail" style={{ lineHeight: '1.65' }}>
+              <div style={{ fontSize: '0.92rem', fontWeight: 800, color: '#0f172a', textTransform: 'uppercase', marginBottom: '2px' }}>
+                {bankName}
+              </div>
               <div>Account Title: <strong>{bankTitle}</strong></div>
-              <div>Bank: <strong>{bankName}</strong></div>
-              <div>Account Number: <strong>{bankAccount}</strong></div>
-              <div>Email: <strong>{companyEmail}</strong></div>
+              <div>Account #: <strong>{bankAccount}</strong></div>
+              {bankIban && <div>IBAN: <strong>{bankIban}</strong></div>}
             </div>
           ) : (
             <div className="inv-tpl-client-detail" style={{ color: '#94a3b8' }}>
@@ -225,15 +239,54 @@ export default function InvoiceTemplate({ invoice = {}, companyDetails = {} }) {
               </tr>
               <tr className="paid-row">
                 <td className="label">Amount Paid:</td>
-                <td className="value">{formatMoney(totalPaid)}</td>
+                <td className="value" style={{ color: '#16a34a' }}>{formatMoney(totalPaid)}</td>
               </tr>
               <tr className={`balance-row ${balanceDue <= 0 ? 'zero' : 'due'}`}>
                 <td className="label">Balance Due:</td>
-                <td className="value">{formatMoney(balanceDue)}</td>
+                <td className="value" style={{ color: balanceDue <= 0 ? '#16a34a' : '#dc2626' }}>
+                  {formatMoney(balanceDue)}
+                </td>
               </tr>
             </tbody>
           </table>
         </div>
+      </div>
+
+      {/* PAYMENTS RECEIVED TABLE (IF ANY PAYMENTS MADE) */}
+      {payments && payments.length > 0 && (
+        <div className="inv-tpl-payments-section">
+          <hr className="inv-tpl-divider" style={{ margin: '1.25rem 0' }} />
+          <div className="inv-tpl-section-label">PAYMENTS RECEIVED:</div>
+          <table className="inv-tpl-payments-table">
+            <thead>
+              <tr>
+                <th>DATE</th>
+                <th>ACCOUNT / METHOD</th>
+                <th>REFERENCE</th>
+                <th style={{ textAlign: 'right' }}>AMOUNT PAID</th>
+              </tr>
+            </thead>
+            <tbody>
+              {payments.map((p, idx) => (
+                <tr key={idx}>
+                  <td>{formatDate(p.payment_date || p.created_at)}</td>
+                  <td>{p.bank_name || p.payment_method || 'Bank Transfer / Vault'}</td>
+                  <td>{p.transaction_id || p.reference || `REF-${p.id || (idx + 1001)}`}</td>
+                  <td style={{ textAlign: 'right', fontWeight: 700, color: '#16a34a' }}>
+                    {formatMoney(p.amount)}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {/* FOOTER NOTE / SOFTWARE CREDITS */}
+      <div className="inv-tpl-credits-box">
+        <hr className="inv-tpl-divider" style={{ margin: '1.5rem 0 0.85rem 0' }} />
+        <div>Thank you for your business! If you have questions about this invoice, please contact {companyEmail}</div>
+        <div className="inv-tpl-credits-author">Software Powered by Adwise Labs</div>
       </div>
 
       {/* TERMS & CONDITIONS (IF PRESENT) */}
