@@ -336,7 +336,12 @@ router.post('/:id/convert', async (req, res) => {
     const lead = leadRows[0];
 
     if (lead.client_id) {
-      return res.status(400).json({ error: 'This lead has already been converted to a Client.' });
+      const [clientCheck] = await db.query('SELECT id FROM clients WHERE id = ?', [lead.client_id]);
+      if (clientCheck.length > 0) {
+        return res.status(400).json({ error: 'This lead has already been converted to an active Client.' });
+      }
+      // Stale reference from previously deleted client: reset client_id pointer
+      await db.query('UPDATE leads SET client_id = NULL WHERE id = ?', [id]);
     }
 
     // Prepare email & phone with fallbacks to avoid SQL NULL/Duplicate constraint errors

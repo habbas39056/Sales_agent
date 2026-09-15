@@ -332,6 +332,9 @@ router.delete('/:id', async (req, res) => {
     const [clientResult] = await connection.query('SELECT user_id FROM clients WHERE id = ?', [req.params.id]);
     const userId = clientResult.length > 0 ? clientResult[0].user_id : null;
 
+    // Unlink any leads attached to this client so they can be re-converted
+    await connection.query('UPDATE leads SET client_id = NULL WHERE client_id = ?', [req.params.id]);
+
     await connection.query('DELETE FROM clients WHERE id = ?', [req.params.id]);
     
     if (userId) {
