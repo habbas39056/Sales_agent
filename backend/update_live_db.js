@@ -779,7 +779,17 @@ async function updateLiveDb() {
       ['evolution_api_url', 'https://evolution-evolution-api.o1nqjj.easypanel.host'],
       ['evolution_instance_name', 'Adwise ERP'],
       ['evolution_api_key', '429683C4C977415CAAFCCE10F7D57E11'],
-      ['whatsapp_delivery_group_jid', '']
+      ['whatsapp_delivery_group_jid', ''],
+      ['lead_sources', JSON.stringify(['Website', 'Referral', 'Social Media', 'Cold Call', 'WhatsApp', 'Direct', 'Other'])],
+      ['lead_stages', JSON.stringify([
+        { id: 'New Lead', name: 'New Lead', color: '#3b82f6', bg: '#eff6ff' },
+        { id: 'Contacted', name: 'Contacted', color: '#8b5cf6', bg: '#f5f3ff' },
+        { id: 'Qualified', name: 'Qualified', color: '#06b6d4', bg: '#ecfeff' },
+        { id: 'Proposal Sent', name: 'Proposal Sent', color: '#f59e0b', bg: '#fffbeb' },
+        { id: 'Negotiation', name: 'Negotiation', color: '#ec4899', bg: '#fdf2f8' },
+        { id: 'Won', name: 'Won (Client)', color: '#10b981', bg: '#ecfdf5' },
+        { id: 'Lost', name: 'Lost', color: '#64748b', bg: '#f8fafc' }
+      ])]
     ];
 
     for (const [sKey, sVal] of defaultSettings) {

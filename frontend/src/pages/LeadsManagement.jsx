@@ -28,9 +28,35 @@ import {
   Send,
   Sparkles,
   Tag,
-  Check
+  Check,
+  Settings as SettingsIcon,
+  Palette
 } from 'lucide-react';
 import './LeadsManagement.css';
+
+const DEFAULT_STAGES = [
+  { id: 'New Lead', name: 'New Lead', color: '#3b82f6', bg: '#eff6ff' },
+  { id: 'Contacted', name: 'Contacted', color: '#8b5cf6', bg: '#f5f3ff' },
+  { id: 'Qualified', name: 'Qualified', color: '#06b6d4', bg: '#ecfeff' },
+  { id: 'Proposal Sent', name: 'Proposal Sent', color: '#f59e0b', bg: '#fffbeb' },
+  { id: 'Negotiation', name: 'Negotiation', color: '#ec4899', bg: '#fdf2f8' },
+  { id: 'Won', name: 'Won (Client)', color: '#10b981', bg: '#ecfdf5' },
+  { id: 'Lost', name: 'Lost', color: '#64748b', bg: '#f8fafc' }
+];
+
+const DEFAULT_SOURCES = ['Website', 'Referral', 'Social Media', 'Cold Call', 'WhatsApp', 'Direct', 'Other'];
+
+const COLOR_OPTIONS = [
+  { color: '#3b82f6', bg: '#eff6ff' },
+  { color: '#8b5cf6', bg: '#f5f3ff' },
+  { color: '#06b6d4', bg: '#ecfeff' },
+  { color: '#f59e0b', bg: '#fffbeb' },
+  { color: '#ec4899', bg: '#fdf2f8' },
+  { color: '#10b981', bg: '#ecfdf5' },
+  { color: '#64748b', bg: '#f8fafc' },
+  { color: '#6366f1', bg: '#eef2ff' },
+  { color: '#f97316', bg: '#fff7ed' }
+];
 
 export default function LeadsManagement() {
   const [leads, setLeads] = useState([]);
@@ -46,6 +72,10 @@ export default function LeadsManagement() {
   const [categories, setCategories] = useState([]);
   const [users, setUsers] = useState([]);
 
+  // Editable Pipeline Stages & Sources
+  const [stages, setStages] = useState(DEFAULT_STAGES);
+  const [sources, setSources] = useState(DEFAULT_SOURCES);
+
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [viewMode, setViewMode] = useState('board'); // 'board' (Kanban) or 'table'
@@ -53,13 +83,19 @@ export default function LeadsManagement() {
   // Filters State
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('All');
-  const [priorityFilter, setPriorityFilter] = useState('All');
   const [sourceFilter, setSourceFilter] = useState('All');
   const [assignedFilter, setAssignedFilter] = useState('All');
 
   // Modal States
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingLead, setEditingLead] = useState(null);
+
+  // Settings Modal State (Edit Stages & Sources)
+  const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
+  const [settingsActiveTab, setSettingsActiveTab] = useState('stages'); // 'stages' or 'sources'
+  const [newStageName, setNewStageName] = useState('');
+  const [newStageColorIndex, setNewStageColorIndex] = useState(0);
+  const [newSourceName, setNewSourceName] = useState('');
 
   // Activity Drawer State
   const [activeLeadDetails, setActiveLeadDetails] = useState(null);
@@ -78,7 +114,6 @@ export default function LeadsManagement() {
     whatsapp_number: '',
     source: 'Website',
     status: 'New Lead',
-    priority: 'Medium',
     estimated_value: '',
     category_id: '',
     assigned_to: '',
@@ -89,23 +124,10 @@ export default function LeadsManagement() {
   // Alert State
   const [alert, setAlert] = useState({ type: '', message: '' });
 
-  const STAGES = [
-    { id: 'New Lead', name: 'New Lead', color: '#3b82f6', bg: '#eff6ff' },
-    { id: 'Contacted', name: 'Contacted', color: '#8b5cf6', bg: '#f5f3ff' },
-    { id: 'Qualified', name: 'Qualified', color: '#06b6d4', bg: '#ecfeff' },
-    { id: 'Proposal Sent', name: 'Proposal Sent', color: '#f59e0b', bg: '#fffbeb' },
-    { id: 'Negotiation', name: 'Negotiation', color: '#ec4899', bg: '#fdf2f8' },
-    { id: 'Won', name: 'Won (Client)', color: '#10b981', bg: '#ecfdf5' },
-    { id: 'Lost', name: 'Lost', color: '#64748b', bg: '#f8fafc' }
-  ];
-
-  const SOURCES = ['Website', 'Referral', 'Social Media', 'Cold Call', 'WhatsApp', 'Direct', 'Other'];
-  const PRIORITIES = ['Low', 'Medium', 'High', 'Urgent'];
-
   useEffect(() => {
     loadLeads();
     loadDropdowns();
-  }, [statusFilter, priorityFilter, sourceFilter, assignedFilter]);
+  }, [statusFilter, sourceFilter, assignedFilter]);
 
   const showAlert = (type, message) => {
     setAlert({ type, message });
@@ -118,7 +140,6 @@ export default function LeadsManagement() {
       const params = {};
       if (search.trim()) params.search = search.trim();
       if (statusFilter !== 'All') params.status = statusFilter;
-      if (priorityFilter !== 'All') params.priority = priorityFilter;
       if (sourceFilter !== 'All') params.source = sourceFilter;
       if (assignedFilter !== 'All') params.assigned_to = assignedFilter;
 
@@ -135,12 +156,27 @@ export default function LeadsManagement() {
 
   const loadDropdowns = async () => {
     try {
-      const [catRes, usersRes] = await Promise.all([
+      const [catRes, usersRes, settingsRes] = await Promise.all([
         axios.get('/api/project-categories'),
-        axios.get('/api/users')
+        axios.get('/api/users'),
+        axios.get('/api/settings')
       ]);
       setCategories(catRes.data || []);
       setUsers(usersRes.data || []);
+
+      const settings = settingsRes.data || {};
+      if (settings.lead_sources) {
+        try {
+          const parsed = JSON.parse(settings.lead_sources);
+          if (Array.isArray(parsed) && parsed.length > 0) setSources(parsed);
+        } catch (e) {}
+      }
+      if (settings.lead_stages) {
+        try {
+          const parsed = JSON.parse(settings.lead_stages);
+          if (Array.isArray(parsed) && parsed.length > 0) setStages(parsed);
+        } catch (e) {}
+      }
     } catch (err) {
       console.warn('Failed to load dropdown metadata:', err);
     }
@@ -153,6 +189,8 @@ export default function LeadsManagement() {
 
   const openCreateModal = () => {
     setEditingLead(null);
+    const defaultSrc = sources.length > 0 ? sources[0] : 'Website';
+    const defaultStg = stages.length > 0 ? stages[0].id : 'New Lead';
     setFormData({
       title: '',
       contact_name: '',
@@ -160,9 +198,8 @@ export default function LeadsManagement() {
       email: '',
       phone: '',
       whatsapp_number: '',
-      source: 'Website',
-      status: 'New Lead',
-      priority: 'Medium',
+      source: defaultSrc,
+      status: defaultStg,
       estimated_value: '',
       category_id: '',
       assigned_to: '',
@@ -174,16 +211,16 @@ export default function LeadsManagement() {
 
   const openEditModal = (lead) => {
     setEditingLead(lead);
+    const phoneVal = lead.phone || lead.whatsapp_number || '';
     setFormData({
       title: lead.title || '',
       contact_name: lead.contact_name || '',
       company_name: lead.company_name || '',
       email: lead.email || '',
-      phone: lead.phone || '',
-      whatsapp_number: lead.whatsapp_number || '',
-      source: lead.source || 'Website',
-      status: lead.status || 'New Lead',
-      priority: lead.priority || 'Medium',
+      phone: phoneVal,
+      whatsapp_number: phoneVal,
+      source: lead.source || (sources[0] || 'Website'),
+      status: lead.status || (stages[0]?.id || 'New Lead'),
       estimated_value: lead.estimated_value || '',
       category_id: lead.category_id || '',
       assigned_to: lead.assigned_to || '',
@@ -201,11 +238,16 @@ export default function LeadsManagement() {
 
     setSaving(true);
     try {
+      const payload = {
+        ...formData,
+        whatsapp_number: formData.phone // Single phone & whatsapp field
+      };
+
       if (editingLead) {
-        await axios.put(`/api/leads/${editingLead.id}`, formData);
+        await axios.put(`/api/leads/${editingLead.id}`, payload);
         showAlert('success', 'Lead updated successfully!');
       } else {
-        await axios.post('/api/leads', formData);
+        await axios.post('/api/leads', payload);
         showAlert('success', 'New lead created successfully!');
       }
       setIsModalOpen(false);
@@ -273,7 +315,7 @@ export default function LeadsManagement() {
         summary: activityNote
       });
 
-      // Update follow up date if set
+      // Update follow up date if set (silent: true prevents duplicate lead update note)
       if (nextFollowupInActivity) {
         await axios.put(`/api/leads/${activeLeadDetails.id}`, {
           next_followup_date: nextFollowupInActivity,
@@ -291,18 +333,60 @@ export default function LeadsManagement() {
     }
   };
 
+  // --- Dynamic Settings Handlers (Stages & Sources) ---
+  const handleAddStage = () => {
+    if (!newStageName.trim()) return;
+    const nameStr = newStageName.trim();
+    if (stages.some(s => s.name.toLowerCase() === nameStr.toLowerCase())) {
+      return showAlert('error', 'A stage with this name already exists.');
+    }
+    const colorObj = COLOR_OPTIONS[newStageColorIndex] || COLOR_OPTIONS[0];
+    const updated = [...stages, { id: nameStr, name: nameStr, color: colorObj.color, bg: colorObj.bg }];
+    setStages(updated);
+    setNewStageName('');
+  };
+
+  const handleDeleteStage = (stageId) => {
+    if (stages.length <= 1) return showAlert('error', 'Must have at least one pipeline stage.');
+    const updated = stages.filter(s => s.id !== stageId);
+    setStages(updated);
+  };
+
+  const handleAddSource = () => {
+    if (!newSourceName.trim()) return;
+    const nameStr = newSourceName.trim();
+    if (sources.includes(nameStr)) {
+      return showAlert('error', 'This lead source already exists.');
+    }
+    setSources([...sources, nameStr]);
+    setNewSourceName('');
+  };
+
+  const handleDeleteSource = (sourceName) => {
+    if (sources.length <= 1) return showAlert('error', 'Must have at least one lead source.');
+    setSources(sources.filter(s => s !== sourceName));
+  };
+
+  const handleSavePipelineSettings = async () => {
+    setSaving(true);
+    try {
+      await axios.post('/api/settings', {
+        lead_sources: JSON.stringify(sources),
+        lead_stages: JSON.stringify(stages)
+      });
+      showAlert('success', 'Pipeline stages & sources updated successfully!');
+      setIsSettingsModalOpen(false);
+      loadLeads();
+    } catch (err) {
+      showAlert('error', 'Failed to save pipeline settings');
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const formatCurrency = (val) => {
     const num = Number(val) || 0;
     return 'PKR ' + num.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
-  };
-
-  const getPriorityBadgeClass = (p) => {
-    switch (p) {
-      case 'Urgent': return 'priority-badge priority-urgent';
-      case 'High': return 'priority-badge priority-high';
-      case 'Medium': return 'priority-badge priority-medium';
-      default: return 'priority-badge priority-low';
-    }
   };
 
   return (
@@ -328,6 +412,9 @@ export default function LeadsManagement() {
         </div>
 
         <div className="header-actions">
+          <button className="btn-secondary" onClick={() => setIsSettingsModalOpen(true)}>
+            <SettingsIcon size={16} /> Manage Pipeline Settings
+          </button>
           <button className="btn-secondary" onClick={loadLeads} disabled={loading}>
             <RefreshCw size={16} className={loading ? 'spin-icon' : ''} /> Refresh
           </button>
@@ -391,7 +478,7 @@ export default function LeadsManagement() {
             <Search size={16} />
             <input 
               type="text" 
-              placeholder="Search leads by title, contact, company, email..." 
+              placeholder="Search leads by title, contact, company, email, phone..." 
               value={search}
               onChange={(e) => setSearch(e.target.value)}
             />
@@ -403,15 +490,7 @@ export default function LeadsManagement() {
             <label>Stage:</label>
             <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
               <option value="All">All Stages</option>
-              {STAGES.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
-            </select>
-          </div>
-
-          <div className="filter-item">
-            <label>Priority:</label>
-            <select value={priorityFilter} onChange={(e) => setPriorityFilter(e.target.value)}>
-              <option value="All">All Priorities</option>
-              {PRIORITIES.map(p => <option key={p} value={p}>{p}</option>)}
+              {stages.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
             </select>
           </div>
 
@@ -419,7 +498,15 @@ export default function LeadsManagement() {
             <label>Source:</label>
             <select value={sourceFilter} onChange={(e) => setSourceFilter(e.target.value)}>
               <option value="All">All Sources</option>
-              {SOURCES.map(src => <option key={src} value={src}>{src}</option>)}
+              {sources.map(src => <option key={src} value={src}>{src}</option>)}
+            </select>
+          </div>
+
+          <div className="filter-item">
+            <label>Sales Rep:</label>
+            <select value={assignedFilter} onChange={(e) => setAssignedFilter(e.target.value)}>
+              <option value="All">All Reps</option>
+              {users.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
             </select>
           </div>
 
@@ -460,13 +547,13 @@ export default function LeadsManagement() {
       ) : viewMode === 'board' ? (
         /* KANBAN BOARD VIEW */
         <div className="kanban-pipeline-grid">
-          {STAGES.map(stage => {
+          {stages.map(stage => {
             const stageLeads = leads.filter(l => l.status === stage.id);
             const totalStageValue = stageLeads.reduce((acc, curr) => acc + Number(curr.estimated_value || 0), 0);
 
             return (
               <div key={stage.id} className="kanban-column" style={{ borderColor: stage.color }}>
-                <div className="kanban-column-header" style={{ backgroundColor: stage.bg }}>
+                <div className="kanban-column-header" style={{ backgroundColor: stage.bg || '#f8fafc' }}>
                   <div className="header-left">
                     <span className="stage-dot" style={{ backgroundColor: stage.color }} />
                     <span className="stage-title">{stage.name}</span>
@@ -485,7 +572,7 @@ export default function LeadsManagement() {
                       <div key={lead.id} className="lead-card" onClick={() => openLeadActivities(lead.id)}>
                         <div className="lead-card-top">
                           <span className="lead-number">{lead.lead_number || `#${lead.id}`}</span>
-                          <span className={getPriorityBadgeClass(lead.priority)}>{lead.priority}</span>
+                          <span className="lead-source-tag"><Tag size={12} /> {lead.source}</span>
                         </div>
 
                         <h4 className="lead-title">{lead.title}</h4>
@@ -495,11 +582,13 @@ export default function LeadsManagement() {
                           {lead.company_name && (
                             <span className="company-name"><Building size={13} /> {lead.company_name}</span>
                           )}
+                          {(lead.phone || lead.whatsapp_number) && (
+                            <span className="company-name"><Phone size={13} /> {lead.phone || lead.whatsapp_number}</span>
+                          )}
                         </div>
 
                         <div className="lead-card-meta">
                           <span className="deal-value">{formatCurrency(lead.estimated_value)}</span>
-                          <span className="lead-source-tag"><Tag size={12} /> {lead.source}</span>
                         </div>
 
                         {lead.next_followup_date && (
@@ -555,10 +644,9 @@ export default function LeadsManagement() {
             <thead>
               <tr>
                 <th>Lead Info</th>
-                <th>Contact Details</th>
+                <th>Contact & Phone/WhatsApp</th>
                 <th>Source & Category</th>
                 <th>Est. Value</th>
-                <th>Priority</th>
                 <th>Pipeline Stage</th>
                 <th>Next Follow-up</th>
                 <th>Assigned Rep</th>
@@ -581,8 +669,8 @@ export default function LeadsManagement() {
                     <div className="contact-cell">
                       <span><strong>{lead.contact_name}</strong></span>
                       {lead.company_name && <span className="text-sub"><Building size={12} /> {lead.company_name}</span>}
+                      {(lead.phone || lead.whatsapp_number) && <span className="text-sub"><Phone size={12} /> {lead.phone || lead.whatsapp_number}</span>}
                       {lead.email && <span className="text-sub"><Mail size={12} /> {lead.email}</span>}
-                      {lead.phone && <span className="text-sub"><Phone size={12} /> {lead.phone}</span>}
                     </div>
                   </td>
 
@@ -598,16 +686,12 @@ export default function LeadsManagement() {
                   </td>
 
                   <td>
-                    <span className={getPriorityBadgeClass(lead.priority)}>{lead.priority}</span>
-                  </td>
-
-                  <td>
                     <select 
                       className="stage-select-dropdown"
                       value={lead.status}
                       onChange={(e) => handleQuickStatusChange(lead.id, e.target.value)}
                     >
-                      {STAGES.map(s => (
+                      {stages.map(s => (
                         <option key={s.id} value={s.id}>{s.name}</option>
                       ))}
                     </select>
@@ -713,6 +797,16 @@ export default function LeadsManagement() {
                   />
                 </div>
 
+                <div className="form-group span-2">
+                  <label>Phone / WhatsApp Number</label>
+                  <input 
+                    type="text" 
+                    placeholder="e.g. +92 300 1234567" 
+                    value={formData.phone}
+                    onChange={(e) => setFormData({ ...formData, phone: e.target.value, whatsapp_number: e.target.value })}
+                  />
+                </div>
+
                 <div className="form-group">
                   <label>Email Address</label>
                   <input 
@@ -724,32 +818,12 @@ export default function LeadsManagement() {
                 </div>
 
                 <div className="form-group">
-                  <label>Phone Number</label>
-                  <input 
-                    type="text" 
-                    placeholder="e.g. +1 555-0192" 
-                    value={formData.phone}
-                    onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-                  />
-                </div>
-
-                <div className="form-group">
-                  <label>WhatsApp Number</label>
-                  <input 
-                    type="text" 
-                    placeholder="e.g. +1 555-0192" 
-                    value={formData.whatsapp_number}
-                    onChange={(e) => setFormData({ ...formData, whatsapp_number: e.target.value })}
-                  />
-                </div>
-
-                <div className="form-group">
                   <label>Lead Source</label>
                   <select 
                     value={formData.source}
                     onChange={(e) => setFormData({ ...formData, source: e.target.value })}
                   >
-                    {SOURCES.map(src => <option key={src} value={src}>{src}</option>)}
+                    {sources.map(src => <option key={src} value={src}>{src}</option>)}
                   </select>
                 </div>
 
@@ -758,7 +832,7 @@ export default function LeadsManagement() {
                   <input 
                     type="number" 
                     step="0.01" 
-                    placeholder="e.g. 5000" 
+                    placeholder="e.g. 50000" 
                     value={formData.estimated_value}
                     onChange={(e) => setFormData({ ...formData, estimated_value: e.target.value })}
                   />
@@ -781,17 +855,7 @@ export default function LeadsManagement() {
                     value={formData.status}
                     onChange={(e) => setFormData({ ...formData, status: e.target.value })}
                   >
-                    {STAGES.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
-                  </select>
-                </div>
-
-                <div className="form-group">
-                  <label>Priority</label>
-                  <select 
-                    value={formData.priority}
-                    onChange={(e) => setFormData({ ...formData, priority: e.target.value })}
-                  >
-                    {PRIORITIES.map(p => <option key={p} value={p}>{p}</option>)}
+                    {stages.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
                   </select>
                 </div>
 
@@ -806,7 +870,7 @@ export default function LeadsManagement() {
                   </select>
                 </div>
 
-                <div className="form-group">
+                <div className="form-group span-2">
                   <label>Next Follow-up Date & Time</label>
                   <input 
                     type="datetime-local" 
@@ -835,6 +899,146 @@ export default function LeadsManagement() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* EDIT PIPELINE STAGES & SOURCES SETTINGS MODAL */}
+      {isSettingsModalOpen && (
+        <div className="modal-backdrop">
+          <div className="modal-content-card">
+            <div className="modal-header">
+              <h3><SettingsIcon size={20} style={{ verticalAlign: 'middle', marginRight: '8px' }} /> Customize Pipeline & Sources</h3>
+              <button className="close-btn" onClick={() => setIsSettingsModalOpen(false)}>&times;</button>
+            </div>
+
+            <div className="pipeline-settings-tabs">
+              <button 
+                type="button"
+                className={`tab-btn ${settingsActiveTab === 'stages' ? 'active' : ''}`}
+                onClick={() => setSettingsActiveTab('stages')}
+              >
+                Pipeline Stages ({stages.length})
+              </button>
+              <button 
+                type="button"
+                className={`tab-btn ${settingsActiveTab === 'sources' ? 'active' : ''}`}
+                onClick={() => setSettingsActiveTab('sources')}
+              >
+                Lead Sources ({sources.length})
+              </button>
+            </div>
+
+            <div className="pipeline-settings-body">
+              {settingsActiveTab === 'stages' ? (
+                <div>
+                  <p className="settings-hint">Add, rename, or remove pipeline stages for your lead Kanban board.</p>
+                  
+                  {/* Add Stage Form */}
+                  <div className="add-item-bar">
+                    <input 
+                      type="text"
+                      placeholder="Enter new stage name (e.g. Discovery Call)..."
+                      value={newStageName}
+                      onChange={(e) => setNewStageName(e.target.value)}
+                    />
+                    <div className="color-picker-row">
+                      {COLOR_OPTIONS.map((c, idx) => (
+                        <div 
+                          key={idx}
+                          className={`color-dot ${newStageColorIndex === idx ? 'selected' : ''}`}
+                          style={{ backgroundColor: c.color }}
+                          onClick={() => setNewStageColorIndex(idx)}
+                        />
+                      ))}
+                    </div>
+                    <button type="button" className="btn-primary" onClick={handleAddStage}>
+                      <Plus size={16} /> Add Stage
+                    </button>
+                  </div>
+
+                  {/* Existing Stages List */}
+                  <div className="settings-items-list">
+                    {stages.map((stg, idx) => (
+                      <div key={stg.id} className="settings-item-row">
+                        <span className="stage-badge-preview" style={{ backgroundColor: stg.bg, color: stg.color, border: `1px solid ${stg.color}` }}>
+                          <span className="dot" style={{ backgroundColor: stg.color }} /> {stg.name}
+                        </span>
+                        <input 
+                          type="text" 
+                          value={stg.name} 
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            setStages(stages.map((s, i) => i === idx ? { ...s, name: val, id: val } : s));
+                          }}
+                          className="stage-rename-input"
+                        />
+                        <button 
+                          type="button" 
+                          className="btn-icon text-red" 
+                          onClick={() => handleDeleteStage(stg.id)}
+                          title="Delete Stage"
+                        >
+                          <Trash2 size={16} />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ) : (
+                <div>
+                  <p className="settings-hint">Add or remove lead acquisition sources (e.g. WhatsApp, Facebook Ads, Referral).</p>
+                  
+                  {/* Add Source Form */}
+                  <div className="add-item-bar">
+                    <input 
+                      type="text"
+                      placeholder="Enter new lead source (e.g. Instagram Ads)..."
+                      value={newSourceName}
+                      onChange={(e) => setNewSourceName(e.target.value)}
+                    />
+                    <button type="button" className="btn-primary" onClick={handleAddSource}>
+                      <Plus size={16} /> Add Source
+                    </button>
+                  </div>
+
+                  {/* Existing Sources List */}
+                  <div className="settings-items-list">
+                    {sources.map((src, idx) => (
+                      <div key={idx} className="settings-item-row">
+                        <span className="source-pill-preview">{src}</span>
+                        <input 
+                          type="text" 
+                          value={src} 
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            setSources(sources.map((s, i) => i === idx ? val : s));
+                          }}
+                          className="stage-rename-input"
+                        />
+                        <button 
+                          type="button" 
+                          className="btn-icon text-red" 
+                          onClick={() => handleDeleteSource(src)}
+                          title="Delete Source"
+                        >
+                          <Trash2 size={16} />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <div className="modal-footer">
+              <button type="button" className="btn-secondary" onClick={() => setIsSettingsModalOpen(false)}>
+                Cancel
+              </button>
+              <button type="button" className="btn-primary" onClick={handleSavePipelineSettings} disabled={saving}>
+                {saving ? 'Saving...' : 'Save Settings'}
+              </button>
+            </div>
           </div>
         </div>
       )}
@@ -885,7 +1089,7 @@ export default function LeadsManagement() {
                     className="activity-type-select"
                   >
                     <option value="Note">📝 General Note</option>
-                    <option value="Call">📞 Phone Call</option>
+                    <option value="Call">📞 Phone Call / WhatsApp</option>
                     <option value="Email">✉️ Email Sent</option>
                     <option value="Meeting">🤝 Meeting</option>
                     <option value="Proposal">📄 Proposal Sent</option>
