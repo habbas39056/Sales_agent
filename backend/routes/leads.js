@@ -26,7 +26,8 @@ router.get('/', async (req, res) => {
         pc.name as category_name,
         c.full_name as client_name,
         c.business_name as client_business,
-        (SELECT MAX(created_at) FROM lead_activities WHERE lead_id = l.id) as last_activity_at
+        (SELECT MAX(created_at) FROM lead_activities WHERE lead_id = l.id) as last_activity_at,
+        (SELECT summary FROM lead_activities WHERE lead_id = l.id ORDER BY id DESC LIMIT 1) as latest_activity_summary
       FROM leads l
       LEFT JOIN users u ON l.assigned_to = u.id
       LEFT JOIN project_categories pc ON l.category_id = pc.id

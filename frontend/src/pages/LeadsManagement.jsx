@@ -428,10 +428,12 @@ export default function LeadsManagement() {
         summary: sessionRemarks
       });
 
-      // 2. Update lead status & next followup date
+      // 2. Update lead status, next followup date, AND remarks/notes
+      currentLead.notes = sessionRemarks.trim();
       await axios.put(`/api/leads/${currentLead.id}`, {
         status: sessionStatus,
         next_followup_date: sessionNextFollowup || null,
+        notes: sessionRemarks.trim(),
         silent: true
       });
 
@@ -538,13 +540,15 @@ export default function LeadsManagement() {
         summary: activityNote
       });
 
-      // Update follow up date if set (silent: true prevents duplicate lead update note)
+      // Update follow up date & notes if set (silent: true prevents duplicate lead update note)
+      const updatePayload = {
+        notes: activityNote.trim(),
+        silent: true
+      };
       if (nextFollowupInActivity) {
-        await axios.put(`/api/leads/${activeLeadDetails.id}`, {
-          next_followup_date: nextFollowupInActivity,
-          silent: true
-        });
+        updatePayload.next_followup_date = nextFollowupInActivity;
       }
+      await axios.put(`/api/leads/${activeLeadDetails.id}`, updatePayload);
 
       setActivityNote('');
       setNextFollowupInActivity('');
@@ -956,9 +960,14 @@ export default function LeadsManagement() {
                     </td>
 
                     <td>
-                      <div className="remarks-cell" title={lead.notes || 'No remarks recorded'}>
-                        {lead.notes ? (lead.notes.length > 45 ? lead.notes.substring(0, 45) + '...' : lead.notes) : '-'}
-                      </div>
+                      {(() => {
+                        const displayRemark = lead.notes || lead.latest_activity_summary || '';
+                        return (
+                          <div className="remarks-cell" title={displayRemark || 'No remarks recorded'}>
+                            {displayRemark ? (displayRemark.length > 45 ? displayRemark.substring(0, 45) + '...' : displayRemark) : '-'}
+                          </div>
+                        );
+                      })()}
                     </td>
 
                     <td>
