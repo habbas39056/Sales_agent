@@ -166,6 +166,19 @@ export default function InvoiceManagement() {
     const target = targetInvoiceForPayment || previewInvoice;
     if (!target) return;
 
+    const enteredAmount = parseFloat(paymentData.amount);
+    if (!paymentData.amount || isNaN(enteredAmount) || enteredAmount <= 0) {
+      alert("Please enter a valid payment amount.");
+      return;
+    }
+
+    const currentBalance = parseFloat(target.balance ?? Math.max(0, (target.amount || 0) - (target.payments || []).reduce((sum, p) => sum + (parseFloat(p?.amount) || 0), 0)));
+
+    if (enteredAmount > (currentBalance + 0.01)) {
+      alert(`Payment amount (PKR ${enteredAmount.toFixed(2)}) cannot exceed the remaining balance (PKR ${currentBalance.toFixed(2)}).`);
+      return;
+    }
+
     try {
       await axios.post(`/api/invoices/${target.id}/payments`, paymentData);
       setIsPaymentModalOpen(false);

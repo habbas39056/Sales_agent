@@ -193,19 +193,33 @@ router.post('/:id/payments', async (req, res) => {
   try {
     await connection.beginTransaction();
 
+    // Fetch invoice details & lock row
+    const [[invoice]] = await connection.query('SELECT amount, due_date, invoice_number FROM invoices WHERE id = ? FOR UPDATE', [invoiceId]);
+    if (!invoice) {
+      await connection.rollback();
+      return res.status(404).json({ error: 'Invoice not found' });
+    }
+
+    const [[alreadyPaidSum]] = await connection.query('SELECT COALESCE(SUM(amount), 0) as total_paid FROM invoice_payments WHERE invoice_id = ?', [invoiceId]);
+    const alreadyPaid = parseFloat(alreadyPaidSum.total_paid || 0);
+    const invoiceAmount = parseFloat(invoice.amount || 0);
+    const paymentAmount = parseFloat(amount || 0);
+    const remainingBalance = Math.max(0, invoiceAmount - alreadyPaid);
+
+    if (paymentAmount > (remainingBalance + 0.01)) {
+      await connection.rollback();
+      return res.status(400).json({ 
+        error: `Payment amount (PKR ${paymentAmount.toFixed(2)}) cannot exceed remaining invoice balance (PKR ${remainingBalance.toFixed(2)}).` 
+      });
+    }
+
     // Insert payment record
     await connection.query(
       'INSERT INTO invoice_payments (invoice_id, amount, payment_date, payment_method, bank, transaction_id, notes) VALUES (?, ?, ?, ?, ?, ?, ?)',
       [invoiceId, amount, payment_date, payment_method, bank || null, transaction_id || null, notes]
     );
 
-    // Fetch invoice details
-    const [[invoice]] = await connection.query('SELECT amount, due_date, invoice_number FROM invoices WHERE id = ? FOR UPDATE', [invoiceId]);
-    if (!invoice) throw new Error('Invoice not found');
-
-    const [[paymentsSum]] = await connection.query('SELECT COALESCE(SUM(amount), 0) as total_paid FROM invoice_payments WHERE invoice_id = ?', [invoiceId]);
-    const totalPaid = parseFloat(paymentsSum.total_paid || 0);
-    const invoiceAmount = parseFloat(invoice.amount || 0);
+    const totalPaid = alreadyPaid + paymentAmount;
     const newBalance = Math.max(0, invoiceAmount - totalPaid);
 
     let newStatus = 'Unpaid';
