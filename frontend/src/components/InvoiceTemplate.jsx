@@ -153,8 +153,6 @@ export default function InvoiceTemplate({ invoice = {}, companyDetails = {} }) {
             <th className="col-desc">ITEM / DESCRIPTION</th>
             <th className="col-qty">QTY</th>
             <th className="col-price">UNIT PRICE</th>
-            <th className="col-disc">DISC %</th>
-            <th className="col-tax">TAX %</th>
             <th className="col-total">TOTAL</th>
           </tr>
         </thead>
@@ -163,8 +161,6 @@ export default function InvoiceTemplate({ invoice = {}, companyDetails = {} }) {
             items.map((item, idx) => {
               const qty = parseFloat(item.quantity) || 1;
               const unitPrice = parseFloat(item.unit_price || item.rate) || 0;
-              const disc = item.discount ? `${item.discount}%` : '-';
-              const tax = item.tax ? `${item.tax}%` : '-';
               const lineTotal = item.total !== undefined && item.total !== null ? parseFloat(item.total) : (qty * unitPrice);
 
               return (
@@ -179,15 +175,13 @@ export default function InvoiceTemplate({ invoice = {}, companyDetails = {} }) {
                   </td>
                   <td style={{ textAlign: 'center' }}>{qty.toFixed(2)}</td>
                   <td style={{ textAlign: 'right' }}>{formatMoney(unitPrice)}</td>
-                  <td style={{ textAlign: 'center' }}>{disc}</td>
-                  <td style={{ textAlign: 'center' }}>{tax}</td>
                   <td style={{ textAlign: 'right', fontWeight: 700 }}>{formatMoney(lineTotal)}</td>
                 </tr>
               );
             })
           ) : (
             <tr>
-              <td colSpan="6" style={{ textAlign: 'center', color: '#94a3b8', padding: '1.5rem' }}>
+              <td colSpan="4" style={{ textAlign: 'center', color: '#94a3b8', padding: '1.5rem' }}>
                 No line items available
               </td>
             </tr>

@@ -187,12 +187,10 @@
   background-color: #ffffff;
 }
 
-.inv-tpl-table th.col-desc { text-align: left; width: 42%; }
-.inv-tpl-table th.col-qty { text-align: center; width: 10%; }
+.inv-tpl-table th.col-desc { text-align: left; width: 55%; }
+.inv-tpl-table th.col-qty { text-align: center; width: 12%; }
 .inv-tpl-table th.col-price { text-align: right; width: 16%; }
-.inv-tpl-table th.col-disc { text-align: center; width: 8%; }
-.inv-tpl-table th.col-tax { text-align: center; width: 8%; }
-.inv-tpl-table th.col-total { text-align: right; width: 16%; }
+.inv-tpl-table th.col-total { text-align: right; width: 17%; }
 
 .inv-tpl-table td {
   padding: 0.85rem 0.5rem;
