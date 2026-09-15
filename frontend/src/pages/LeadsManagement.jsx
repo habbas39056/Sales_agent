@@ -36,7 +36,8 @@ import {
   FileText,
   Download,
   Upload,
-  FileSpreadsheet
+  FileSpreadsheet,
+  PhoneCall
 } from 'lucide-react';
 import './LeadsManagement.css';
 
@@ -106,6 +107,16 @@ export default function LeadsManagement() {
   const [newStageName, setNewStageName] = useState('');
   const [newStageColorIndex, setNewStageColorIndex] = useState(0);
   const [newSourceName, setNewSourceName] = useState('');
+
+  // Calling Session Queue State ("Start Lead")
+  const [isSessionModalOpen, setIsSessionModalOpen] = useState(false);
+  const [sessionQueue, setSessionQueue] = useState([]);
+  const [sessionIndex, setSessionIndex] = useState(0);
+  const [sessionStatus, setSessionStatus] = useState('');
+  const [sessionNextFollowup, setSessionNextFollowup] = useState('');
+  const [sessionRemarks, setSessionRemarks] = useState('');
+  const [sessionRecentActivity, setSessionRecentActivity] = useState('');
+  const [sessionSaving, setSessionSaving] = useState(false);
 
   // Activity Drawer State
   const [activeLeadDetails, setActiveLeadDetails] = useState(null);
@@ -347,6 +358,91 @@ export default function LeadsManagement() {
     e.target.value = '';
   };
 
+  const loadSessionLeadDetails = async (leadId) => {
+    try {
+      const res = await axios.get(`/api/leads/${leadId}`);
+      const latest = res.data.activities?.[0];
+      setSessionRecentActivity(latest ? `${latest.type} (${new Date(latest.created_at).toLocaleDateString()}): ${latest.summary}` : 'No recent activity.');
+    } catch (err) {
+      setSessionRecentActivity('No recent activity.');
+    }
+  };
+
+  const startCallingSession = () => {
+    if (!leads || leads.length === 0) {
+      return showAlert('error', 'No leads available for calling session.');
+    }
+
+    const todayStr = new Date().toISOString().slice(0, 10);
+    // Prioritize active leads with follow-up due today or overdue
+    const dueLeads = leads.filter(l => l.status !== 'Won' && l.status !== 'Lost' && l.next_followup_date && l.next_followup_date.slice(0, 10) <= todayStr);
+    const pendingLeads = leads.filter(l => l.status !== 'Won' && l.status !== 'Lost' && (!l.next_followup_date || l.next_followup_date.slice(0, 10) > todayStr));
+    const queue = dueLeads.length > 0 ? [...dueLeads, ...pendingLeads] : (leads.filter(l => l.status !== 'Won' && l.status !== 'Lost').length > 0 ? leads.filter(l => l.status !== 'Won' && l.status !== 'Lost') : leads);
+
+    if (queue.length === 0) {
+      return showAlert('error', 'No active leads in queue to call.');
+    }
+
+    setSessionQueue(queue);
+    setSessionIndex(0);
+    const first = queue[0];
+    setSessionStatus(first.status || (stages[0]?.id || 'New Lead'));
+    setSessionNextFollowup(first.next_followup_date ? first.next_followup_date.substring(0, 16) : '');
+    setSessionRemarks('');
+    setIsSessionModalOpen(true);
+    loadSessionLeadDetails(first.id);
+  };
+
+  const goToSessionIndex = (newIdx) => {
+    if (newIdx < 0 || newIdx >= sessionQueue.length) return;
+    setSessionIndex(newIdx);
+    const lead = sessionQueue[newIdx];
+    setSessionStatus(lead.status || (stages[0]?.id || 'New Lead'));
+    setSessionNextFollowup(lead.next_followup_date ? lead.next_followup_date.substring(0, 16) : '');
+    setSessionRemarks('');
+    loadSessionLeadDetails(lead.id);
+  };
+
+  const handleSaveAndNextSession = async (e) => {
+    e.preventDefault();
+    if (!sessionRemarks.trim()) {
+      return showAlert('error', 'Please enter remarks for this interaction before proceeding.');
+    }
+
+    const currentLead = sessionQueue[sessionIndex];
+    if (!currentLead) return;
+
+    setSessionSaving(true);
+    try {
+      // 1. Log activity
+      await axios.post(`/api/leads/${currentLead.id}/activities`, {
+        type: 'Call',
+        summary: sessionRemarks
+      });
+
+      // 2. Update lead status & next followup date
+      await axios.put(`/api/leads/${currentLead.id}`, {
+        status: sessionStatus,
+        next_followup_date: sessionNextFollowup || null,
+        silent: true
+      });
+
+      showAlert('success', `Logged call for ${currentLead.contact_name}!`);
+
+      if (sessionIndex < sessionQueue.length - 1) {
+        goToSessionIndex(sessionIndex + 1);
+      } else {
+        showAlert('success', `🎉 Session Complete! Worked through all ${sessionQueue.length} leads in today's queue!`);
+        setIsSessionModalOpen(false);
+        loadLeads();
+      }
+    } catch (err) {
+      showAlert('error', 'Failed to save interaction. Please try again.');
+    } finally {
+      setSessionSaving(false);
+    }
+  };
+
   const handleSaveLead = async (e) => {
     e.preventDefault();
     if (!formData.title.trim() || !formData.contact_name.trim()) {
@@ -531,6 +627,9 @@ export default function LeadsManagement() {
         </div>
 
         <div className="header-actions">
+          <button className="btn-start-lead" onClick={startCallingSession} title="Start daily lead follow-up session">
+            <PhoneCall size={18} /> Start Lead Session
+          </button>
           <button className="btn-secondary" onClick={() => setIsSettingsModalOpen(true)}>
             <SettingsIcon size={16} /> Manage Pipeline Settings
           </button>
@@ -1417,6 +1516,184 @@ export default function LeadsManagement() {
           </div>
         </div>
       )}
+
+      {/* START CALLING SESSION MODAL (DESIGN MATCHING REFERENCE SPEC) */}
+      {isSessionModalOpen && sessionQueue.length > 0 && (() => {
+        const currentLead = sessionQueue[sessionIndex];
+        const matchedStage = stages.find(s => s.id === currentLead.status) || { color: '#3b82f6', bg: '#eff6ff' };
+        const rawPhone = currentLead.phone || currentLead.whatsapp_number || '';
+        const phoneClean = rawPhone.replace(/[^0-9]/g, '');
+
+        return (
+          <div className="modal-backdrop">
+            <div className="modal-content-card session-modal-card" style={{ maxWidth: '680px', padding: 0, overflow: 'hidden', borderRadius: '16px' }}>
+              {/* Header */}
+              <div className="session-modal-header" style={{ padding: '1.25rem 1.5rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #e2e8f0', background: '#ffffff' }}>
+                <div>
+                  <h3 style={{ margin: 0, fontSize: '1.45rem', fontWeight: 800, color: '#0f172a' }}>{currentLead.contact_name}</h3>
+                  {currentLead.company_name && (
+                    <span style={{ fontSize: '0.85rem', color: '#64748b' }}>{currentLead.company_name}</span>
+                  )}
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                  <span className="session-status-badge" style={{ backgroundColor: matchedStage.bg || '#eff6ff', color: matchedStage.color || '#2563eb', border: `1px solid ${matchedStage.color || '#2563eb'}`, padding: '0.35rem 0.85rem', borderRadius: '20px', fontWeight: 700, fontSize: '0.82rem' }}>
+                    {currentLead.status}
+                  </span>
+                  <button className="close-btn" onClick={() => { setIsSessionModalOpen(false); loadLeads(); }}>&times;</button>
+                </div>
+              </div>
+
+              {/* Body */}
+              <form onSubmit={handleSaveAndNextSession}>
+                <div className="session-modal-body" style={{ padding: '1.5rem', display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+                  
+                  {/* 4 Stat Cards Grid */}
+                  <div className="session-stats-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.85rem' }}>
+                    
+                    <div className="session-card-box" style={{ background: '#f8fafc', padding: '1rem', borderRadius: '12px', border: '1px solid #e2e8f0' }}>
+                      <span style={{ fontSize: '0.72rem', fontWeight: 700, textTransform: 'uppercase', color: '#64748b', letterSpacing: '0.04em' }}>SERVICE</span>
+                      <div style={{ fontSize: '1.05rem', fontWeight: 700, color: '#0f172a', marginTop: '0.3rem' }}>
+                        {currentLead.category_name || currentLead.title || 'General Inquiry'}
+                      </div>
+                    </div>
+
+                    <div className="session-card-box" style={{ background: '#f8fafc', padding: '1rem', borderRadius: '12px', border: '1px solid #e2e8f0' }}>
+                      <span style={{ fontSize: '0.72rem', fontWeight: 700, textTransform: 'uppercase', color: '#64748b', letterSpacing: '0.04em' }}>DEAL VALUE</span>
+                      <div style={{ fontSize: '1.05rem', fontWeight: 700, color: '#059669', marginTop: '0.3rem' }}>
+                        {formatCurrency(currentLead.estimated_value)}
+                      </div>
+                    </div>
+
+                    <div className="session-card-box" style={{ background: '#f8fafc', padding: '1rem', borderRadius: '12px', border: '1px solid #e2e8f0' }}>
+                      <span style={{ fontSize: '0.72rem', fontWeight: 700, textTransform: 'uppercase', color: '#64748b', letterSpacing: '0.04em' }}>WHATSAPP / PHONE</span>
+                      <div style={{ fontSize: '1.05rem', fontWeight: 700, color: '#0f172a', marginTop: '0.3rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                        <span>{rawPhone || 'N/A'}</span>
+                        {phoneClean && (
+                          <a 
+                            href={`https://wa.me/${phoneClean}`} 
+                            target="_blank" 
+                            rel="noopener noreferrer"
+                            style={{ color: '#10b981', display: 'inline-flex', alignItems: 'center', textDecoration: 'none' }}
+                            title="Open WhatsApp Chat"
+                          >
+                            <MessageSquare size={16} />
+                          </a>
+                        )}
+                        {rawPhone && (
+                          <a 
+                            href={`tel:${rawPhone}`} 
+                            style={{ color: '#2563eb', display: 'inline-flex', alignItems: 'center', textDecoration: 'none' }}
+                            title="Direct Call"
+                          >
+                            <Phone size={15} />
+                          </a>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="session-card-box" style={{ background: '#f8fafc', padding: '1rem', borderRadius: '12px', border: '1px solid #e2e8f0' }}>
+                      <span style={{ fontSize: '0.72rem', fontWeight: 700, textTransform: 'uppercase', color: '#64748b', letterSpacing: '0.04em' }}>FOLLOW-UP</span>
+                      <div style={{ fontSize: '1.05rem', fontWeight: 700, color: currentLead.next_followup_date ? '#dc2626' : '#64748b', marginTop: '0.3rem' }}>
+                        {currentLead.next_followup_date ? new Date(currentLead.next_followup_date).toLocaleDateString() : 'None Scheduled'}
+                      </div>
+                    </div>
+
+                  </div>
+
+                  {/* Recent Activity Section */}
+                  <div className="session-section">
+                    <span style={{ fontSize: '0.75rem', fontWeight: 700, textTransform: 'uppercase', color: '#64748b', letterSpacing: '0.04em' }}>RECENT ACTIVITY</span>
+                    <div style={{ fontSize: '0.88rem', color: '#475569', fontStyle: 'italic', marginTop: '0.35rem', background: '#ffffff', padding: '0.75rem 1rem', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
+                      {sessionRecentActivity || 'No recent activity.'}
+                    </div>
+                  </div>
+
+                  {/* Log Interaction Form */}
+                  <div className="session-section" style={{ display: 'flex', flexDirection: 'column', gap: '0.85rem' }}>
+                    <span style={{ fontSize: '0.75rem', fontWeight: 700, textTransform: 'uppercase', color: '#2563eb', letterSpacing: '0.04em' }}>LOG INTERACTION</span>
+                    
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.85rem' }}>
+                      <div>
+                        <label style={{ fontSize: '0.78rem', fontWeight: 700, color: '#334155', display: 'block', marginBottom: '0.3rem' }}>STATUS</label>
+                        <select 
+                          value={sessionStatus}
+                          onChange={(e) => setSessionStatus(e.target.value)}
+                          style={{ width: '100%', padding: '0.65rem 0.85rem', borderRadius: '8px', border: '1px solid #cbd5e1', fontWeight: 600, outline: 'none', backgroundColor: '#ffffff' }}
+                        >
+                          {stages.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                        </select>
+                      </div>
+
+                      <div>
+                        <label style={{ fontSize: '0.78rem', fontWeight: 700, color: '#334155', display: 'block', marginBottom: '0.3rem' }}>NEXT FOLLOW-UP *</label>
+                        <input 
+                          type="datetime-local"
+                          value={sessionNextFollowup}
+                          onChange={(e) => setSessionNextFollowup(e.target.value)}
+                          style={{ width: '100%', padding: '0.65rem 0.85rem', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '0.88rem', outline: 'none', backgroundColor: '#ffffff' }}
+                        />
+                      </div>
+                    </div>
+
+                    <div>
+                      <label style={{ fontSize: '0.78rem', fontWeight: 700, color: '#334155', display: 'block', marginBottom: '0.3rem' }}>REMARKS *</label>
+                      <textarea 
+                        rows="3"
+                        placeholder="What happened? Next steps?"
+                        value={sessionRemarks}
+                        onChange={(e) => setSessionRemarks(e.target.value)}
+                        required
+                        style={{ width: '100%', padding: '0.75rem 0.85rem', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '0.9rem', outline: 'none', resize: 'vertical', backgroundColor: '#ffffff' }}
+                      />
+                    </div>
+                  </div>
+
+                </div>
+
+                {/* Footer */}
+                <div className="session-modal-footer" style={{ padding: '1rem 1.5rem', background: '#f8fafc', borderTop: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                    <span style={{ fontSize: '0.9rem', fontWeight: 600, color: '#475569' }}>
+                      Queue: <strong>{sessionIndex + 1} / {sessionQueue.length}</strong>
+                    </span>
+                    <div style={{ display: 'flex', gap: '0.25rem' }}>
+                      <button 
+                        type="button" 
+                        className="btn-icon" 
+                        disabled={sessionIndex === 0} 
+                        onClick={() => goToSessionIndex(sessionIndex - 1)}
+                        title="Previous Lead"
+                        style={{ opacity: sessionIndex === 0 ? 0.5 : 1, width: '28px', height: '28px' }}
+                      >
+                        <ChevronRight size={15} style={{ transform: 'rotate(180deg)' }} />
+                      </button>
+                      <button 
+                        type="button" 
+                        className="btn-icon" 
+                        disabled={sessionIndex === sessionQueue.length - 1} 
+                        onClick={() => goToSessionIndex(sessionIndex + 1)}
+                        title="Skip to Next Lead"
+                        style={{ opacity: sessionIndex === sessionQueue.length - 1 ? 0.5 : 1, width: '28px', height: '28px' }}
+                      >
+                        <ChevronRight size={15} />
+                      </button>
+                    </div>
+                  </div>
+
+                  <div style={{ display: 'flex', gap: '0.75rem' }}>
+                    <button type="button" className="btn-secondary" onClick={() => { setIsSessionModalOpen(false); loadLeads(); }}>
+                      Cancel
+                    </button>
+                    <button type="submit" className="btn-primary" disabled={sessionSaving} style={{ padding: '0.65rem 1.5rem', backgroundColor: '#2563eb' }}>
+                      {sessionSaving ? 'Saving...' : sessionIndex === sessionQueue.length - 1 ? 'Save & Finish' : 'Save & Next'}
+                    </button>
+                  </div>
+                </div>
+              </form>
+            </div>
+          </div>
+        );
+      })()}
     </div>
   );
 }
