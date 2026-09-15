@@ -190,11 +190,11 @@ export default function Header() {
 
   return (
     <header className="top-header">
-      <div className="header-left" style={{ display: 'flex', alignItems: 'center', gap: '1.25rem' }}>
+      <div className="header-left">
         {title && (
           <div className="header-titles">
-            <h1 style={{ margin: '0 0 0.2rem 0', fontSize: '1.25rem', fontWeight: '700', color: 'var(--text-primary)' }}>{title}</h1>
-            {subtitle && <p style={{ margin: 0, fontSize: '0.8rem', color: 'var(--text-secondary)' }}>{subtitle}</p>}
+            <h1>{title}</h1>
+            {subtitle && <p title={subtitle}>{subtitle}</p>}
           </div>
         )}
 
@@ -212,7 +212,7 @@ export default function Header() {
         )}
       </div>
 
-      <div className="header-right" style={{ display: 'flex', alignItems: 'center', gap: '1.5rem' }}>
+      <div className="header-right">
         <div className="header-search" ref={searchRef} style={{ position: 'relative' }}>
           <Search size={18} className="search-icon" />
           <input 
