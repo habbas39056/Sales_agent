@@ -247,21 +247,15 @@ router.get('/management/overview', async (req, res) => {
         pm_user.name as pm_name,
         (SELECT COUNT(*) FROM project_steps WHERE project_steps.project_id = p.id) as dyn_total_steps,
         (SELECT COUNT(*) FROM project_steps WHERE project_steps.project_id = p.id AND project_steps.status = 'Completed') as dyn_completed_steps,
-        inv.id as invoice_id,
-        inv.invoice_number,
-        inv.amount as invoice_amount,
-        inv.balance as invoice_balance,
-        inv.due_date as invoice_due_date,
-        inv.status as invoice_status
+        (
+          SELECT id FROM invoices 
+          WHERE project_id = p.id OR (project_id IS NULL AND client_id = p.client_id)
+          ORDER BY CASE WHEN project_id = p.id THEN 1 ELSE 0 END DESC, id DESC 
+          LIMIT 1
+        ) as linked_invoice_id
       FROM projects p
       LEFT JOIN clients c ON p.client_id = c.id
       LEFT JOIN users pm_user ON p.pm_id = pm_user.id
-      LEFT JOIN invoices inv ON inv.id = (
-        SELECT id FROM invoices 
-        WHERE project_id = p.id OR (project_id IS NULL AND client_id = p.client_id)
-        ORDER BY CASE WHEN project_id = p.id THEN 1 ELSE 0 END DESC, id DESC 
-        LIMIT 1
-      )
     `;
     const params = [];
 
@@ -274,8 +268,20 @@ router.get('/management/overview', async (req, res) => {
 
     const [rows] = await db.query(query, params);
 
+    let invoiceMap = {};
+    const invoiceIds = rows.map(r => r.linked_invoice_id).filter(Boolean);
+    if (invoiceIds.length > 0) {
+      const [invRows] = await db.query(
+        'SELECT id, invoice_number, amount, balance, due_date, status FROM invoices WHERE id IN (?)',
+        [invoiceIds]
+      );
+      invRows.forEach(inv => {
+        invoiceMap[inv.id] = inv;
+      });
+    }
+
     const processed = rows.map(r => {
-      // Auto-pick status from project and steps
+      const inv = invoiceMap[r.linked_invoice_id] || null;
       let autoStatus = r.status || 'Assigned';
       const totalSteps = Number(r.dyn_total_steps || 0);
       const completedSteps = Number(r.dyn_completed_steps || 0);
@@ -296,12 +302,12 @@ router.get('/management/overview', async (req, res) => {
         pm_name: r.pm_name,
         total_steps: totalSteps,
         completed_steps: completedSteps,
-        invoice_id: r.invoice_id || null,
-        invoice_number: r.invoice_number || null,
-        invoice_amount: r.invoice_amount != null ? r.invoice_amount : null,
-        balance: r.invoice_balance != null ? r.invoice_balance : null,
-        invoice_due_date: r.invoice_due_date || null,
-        invoice_status: r.invoice_status || null,
+        invoice_id: inv ? inv.id : null,
+        invoice_number: inv ? inv.invoice_number : null,
+        invoice_amount: inv ? inv.amount : null,
+        balance: inv ? inv.balance : null,
+        invoice_due_date: inv ? inv.due_date : null,
+        invoice_status: inv ? inv.status : null,
         project_due_date: r.due_date || r.locked_deadline,
         status: autoStatus,
         remarks: r.remarks || '',
