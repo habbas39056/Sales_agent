@@ -373,14 +373,23 @@ export default function LeadsManagement() {
       return showAlert('error', 'No leads available for calling session.');
     }
 
-    const todayStr = new Date().toISOString().slice(0, 10);
-    // Prioritize active leads with follow-up due today or overdue
-    const dueLeads = leads.filter(l => l.status !== 'Won' && l.status !== 'Lost' && l.next_followup_date && l.next_followup_date.slice(0, 10) <= todayStr);
-    const pendingLeads = leads.filter(l => l.status !== 'Won' && l.status !== 'Lost' && (!l.next_followup_date || l.next_followup_date.slice(0, 10) > todayStr));
-    const queue = dueLeads.length > 0 ? [...dueLeads, ...pendingLeads] : (leads.filter(l => l.status !== 'Won' && l.status !== 'Lost').length > 0 ? leads.filter(l => l.status !== 'Won' && l.status !== 'Lost') : leads);
+    const todayObj = new Date();
+    const year = todayObj.getFullYear();
+    const month = String(todayObj.getMonth() + 1).padStart(2, '0');
+    const day = String(todayObj.getDate()).padStart(2, '0');
+    const todayStr = `${year}-${month}-${day}`;
+
+    // Filter strictly for active leads due today, overdue (next_followup <= today), or unscheduled leads.
+    // Future follow-up dates (next_followup > today) are strictly EXCLUDED!
+    const queue = leads.filter(l => {
+      if (l.status === 'Won' || l.status === 'Lost') return false;
+      if (!l.next_followup_date) return true; // Unscheduled lead
+      const fDate = l.next_followup_date.slice(0, 10);
+      return fDate <= todayStr; // Due today or overdue
+    });
 
     if (queue.length === 0) {
-      return showAlert('error', 'No active leads in queue to call.');
+      return showAlert('error', 'No due or overdue leads found for today! Future follow-ups are excluded.');
     }
 
     setSessionQueue(queue);
