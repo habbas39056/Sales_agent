@@ -25,7 +25,8 @@ router.get('/', async (req, res) => {
         u.profile_image_url as assigned_avatar,
         pc.name as category_name,
         c.full_name as client_name,
-        c.business_name as client_business
+        c.business_name as client_business,
+        (SELECT MAX(created_at) FROM lead_activities WHERE lead_id = l.id) as last_activity_at
       FROM leads l
       LEFT JOIN users u ON l.assigned_to = u.id
       LEFT JOIN project_categories pc ON l.category_id = pc.id

@@ -30,7 +30,9 @@ import {
   Tag,
   Check,
   Settings as SettingsIcon,
-  Palette
+  Palette,
+  Eye,
+  FileText
 } from 'lucide-react';
 import './LeadsManagement.css';
 
@@ -89,6 +91,10 @@ export default function LeadsManagement() {
   // Modal States
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingLead, setEditingLead] = useState(null);
+
+  // Full Details Modal State
+  const [selectedLeadForDetails, setSelectedLeadForDetails] = useState(null);
+  const [leadDetailsActivities, setLeadDetailsActivities] = useState([]);
 
   // Settings Modal State (Edit Stages & Sources)
   const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
@@ -230,6 +236,16 @@ export default function LeadsManagement() {
     setIsModalOpen(true);
   };
 
+  const openFullLeadDetails = async (leadId) => {
+    try {
+      const res = await axios.get(`/api/leads/${leadId}`);
+      setSelectedLeadForDetails(res.data.lead);
+      setLeadDetailsActivities(res.data.activities || []);
+    } catch (err) {
+      showAlert('error', 'Failed to load lead details');
+    }
+  };
+
   const handleSaveLead = async (e) => {
     e.preventDefault();
     if (!formData.title.trim() || !formData.contact_name.trim()) {
@@ -275,6 +291,7 @@ export default function LeadsManagement() {
       await axios.delete(`/api/leads/${id}`);
       showAlert('success', 'Lead deleted successfully!');
       if (activeLeadDetails?.id === id) setActiveLeadDetails(null);
+      if (selectedLeadForDetails?.id === id) setSelectedLeadForDetails(null);
       loadLeads();
     } catch (err) {
       showAlert('error', 'Failed to delete lead');
@@ -288,6 +305,7 @@ export default function LeadsManagement() {
       showAlert('success', res.data.message || 'Lead converted to Client!');
       loadLeads();
       if (activeLeadDetails?.id === leadId) openLeadActivities(leadId);
+      if (selectedLeadForDetails?.id === leadId) openFullLeadDetails(leadId);
     } catch (err) {
       showAlert('error', err.response?.data?.error || 'Failed to convert lead');
     }
@@ -611,6 +629,13 @@ export default function LeadsManagement() {
                           </div>
 
                           <div className="card-actions">
+                            <button 
+                              className="action-btn text-blue" 
+                              title="View Full Lead Details"
+                              onClick={() => openFullLeadDetails(lead.id)}
+                            >
+                              <Eye size={14} />
+                            </button>
                             {lead.status !== 'Won' && (
                               <button 
                                 className="action-btn text-emerald" 
@@ -638,18 +663,18 @@ export default function LeadsManagement() {
           })}
         </div>
       ) : (
-        /* TABLE LIST VIEW */
+        /* TABLE LIST VIEW WITH CUSTOM COLUMNS */
         <div className="table-responsive-card">
           <table className="leads-table">
             <thead>
               <tr>
-                <th>Lead Info</th>
-                <th>Contact & Phone/WhatsApp</th>
-                <th>Source & Category</th>
-                <th>Est. Value</th>
-                <th>Pipeline Stage</th>
-                <th>Next Follow-up</th>
-                <th>Assigned Rep</th>
+                <th>Client Name</th>
+                <th>Business Name</th>
+                <th>Phone Number</th>
+                <th>Services Interested</th>
+                <th>Status</th>
+                <th>Remarks</th>
+                <th>Last + Next Followup</th>
                 <th style={{ textAlign: 'right' }}>Actions</th>
               </tr>
             </thead>
@@ -667,31 +692,34 @@ export default function LeadsManagement() {
                   >
                     <td>
                       <div className="lead-cell-title">
-                        <strong onClick={() => openLeadActivities(lead.id)} className="clickable-lead">
-                          {lead.title}
+                        <strong onClick={() => openFullLeadDetails(lead.id)} className="clickable-lead">
+                          {lead.contact_name}
                         </strong>
                         <span className="lead-number-sub">{lead.lead_number || `#${lead.id}`}</span>
                       </div>
                     </td>
 
                     <td>
-                      <div className="contact-cell">
-                        <span><strong>{lead.contact_name}</strong></span>
-                        {lead.company_name && <span className="text-sub"><Building size={12} /> {lead.company_name}</span>}
-                        {(lead.phone || lead.whatsapp_number) && <span className="text-sub"><Phone size={12} /> {lead.phone || lead.whatsapp_number}</span>}
+                      <div className="company-cell">
+                        <strong>{lead.company_name || '-'}</strong>
                         {lead.email && <span className="text-sub"><Mail size={12} /> {lead.email}</span>}
                       </div>
                     </td>
 
                     <td>
-                      <div className="source-cell">
-                        <span className="source-pill">{lead.source}</span>
-                        {lead.category_name && <span className="cat-pill">{lead.category_name}</span>}
+                      <div className="phone-cell">
+                        <span><Phone size={12} /> {lead.phone || lead.whatsapp_number || '-'}</span>
                       </div>
                     </td>
 
                     <td>
-                      <strong className="deal-value-text">{formatCurrency(lead.estimated_value)}</strong>
+                      <div className="service-cell">
+                        <strong>{lead.category_name || lead.title}</strong>
+                        <div style={{ marginTop: '2px', display: 'flex', alignItems: 'center', gap: '4px', flexWrap: 'wrap' }}>
+                          <span className="source-pill">{lead.source}</span>
+                          <span className="deal-value-text">{formatCurrency(lead.estimated_value)}</span>
+                        </div>
+                      </div>
                     </td>
 
                     <td>
@@ -712,59 +740,67 @@ export default function LeadsManagement() {
                       </select>
                     </td>
 
-                  <td>
-                    {lead.next_followup_date ? (
-                      <span className="followup-cell">
-                        <Calendar size={13} /> {new Date(lead.next_followup_date).toLocaleDateString()}
-                      </span>
-                    ) : (
-                      <span className="text-muted">-</span>
-                    )}
-                  </td>
+                    <td>
+                      <div className="remarks-cell" title={lead.notes || 'No remarks recorded'}>
+                        {lead.notes ? (lead.notes.length > 45 ? lead.notes.substring(0, 45) + '...' : lead.notes) : '-'}
+                      </div>
+                    </td>
 
-                  <td>
-                    <div className="assigned-cell">
-                      <span className="rep-name">{lead.assigned_name || 'Unassigned'}</span>
-                    </div>
-                  </td>
+                    <td>
+                      <div className="followups-cell">
+                        <div style={{ fontSize: '0.78rem', color: '#64748b' }}>
+                          <strong>Last:</strong> {lead.last_activity_at ? new Date(lead.last_activity_at).toLocaleDateString() : 'None'}
+                        </div>
+                        <div style={{ fontSize: '0.78rem', color: lead.next_followup_date ? '#d97706' : '#94a3b8', fontWeight: lead.next_followup_date ? 700 : 400 }}>
+                          <strong>Next:</strong> {lead.next_followup_date ? new Date(lead.next_followup_date).toLocaleDateString() : 'None'}
+                        </div>
+                      </div>
+                    </td>
 
-                  <td style={{ textAlign: 'right' }}>
-                    <div className="table-actions">
-                      <button 
-                        className="btn-icon" 
-                        title="View Activities & Notes"
-                        onClick={() => openLeadActivities(lead.id)}
-                      >
-                        <MessageSquare size={16} />
-                      </button>
-                      {lead.status !== 'Won' && (
+                    <td style={{ textAlign: 'right' }}>
+                      <div className="table-actions">
                         <button 
-                          className="btn-icon text-emerald" 
-                          title="Convert to Client"
-                          onClick={() => handleConvertLeadToClient(lead.id)}
+                          className="btn-icon text-blue" 
+                          title="View Full Lead Details"
+                          onClick={() => openFullLeadDetails(lead.id)}
                         >
-                          <UserPlus size={16} />
+                          <Eye size={16} />
                         </button>
-                      )}
-                      <button 
-                        className="btn-icon" 
-                        title="Edit Lead"
-                        onClick={() => openEditModal(lead)}
-                      >
-                        <Edit3 size={16} />
-                      </button>
-                      <button 
-                        className="btn-icon text-red" 
-                        title="Delete Lead"
-                        onClick={() => handleDeleteLead(lead.id, lead.title)}
-                      >
-                        <Trash2 size={16} />
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              );
-            })}
+                        <button 
+                          className="btn-icon" 
+                          title="Log Activity & Notes"
+                          onClick={() => openLeadActivities(lead.id)}
+                        >
+                          <MessageSquare size={16} />
+                        </button>
+                        {lead.status !== 'Won' && (
+                          <button 
+                            className="btn-icon text-emerald" 
+                            title="Convert to Client"
+                            onClick={() => handleConvertLeadToClient(lead.id)}
+                          >
+                            <UserPlus size={16} />
+                          </button>
+                        )}
+                        <button 
+                          className="btn-icon" 
+                          title="Edit Lead"
+                          onClick={() => openEditModal(lead)}
+                        >
+                          <Edit3 size={16} />
+                        </button>
+                        <button 
+                          className="btn-icon text-red" 
+                          title="Delete Lead"
+                          onClick={() => handleDeleteLead(lead.id, lead.title)}
+                        >
+                          <Trash2 size={16} />
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>
@@ -793,7 +829,7 @@ export default function LeadsManagement() {
                 </div>
 
                 <div className="form-group">
-                  <label>Contact Name *</label>
+                  <label>Client / Contact Name *</label>
                   <input 
                     type="text" 
                     placeholder="e.g. John Doe" 
@@ -855,7 +891,7 @@ export default function LeadsManagement() {
                 </div>
 
                 <div className="form-group">
-                  <label>Project Category</label>
+                  <label>Services Interested / Project Category</label>
                   <select 
                     value={formData.category_id}
                     onChange={(e) => setFormData({ ...formData, category_id: e.target.value })}
@@ -896,10 +932,10 @@ export default function LeadsManagement() {
                 </div>
 
                 <div className="form-group span-2">
-                  <label>Initial Notes / Requirement Details</label>
+                  <label>Remarks / Requirement Details</label>
                   <textarea 
                     rows="3" 
-                    placeholder="Enter detailed notes regarding client requirements, budget, or scope..."
+                    placeholder="Enter detailed remarks regarding client requirements, budget, or scope..."
                     value={formData.notes}
                     onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
                   />
@@ -915,6 +951,112 @@ export default function LeadsManagement() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* FULL LEAD DETAILS MODAL (OPENED BY DETAIL ICON) */}
+      {selectedLeadForDetails && (
+        <div className="modal-backdrop">
+          <div className="modal-content-card" style={{ maxWidth: '820px' }}>
+            <div className="modal-header">
+              <div>
+                <h3 style={{ margin: 0, display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                  <Eye size={22} style={{ color: '#2563eb' }} />
+                  {selectedLeadForDetails.title}
+                </h3>
+                <span className="lead-subtitle">
+                  Lead Number: <strong>{selectedLeadForDetails.lead_number || `#${selectedLeadForDetails.id}`}</strong> | Created: {new Date(selectedLeadForDetails.created_at).toLocaleString()}
+                </span>
+              </div>
+              <button className="close-btn" onClick={() => setSelectedLeadForDetails(null)}>&times;</button>
+            </div>
+
+            <div className="modal-body-grid" style={{ padding: '1.5rem', gap: '1.25rem' }}>
+              {/* Client & Contact Info */}
+              <div className="details-section-card span-2" style={{ background: '#f8fafc', padding: '1rem', borderRadius: '12px', border: '1px solid #e2e8f0' }}>
+                <h4 style={{ margin: '0 0 0.75rem 0', color: '#0f172a', fontSize: '0.95rem' }}>Client & Contact Information</h4>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem', fontSize: '0.9rem' }}>
+                  <div><strong>Client Name:</strong> {selectedLeadForDetails.contact_name}</div>
+                  <div><strong>Business Name:</strong> {selectedLeadForDetails.company_name || '-'}</div>
+                  <div><strong>Phone / WhatsApp:</strong> {selectedLeadForDetails.phone || selectedLeadForDetails.whatsapp_number || '-'}</div>
+                  <div><strong>Email Address:</strong> {selectedLeadForDetails.email || '-'}</div>
+                </div>
+              </div>
+
+              {/* Deal & Service Info */}
+              <div className="details-section-card span-2" style={{ background: '#f8fafc', padding: '1rem', borderRadius: '12px', border: '1px solid #e2e8f0' }}>
+                <h4 style={{ margin: '0 0 0.75rem 0', color: '#0f172a', fontSize: '0.95rem' }}>Services & Opportunity Details</h4>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem', fontSize: '0.9rem' }}>
+                  <div><strong>Services Interested / Category:</strong> {selectedLeadForDetails.category_name || selectedLeadForDetails.title}</div>
+                  <div><strong>Lead Source:</strong> {selectedLeadForDetails.source}</div>
+                  <div><strong>Estimated Value:</strong> <span style={{ color: '#059669', fontWeight: 700 }}>{formatCurrency(selectedLeadForDetails.estimated_value)}</span></div>
+                  <div><strong>Pipeline Stage:</strong> <span style={{ fontWeight: 700, color: '#2563eb' }}>{selectedLeadForDetails.status}</span></div>
+                  <div><strong>Assigned Sales Rep:</strong> {selectedLeadForDetails.assigned_name || 'Unassigned'}</div>
+                  <div><strong>Last Activity Date:</strong> {selectedLeadForDetails.last_activity_at ? new Date(selectedLeadForDetails.last_activity_at).toLocaleString() : 'No activity logged'}</div>
+                  <div><strong>Next Follow-up Date:</strong> {selectedLeadForDetails.next_followup_date ? new Date(selectedLeadForDetails.next_followup_date).toLocaleString() : 'None'}</div>
+                </div>
+              </div>
+
+              {/* Remarks */}
+              <div className="details-section-card span-2">
+                <h4 style={{ margin: '0 0 0.5rem 0', color: '#0f172a', fontSize: '0.95rem' }}>Remarks / Initial Requirements Notes</h4>
+                <p style={{ margin: 0, fontSize: '0.9rem', color: '#334155', backgroundColor: '#ffffff', padding: '0.85rem', borderRadius: '8px', border: '1px solid #cbd5e1', whiteSpace: 'pre-wrap' }}>
+                  {selectedLeadForDetails.notes || 'No remarks recorded during lead creation.'}
+                </p>
+              </div>
+
+              {/* Activity History */}
+              <div className="details-section-card span-2">
+                <h4 style={{ margin: '0 0 0.75rem 0', color: '#0f172a', fontSize: '0.95rem' }}>Activity History & Logs ({leadDetailsActivities.length})</h4>
+                {leadDetailsActivities.length === 0 ? (
+                  <p style={{ fontSize: '0.85rem', color: '#64748b' }}>No activity logs recorded yet.</p>
+                ) : (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', maxHeight: '200px', overflowY: 'auto' }}>
+                    {leadDetailsActivities.map(act => (
+                      <div key={act.id} style={{ background: '#f8fafc', padding: '0.6rem 0.85rem', borderRadius: '8px', border: '1px solid #e2e8f0', fontSize: '0.85rem' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.2rem' }}>
+                          <strong>{act.author_name || 'System'} ({act.type})</strong>
+                          <span style={{ color: '#94a3b8', fontSize: '0.75rem' }}>{new Date(act.created_at).toLocaleString()}</span>
+                        </div>
+                        <div style={{ color: '#334155' }}>{act.summary}</div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div className="modal-footer">
+              <button type="button" className="btn-secondary" onClick={() => setSelectedLeadForDetails(null)}>
+                Close
+              </button>
+              {selectedLeadForDetails.status !== 'Won' && (
+                <button 
+                  type="button" 
+                  className="btn-primary" 
+                  style={{ backgroundColor: '#059669' }} 
+                  onClick={() => { 
+                    const leadId = selectedLeadForDetails.id; 
+                    setSelectedLeadForDetails(null); 
+                    handleConvertLeadToClient(leadId); 
+                  }}
+                >
+                  <UserPlus size={16} /> Convert to Client
+                </button>
+              )}
+              <button 
+                type="button" 
+                className="btn-primary" 
+                onClick={() => { 
+                  const leadToEdit = selectedLeadForDetails; 
+                  setSelectedLeadForDetails(null); 
+                  openEditModal(leadToEdit); 
+                }}
+              >
+                <Edit3 size={16} /> Edit Lead
+              </button>
+            </div>
           </div>
         </div>
       )}
