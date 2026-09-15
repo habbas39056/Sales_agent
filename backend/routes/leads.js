@@ -392,8 +392,9 @@ router.post('/:id/send-whatsapp', async (req, res) => {
     const lead = rows[0];
 
     const phoneRaw = lead.phone || lead.whatsapp_number;
-    if (!phoneRaw) {
-      return res.status(400).json({ error: 'Lead has no phone or WhatsApp number' });
+    const phoneClean = (phoneRaw || '').replace(/\D/g, '');
+    if (!phoneClean || phoneClean.length < 10) {
+      return res.status(400).json({ error: `Invalid phone number "${phoneRaw || 'none'}". WhatsApp numbers must be at least 10 digits (e.g. 03001234567 or 923001234567).` });
     }
 
     const clientName = lead.contact_name || 'Valued Client';
