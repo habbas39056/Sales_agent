@@ -11,6 +11,7 @@ export default function CreateQuotation() {
   const navigate = useNavigate();
   const { id } = useParams();
   const [clients, setClients] = useState([]);
+  const [leads, setLeads] = useState([]);
   const [projects, setProjects] = useState([]);
   const [products, setProducts] = useState([]);
   const [agents, setAgents] = useState([]);
@@ -23,6 +24,10 @@ export default function CreateQuotation() {
     quotation_number: `QT-${Date.now()}`,
     client_id: '',
     manual_client_name: '',
+    manual_client_email: '',
+    manual_client_phone: '',
+    manual_client_business: '',
+    manual_client_address: '',
     project_id: '',
     agent_id: '',
     discount: 0,
@@ -48,18 +53,20 @@ export default function CreateQuotation() {
         queryParams = `?user_id=${user.id}&role=${encodeURIComponent(user.role)}`;
       }
 
-      const [cliRes, projRes, prodRes, agentRes, banksRes] = await Promise.all([
+      const [cliRes, projRes, prodRes, agentRes, banksRes, leadsRes] = await Promise.all([
         axios.get(`/api/clients${queryParams}`),
         axios.get('/api/projects'),
         axios.get('/api/products'),
         axios.get('/api/users'),
-        axios.get('/api/banks')
+        axios.get('/api/banks'),
+        axios.get('/api/leads')
       ]);
-      setClients(cliRes.data);
-      setProjects(projRes.data);
-      setProducts(prodRes.data);
-      setAgents(agentRes.data);
-      setBanks(banksRes.data);
+      setClients(cliRes.data || []);
+      setProjects(projRes.data || []);
+      setProducts(prodRes.data || []);
+      setAgents(agentRes.data || []);
+      setBanks(banksRes.data || []);
+      setLeads(leadsRes.data || []);
       
       if (id) {
         const invRes = await axios.get(`/api/quotations/${id}`);
@@ -68,6 +75,10 @@ export default function CreateQuotation() {
           quotation_number: inv.quotation_number,
           client_id: inv.client_id || '',
           manual_client_name: inv.manual_client_name || '',
+          manual_client_email: inv.manual_client_email || '',
+          manual_client_phone: inv.manual_client_phone || '',
+          manual_client_business: inv.manual_client_business || '',
+          manual_client_address: inv.manual_client_address || '',
           project_id: inv.project_id || '',
           agent_id: inv.agent_id || '',
           discount: inv.discount || 0,
@@ -76,7 +87,7 @@ export default function CreateQuotation() {
           terms_and_conditions: inv.terms_and_conditions,
           bill_from_name: inv.bill_from_name || 'Adwise Labs',
           bill_from_address: inv.bill_from_address || 'A-205 / II Saba Ave, DHA Karachi Phase VIII Zone A Phase VIII\nDefence Housing Authority\nKarachi Sindh\n76500',
-          items: inv.items.map(item => ({
+          items: (inv.items || []).map(item => ({
             description: item.description,
             details: item.details || '',
             category: item.category || 'SERVICE',
@@ -85,12 +96,30 @@ export default function CreateQuotation() {
             unit_price: item.unit_price
           }))
         });
-        setPayments(inv.payments || []);
       } else {
         const urlParams = new URLSearchParams(window.location.search);
         const preselectedClient = urlParams.get('client_id');
+        const preselectedLead = urlParams.get('lead_id');
+
         if (preselectedClient) {
           setFormData(prev => ({ ...prev, client_id: preselectedClient }));
+        } else if (preselectedLead && leadsRes.data) {
+          const foundLead = leadsRes.data.find(l => String(l.id) === String(preselectedLead));
+          if (foundLead) {
+            if (foundLead.client_id) {
+              setFormData(prev => ({ ...prev, client_id: foundLead.client_id }));
+            } else {
+              setFormData(prev => ({
+                ...prev,
+                client_id: '',
+                manual_client_name: foundLead.contact_name || foundLead.title || '',
+                manual_client_email: foundLead.email || '',
+                manual_client_phone: foundLead.phone || '',
+                manual_client_business: foundLead.company_name || '',
+                manual_client_address: foundLead.location || ''
+              }));
+            }
+          }
         }
       }
     } catch (error) {
@@ -133,12 +162,193 @@ export default function CreateQuotation() {
     return formData.items.reduce((total, item) => total + (item.quantity * item.unit_price), 0);
   };
 
+  // Recipient options for CreatableSelect
+  const recipientOptions = [
+    {
+      label: '🏢 Existing Clients',
+      options: (clients || []).map(c => ({
+        value: `client_${c.id}`,
+        type: 'client',
+        client: c,
+        label: `${c.full_name}${c.business_name ? ` (${c.business_name})` : ''}`
+      }))
+    },
+    {
+      label: '🎯 Sales Leads',
+      options: (leads || []).map(l => ({
+        value: `lead_${l.id}`,
+        type: 'lead',
+        lead: l,
+        label: `${l.contact_name || l.title}${l.company_name ? ` (${l.company_name})` : ''} - ${l.lead_number || `LEAD-${l.id}`}`
+      }))
+    }
+  ];
+
+  const getRecipientSelectValue = () => {
+    if (formData.client_id) {
+      const foundClient = (clients || []).find(c => String(c.id) === String(formData.client_id));
+      if (foundClient) {
+        return {
+          value: `client_${foundClient.id}`,
+          type: 'client',
+          client: foundClient,
+          label: `${foundClient.full_name}${foundClient.business_name ? ` (${foundClient.business_name})` : ''}`
+        };
+      }
+    }
+    if (formData.manual_client_name) {
+      const foundLead = (leads || []).find(l => 
+        (l.contact_name && l.contact_name.toLowerCase() === formData.manual_client_name.toLowerCase()) ||
+        (l.title && l.title.toLowerCase() === formData.manual_client_name.toLowerCase())
+      );
+      if (foundLead) {
+        return {
+          value: `lead_${foundLead.id}`,
+          type: 'lead',
+          lead: foundLead,
+          label: `${foundLead.contact_name || foundLead.title}${foundLead.company_name ? ` (${foundLead.company_name})` : ''}`
+        };
+      }
+      return {
+        value: formData.manual_client_name,
+        label: formData.manual_client_name,
+        type: 'manual'
+      };
+    }
+    return null;
+  };
+
+  const handleRecipientSelect = (selectedOption) => {
+    if (!selectedOption) {
+      setFormData(prev => ({
+        ...prev,
+        client_id: '',
+        manual_client_name: '',
+        manual_client_email: '',
+        manual_client_phone: '',
+        manual_client_business: '',
+        manual_client_address: ''
+      }));
+    } else if (selectedOption.__isNew__ || selectedOption.type === 'manual') {
+      setFormData(prev => ({
+        ...prev,
+        client_id: '',
+        manual_client_name: selectedOption.value || selectedOption.label,
+        manual_client_email: '',
+        manual_client_phone: '',
+        manual_client_business: '',
+        manual_client_address: ''
+      }));
+    } else if (selectedOption.type === 'client') {
+      const c = selectedOption.client;
+      setFormData(prev => ({
+        ...prev,
+        client_id: c.id,
+        manual_client_name: '',
+        manual_client_email: '',
+        manual_client_phone: '',
+        manual_client_business: '',
+        manual_client_address: ''
+      }));
+    } else if (selectedOption.type === 'lead') {
+      const l = selectedOption.lead;
+      if (l.client_id) {
+        // Converted lead
+        setFormData(prev => ({
+          ...prev,
+          client_id: l.client_id,
+          manual_client_name: '',
+          manual_client_email: '',
+          manual_client_phone: '',
+          manual_client_business: '',
+          manual_client_address: ''
+        }));
+      } else {
+        // Unconverted lead
+        setFormData(prev => ({
+          ...prev,
+          client_id: '',
+          manual_client_name: l.contact_name || l.title || '',
+          manual_client_email: l.email || '',
+          manual_client_phone: l.phone || '',
+          manual_client_business: l.company_name || '',
+          manual_client_address: l.location || ''
+        }));
+      }
+    }
+  };
+
+  const formatOptionLabel = (option, { context }) => {
+    if (context === 'value') {
+      if (option.type === 'lead') {
+        return (
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontWeight: '600' }}>
+            <span style={{ fontSize: '0.7rem', background: '#fef3c7', color: '#92400e', padding: '2px 6px', borderRadius: '4px', fontWeight: '700' }}>
+              🎯 LEAD
+            </span>
+            <span>{option.label}</span>
+          </div>
+        );
+      }
+      if (option.type === 'client') {
+        return (
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontWeight: '600' }}>
+            <span style={{ fontSize: '0.7rem', background: '#e0f2fe', color: '#0369a1', padding: '2px 6px', borderRadius: '4px', fontWeight: '700' }}>
+              🏢 CLIENT
+            </span>
+            <span>{option.label}</span>
+          </div>
+        );
+      }
+      return option.label;
+    }
+
+    if (option.type === 'client') {
+      return (
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%' }}>
+          <div>
+            <div style={{ fontWeight: '600', color: '#1e293b' }}>🏢 {option.client.full_name}</div>
+            {option.client.business_name && (
+              <div style={{ fontSize: '0.8rem', color: '#64748b' }}>{option.client.business_name}</div>
+            )}
+          </div>
+          <span style={{ fontSize: '0.7rem', background: '#e0f2fe', color: '#0369a1', padding: '2px 8px', borderRadius: '12px', fontWeight: '700' }}>
+            Existing Client
+          </span>
+        </div>
+      );
+    }
+
+    if (option.type === 'lead') {
+      return (
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%' }}>
+          <div>
+            <div style={{ fontWeight: '600', color: '#1e293b' }}>🎯 {option.lead.contact_name || option.lead.title}</div>
+            <div style={{ fontSize: '0.8rem', color: '#64748b' }}>
+              {option.lead.company_name ? `${option.lead.company_name} • ` : ''}{option.lead.lead_number || `LEAD-${option.lead.id}`}
+            </div>
+          </div>
+          {option.lead.client_id ? (
+            <span style={{ fontSize: '0.7rem', background: '#dcfce7', color: '#15803d', padding: '2px 8px', borderRadius: '12px', fontWeight: '700' }}>
+              Converted Client
+            </span>
+          ) : (
+            <span style={{ fontSize: '0.7rem', background: '#fef3c7', color: '#b45309', padding: '2px 8px', borderRadius: '12px', fontWeight: '700' }}>
+              Sales Lead
+            </span>
+          )}
+        </div>
+      );
+    }
+
+    return option.label;
+  };
   
   
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!formData.client_id && !formData.manual_client_name) {
-      alert("Please select an existing client or enter a client name manually.");
+      alert("Please select an existing client, a sales lead, or enter recipient name.");
       return;
     }
     if (formData.items.length === 0) {
@@ -263,37 +473,23 @@ export default function CreateQuotation() {
               
               <div className="bill-to-row" style={{ minWidth: '300px' }}>
                 <CreatableSelect
-                  options={(clients || []).map(c => ({ value: c.id, label: `${c.full_name}${c.business_name ? ` (${c.business_name})` : ''}`, client: c }))}
-                  value={(() => {
-                    if (formData.client_id) {
-                      const found = (clients || []).find(c => String(c.id) === String(formData.client_id));
-                      return found ? { value: found.id, label: `${found.full_name}${found.business_name ? ` (${found.business_name})` : ''}` } : null;
-                    }
-                    if (formData.manual_client_name) {
-                      return { value: formData.manual_client_name, label: formData.manual_client_name };
-                    }
-                    return null;
-                  })()}
-                  onChange={(selectedOption) => {
-                    if (!selectedOption) {
-                      setFormData(prev => ({ ...prev, client_id: '', manual_client_name: '' }));
-                    } else if (selectedOption.__isNew__) {
-                      setFormData(prev => ({ ...prev, client_id: '', manual_client_name: selectedOption.value }));
-                    } else if (selectedOption.client) {
-                      setFormData(prev => ({ ...prev, client_id: selectedOption.value, manual_client_name: '' }));
-                    } else {
-                      setFormData(prev => ({ ...prev, client_id: '', manual_client_name: selectedOption.value }));
-                    }
-                  }}
+                  options={recipientOptions}
+                  value={getRecipientSelectValue()}
+                  onChange={handleRecipientSelect}
+                  formatOptionLabel={formatOptionLabel}
                   onCreateOption={(inputValue) => {
                     setFormData(prev => ({
                       ...prev,
                       client_id: '',
-                      manual_client_name: inputValue
+                      manual_client_name: inputValue,
+                      manual_client_email: '',
+                      manual_client_phone: '',
+                      manual_client_business: '',
+                      manual_client_address: ''
                     }));
                   }}
-                  placeholder="Search existing client or type name directly..."
-                  formatCreateLabel={(inputValue) => `Type client name: "${inputValue}"`}
+                  placeholder="Select Sales Lead, Existing Client, or type name..."
+                  formatCreateLabel={(inputValue) => `Type recipient name: "${inputValue}"`}
                   isSearchable={true}
                   isClearable={true}
                   styles={{
@@ -338,6 +534,83 @@ export default function CreateQuotation() {
                   }}
                 />
               </div>
+
+              {/* RECIPIENT DETAILS CARD & EDITABLE FIELDS */}
+              {formData.client_id ? (
+                (() => {
+                  const client = (clients || []).find(c => String(c.id) === String(formData.client_id));
+                  if (!client) return null;
+                  return (
+                    <div style={{ marginTop: '0.75rem', padding: '0.75rem 1rem', background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '8px', fontSize: '0.85rem' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.25rem' }}>
+                        <span style={{ fontWeight: '700', color: '#0f172a' }}>🏢 {client.full_name}</span>
+                        <span style={{ fontSize: '0.7rem', background: '#ccfbf1', color: '#0f766e', padding: '2px 8px', borderRadius: '12px', fontWeight: '700' }}>
+                          Client Connected
+                        </span>
+                      </div>
+                      {client.business_name && <div style={{ color: '#475569', fontWeight: '600' }}>{client.business_name}</div>}
+                      {client.email && <div style={{ color: '#64748b' }}>✉️ {client.email}</div>}
+                      {client.phone_number && <div style={{ color: '#64748b' }}>📞 {client.phone_number}</div>}
+                      {client.physical_address && <div style={{ color: '#64748b', marginTop: '0.2rem' }}>📍 {client.physical_address}</div>}
+                    </div>
+                  );
+                })()
+              ) : formData.manual_client_name ? (
+                <div style={{ marginTop: '0.75rem', padding: '0.75rem 1rem', background: '#f8fafc', border: '1px dashed #cbd5e1', borderRadius: '8px', fontSize: '0.85rem' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.5rem' }}>
+                    <span style={{ fontWeight: '700', color: '#0f172a' }}>Contact & Billing Details</span>
+                    <span style={{ fontSize: '0.7rem', background: '#fef3c7', color: '#92400e', padding: '2px 8px', borderRadius: '12px', fontWeight: '700' }}>
+                      Lead / Manual
+                    </span>
+                  </div>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem' }}>
+                    <div>
+                      <label style={{ fontSize: '0.75rem', color: '#64748b', fontWeight: '600' }}>Company / Business</label>
+                      <input
+                        type="text"
+                        name="manual_client_business"
+                        value={formData.manual_client_business || ''}
+                        onChange={handleInputChange}
+                        placeholder="Company name"
+                        style={{ width: '100%', padding: '0.25rem 0.5rem', border: '1px solid #cbd5e1', borderRadius: '4px', fontSize: '0.8rem' }}
+                      />
+                    </div>
+                    <div>
+                      <label style={{ fontSize: '0.75rem', color: '#64748b', fontWeight: '600' }}>Email Address</label>
+                      <input
+                        type="email"
+                        name="manual_client_email"
+                        value={formData.manual_client_email || ''}
+                        onChange={handleInputChange}
+                        placeholder="Email address"
+                        style={{ width: '100%', padding: '0.25rem 0.5rem', border: '1px solid #cbd5e1', borderRadius: '4px', fontSize: '0.8rem' }}
+                      />
+                    </div>
+                    <div>
+                      <label style={{ fontSize: '0.75rem', color: '#64748b', fontWeight: '600' }}>Phone Number</label>
+                      <input
+                        type="text"
+                        name="manual_client_phone"
+                        value={formData.manual_client_phone || ''}
+                        onChange={handleInputChange}
+                        placeholder="Phone number"
+                        style={{ width: '100%', padding: '0.25rem 0.5rem', border: '1px solid #cbd5e1', borderRadius: '4px', fontSize: '0.8rem' }}
+                      />
+                    </div>
+                    <div>
+                      <label style={{ fontSize: '0.75rem', color: '#64748b', fontWeight: '600' }}>Address</label>
+                      <input
+                        type="text"
+                        name="manual_client_address"
+                        value={formData.manual_client_address || ''}
+                        onChange={handleInputChange}
+                        placeholder="Billing address"
+                        style={{ width: '100%', padding: '0.25rem 0.5rem', border: '1px solid #cbd5e1', borderRadius: '4px', fontSize: '0.8rem' }}
+                      />
+                    </div>
+                  </div>
+                </div>
+              ) : null}
 
               <div className="bill-to-row">
                 <label>Quotation Date:</label>
