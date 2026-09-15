@@ -220,7 +220,7 @@ export default function InvoiceTemplate({ invoice = {}, companyDetails = {} }) {
 
         {/* PAYMENT SUMMARY */}
         <div style={{ flex: 1 }}>
-          <div className="inv-tpl-section-label" style={{ textAlign: 'right' }}>PAYMENT SUMMARY:</div>
+          <div className="inv-tpl-section-label" style={{ textAlign: 'left' }}>PAYMENT SUMMARY:</div>
           <table className="inv-tpl-summary-table">
             <tbody>
               <tr className="subtotal-row">
