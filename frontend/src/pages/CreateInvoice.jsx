@@ -221,8 +221,8 @@ export default function CreateInvoice() {
   const remainingBalance = Math.max(0, invoiceTotal - totalPaid);
 
   return (
-    <div style={{ backgroundColor: '#f3f4f6', minHeight: '100vh', padding: '2rem' }}>
-      <div className="invoice-editor-container" style={{ maxWidth: '1000px', margin: '0 auto' }}>
+    <div style={{ backgroundColor: '#ffffff', minHeight: '100vh', padding: '1rem 2rem 3rem 2rem' }}>
+      <div className="invoice-editor-container" style={{ width: '100%', maxWidth: '100%', margin: '0' }}>
         
         {/* TOP TABS */}
         <div className="invoice-editor-tabs print-hide">
