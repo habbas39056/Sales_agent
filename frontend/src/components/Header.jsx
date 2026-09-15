@@ -154,6 +154,9 @@ export default function Header() {
   } else if (location.pathname.startsWith('/quotations')) {
     title = 'Quotations';
     subtitle = 'Create and manage sales quotations & estimates';
+  } else if (location.pathname === '/items') {
+    title = 'Items Inventory';
+    subtitle = 'Create and manage reusable item templates for Quotations & Invoices';
   } else if (location.pathname === '/projects') {
     title = 'Project Creation';
     subtitle = 'Create and configure new client projects & steps';

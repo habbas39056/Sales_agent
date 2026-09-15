@@ -213,19 +213,9 @@ export default function ItemsList() {
 
   return (
     <div className="items-page-container">
-      {/* HEADER */}
-      <div className="items-header">
-        <div className="items-title-group">
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-            <h1>Items Inventory</h1>
-            <span style={{ background: '#e0f2fe', color: '#0369a1', fontSize: '0.75rem', fontWeight: '800', padding: '0.25rem 0.65rem', borderRadius: '12px' }}>
-              {items.length} {items.length === 1 ? 'Item' : 'Items'}
-            </span>
-          </div>
-          <p>Create and manage reusable item templates for Quotations & Invoices</p>
-        </div>
-
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', flexWrap: 'wrap' }}>
+      {/* ACTIONS BAR */}
+      <div className="items-actions-bar">
+        <div className="items-action-left">
           <button type="button" className="btn-primary-item" onClick={handleOpenCreateModal}>
             <Plus size={16} /> New Item
           </button>
@@ -241,12 +231,9 @@ export default function ItemsList() {
             </button>
           )}
         </div>
-      </div>
 
-      {/* FILTER & SEARCH BAR */}
-      <div className="items-actions-bar">
-        <div className="items-action-left" style={{ flex: 1, maxWidth: '500px' }}>
-          <form onSubmit={handleSearchSubmit} className="items-search-box" style={{ width: '100%' }}>
+        <div className="items-action-right">
+          <form onSubmit={handleSearchSubmit} className="items-search-box">
             <Search size={16} className="items-search-icon" />
             <input
               type="text"
@@ -255,13 +242,11 @@ export default function ItemsList() {
               onChange={(e) => setSearch(e.target.value)}
             />
           </form>
-        </div>
 
-        <div className="items-action-right">
           <select
             value={selectedGroup}
             onChange={(e) => setSelectedGroup(e.target.value)}
-            style={{ padding: '0.5rem 0.75rem', border: '1px solid #cbd5e1', borderRadius: '6px', fontSize: '0.85rem', fontWeight: '600', backgroundColor: '#ffffff' }}
+            style={{ padding: '0.5rem 0.75rem', border: '1px solid #cbd5e1', borderRadius: '6px', fontSize: '0.85rem', fontWeight: '600' }}
           >
             <option value="All">All Groups ({items.length})</option>
             {groups.map(g => (
