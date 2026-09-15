@@ -1,13 +1,51 @@
-/* Professional Modern Invoice Template matching reference image 100% */
+.inv-tpl-wrapper {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+  background-color: #f1f5f9;
+  padding: 1.5rem 1rem;
+  border-radius: 12px;
+}
+
+.inv-tpl-sheet,
 .inv-tpl-container {
   background-color: #ffffff;
   color: #0f172a;
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-  padding: 2rem 2.25rem;
+  padding: 2.25rem 2.5rem;
   box-sizing: border-box;
   max-width: 760px;
+  width: 100%;
   margin: 0 auto;
   position: relative;
+  border-radius: 8px;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.06), 0 1px 3px rgba(0, 0, 0, 0.03);
+}
+
+.inv-tpl-page-break-indicator {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  max-width: 760px;
+  width: 100%;
+  margin: 0.5rem auto;
+}
+
+.inv-tpl-page-break-indicator .page-break-line {
+  flex: 1;
+  height: 0;
+  border-top: 2px dashed #cbd5e1;
+}
+
+.inv-tpl-page-break-indicator .page-break-badge {
+  background: #e2e8f0;
+  color: #475569;
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  padding: 0.4rem 0.9rem;
+  border-radius: 20px;
+  text-transform: uppercase;
 }
 
 /* Header Section */
@@ -450,10 +488,10 @@
   margin-top: 1.25rem;
 }
 
-/* Print Specific Rules for A4 Paper */
+/* Print Specific Rules for A5 Paper */
 @page {
-  size: A4 portrait;
-  margin: 10mm;
+  size: A5 portrait;
+  margin: 8mm 10mm;
 }
 
 @media print {
@@ -461,11 +499,64 @@
     background: #ffffff !important;
   }
 
+  .inv-tpl-wrapper {
+    background: transparent !important;
+    padding: 0 !important;
+    gap: 0 !important;
+    display: block !important;
+  }
+
+  .inv-tpl-sheet,
   .inv-tpl-container {
     padding: 0 !important;
     max-width: 100% !important;
     width: 100% !important;
     box-shadow: none !important;
+    border-radius: 0 !important;
+    display: block !important;
+    height: auto !important;
+    overflow: visible !important;
+  }
+
+  .inv-tpl-page-1 {
+    display: block !important;
+    min-height: 185mm !important;
+    box-sizing: border-box !important;
+    page-break-after: always !important;
+    break-after: page !important;
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+    margin-bottom: 0 !important;
+    padding-bottom: 0 !important;
+    clear: both !important;
+  }
+
+  .inv-tpl-credits-box {
+    margin-top: 1rem !important;
+    page-break-after: always !important;
+    break-after: page !important;
+    margin-bottom: 0 !important;
+    clear: both !important;
+  }
+
+  .inv-tpl-page-2,
+  .inv-tpl-terms-page,
+  .terms-page-break {
+    display: block !important;
+    page-break-before: always !important;
+    break-before: page !important;
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+    min-height: 185mm !important;
+    margin-top: 0 !important;
+    padding-top: 3mm !important;
+    border-top: none !important;
+    clear: both !important;
+    box-sizing: border-box !important;
+  }
+
+  .inv-tpl-page-break-indicator {
+    display: none !important;
   }
 }
 

@@ -485,6 +485,102 @@ export default function InvoiceManagement() {
     }
   };
 
+  const handlePrintInvoice = () => {
+    const printableElement = document.getElementById('printable-invoice');
+    if (!printableElement) {
+      window.print();
+      return;
+    }
+
+    const styleTags = Array.from(document.querySelectorAll('style, link[rel="stylesheet"]'))
+      .map(el => el.outerHTML)
+      .join('\n');
+
+    const iframe = document.createElement('iframe');
+    iframe.style.position = 'fixed';
+    iframe.style.right = '0';
+    iframe.style.bottom = '0';
+    iframe.style.width = '0px';
+    iframe.style.height = '0px';
+    iframe.style.border = '0';
+    iframe.id = 'invoice-print-frame';
+
+    document.body.appendChild(iframe);
+
+    const frameDoc = iframe.contentWindow.document;
+    frameDoc.open();
+    frameDoc.write(`
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <title>Invoice - ${previewInvoice?.invoice_number || 'INV'}</title>
+          ${styleTags}
+          <style>
+            @page {
+              size: A4 portrait;
+              margin: 10mm 12mm;
+            }
+            * {
+              box-sizing: border-box !important;
+              -webkit-print-color-adjust: exact !important;
+              print-color-adjust: exact !important;
+            }
+            html, body {
+              margin: 0 !important;
+              padding: 0 !important;
+              background: #ffffff !important;
+              width: 100% !important;
+              height: auto !important;
+            }
+            .inv-tpl-container {
+              max-width: 100% !important;
+              width: 100% !important;
+              padding: 0 !important;
+              margin: 0 !important;
+              box-shadow: none !important;
+            }
+            .inv-tpl-page-1 {
+              display: block !important;
+              page-break-after: always !important;
+              break-after: page !important;
+              margin-bottom: 0 !important;
+            }
+            .terms-page-break, .inv-tpl-terms-page {
+              display: block !important;
+              page-break-before: always !important;
+              break-before: page !important;
+              margin-top: 0 !important;
+              padding-top: 5mm !important;
+            }
+            .print-hide {
+              display: none !important;
+            }
+          </style>
+        </head>
+        <body>
+          ${printableElement.outerHTML}
+        </body>
+      </html>
+    `);
+    frameDoc.close();
+
+    setTimeout(() => {
+      try {
+        iframe.contentWindow.focus();
+        iframe.contentWindow.print();
+      } catch (err) {
+        console.error('Iframe print fallback:', err);
+        window.print();
+      } finally {
+        setTimeout(() => {
+          if (document.body.contains(iframe)) {
+            document.body.removeChild(iframe);
+          }
+        }, 1500);
+      }
+    }, 300);
+  };
+
   return (
     <div className="inv-main-container">
       {/* 1. TOP HEADER & RIGHT-ALIGNED ACTIONS */}
@@ -1155,7 +1251,7 @@ export default function InvoiceManagement() {
                 <button 
                   className="btn" 
                   style={{backgroundColor: '#e11d48', color: '#ffffff', display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.5rem 1rem', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: '600'}} 
-                  onClick={() => window.print()}
+                  onClick={handlePrintInvoice}
                   title="Print or Save as PDF"
                 >
                   <Printer size={18} /> Print / PDF

@@ -569,3 +569,29 @@ input:focus, select:focus, textarea:focus {
     width: 100%;
   }
 }
+
+/* Global Print Reset for Multi-Page PDF Generation (A5 Portrait) */
+@media print {
+  @page {
+    size: A5 portrait;
+    margin: 8mm 10mm;
+  }
+  html, body, #root, .app-layout, .app-container, main, .main-content, .inv-main-container, .page-container, .modal-overlay, .modal-content, .preview-modal, .inv-tpl-container {
+    height: auto !important;
+    min-height: 0 !important;
+    max-height: none !important;
+    overflow: visible !important;
+    overflow-x: visible !important;
+    overflow-y: visible !important;
+    display: block !important;
+    position: static !important;
+    float: none !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    background: #ffffff !important;
+    box-shadow: none !important;
+    border: none !important;
+    transform: none !important;
+  }
+}
+

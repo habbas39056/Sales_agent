@@ -315,46 +315,15 @@
 /* Print specific rules */
 @media print {
   @page {
-    margin: 0;
+    size: A4 portrait;
+    margin: 10mm 12mm;
   }
   * {
     -webkit-print-color-adjust: exact !important;
     print-color-adjust: exact !important;
   }
-  body * {
-    visibility: hidden;
-  }
-  #printable-quotation, #printable-quotation * {
-    visibility: visible !important;
-  }
-  #printable-quotation {
-    position: absolute;
-    left: 0;
-    top: 0;
-    width: 100%;
-    margin: 0;
-    padding: 0;
-  }
   .print-hide {
     display: none !important;
-  }
-  .modal-overlay {
-    background: transparent;
-    position: absolute;
-    display: block !important;
-    overflow: visible !important;
-  }
-  .modal-content {
-    box-shadow: none !important;
-    max-width: 100% !important;
-    max-height: none !important;
-    overflow: visible !important;
-    padding: 0 !important;
-    margin: 0 !important;
-    border: none !important;
-  }
-  .print-only-layout {
-    display: block !important;
   }
   .terms-page-break {
     page-break-before: always !important;

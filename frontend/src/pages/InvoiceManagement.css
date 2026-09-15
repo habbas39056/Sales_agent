@@ -315,53 +315,131 @@
 /* Print specific rules */
 @media print {
   @page {
-    margin: 0;
+    size: A5 portrait;
+    margin: 8mm 10mm;
   }
   * {
     -webkit-print-color-adjust: exact !important;
     print-color-adjust: exact !important;
   }
-  body * {
-    visibility: hidden;
+  body {
+    background: #ffffff !important;
+    margin: 0 !important;
+    padding: 0 !important;
   }
-  #printable-invoice, #printable-invoice * {
-    visibility: visible !important;
-  }
-  #printable-invoice {
-    position: absolute;
-    left: 0;
-    top: 0;
-    width: 100%;
-    margin: 0;
-    padding: 0;
-  }
-  .print-hide {
+  
+  /* Hide all app navigation, headers, tables, grids, and background elements when printing */
+  .sidebar,
+  .top-navbar,
+  .header,
+  .inv-header,
+  .inv-kpi-grid,
+  .inv-panel,
+  .inv-cards-grid,
+  .inv-table-container,
+  .inv-table,
+  .inv-filter-bar,
+  .pagination,
+  .print-hide,
+  nav,
+  aside,
+  header,
+  .inv-main-container > *:not(.modal-overlay) {
     display: none !important;
   }
+
+  html, body, #root, .app-layout, .app-container, main, .main-content, .inv-main-container, .modal-overlay, .modal-content, .preview-modal {
+    height: auto !important;
+    min-height: 0 !important;
+    max-height: none !important;
+    overflow: visible !important;
+    overflow-x: visible !important;
+    overflow-y: visible !important;
+    display: block !important;
+    position: static !important;
+    float: none !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    background: #ffffff !important;
+    box-shadow: none !important;
+    border: none !important;
+    width: 100% !important;
+  }
+
   .modal-overlay {
-    background: transparent;
-    position: absolute;
+    position: static !important;
     display: block !important;
     overflow: visible !important;
+    background: #ffffff !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    box-shadow: none !important;
+    width: 100% !important;
+    height: auto !important;
   }
-  .modal-content {
+
+  .modal-content, .preview-modal {
+    position: static !important;
+    display: block !important;
+    overflow: visible !important;
+    background: #ffffff !important;
     box-shadow: none !important;
     max-width: 100% !important;
     max-height: none !important;
-    overflow: visible !important;
     padding: 0 !important;
     margin: 0 !important;
     border: none !important;
+    width: 100% !important;
+    height: auto !important;
   }
-  .print-only-layout {
+
+  #printable-invoice {
     display: block !important;
+    visibility: visible !important;
+    position: relative !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    height: auto !important;
+    overflow: visible !important;
   }
+
+  #printable-invoice * {
+    visibility: visible !important;
+  }
+
+  .inv-tpl-page-1 {
+    display: block !important;
+    min-height: 185mm !important;
+    box-sizing: border-box !important;
+    page-break-after: always !important;
+    break-after: page !important;
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+    margin-bottom: 0 !important;
+    padding-bottom: 0 !important;
+    clear: both !important;
+  }
+
+  .inv-tpl-credits-box {
+    margin-top: 1rem !important;
+    page-break-after: always !important;
+    break-after: page !important;
+    clear: both !important;
+  }
+
+  .inv-tpl-page-2,
+  .inv-tpl-terms-page,
   .terms-page-break {
+    display: block !important;
     page-break-before: always !important;
     break-before: page !important;
-    margin-top: 0 !important;
-    padding-top: 1.5rem !important;
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+    min-height: 185mm !important;
     border-top: none !important;
+    clear: both !important;
   }
 }
 
