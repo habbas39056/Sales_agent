@@ -3382,14 +3382,14 @@ router.get('/salesperson-leads', async (req, res) => {
 
         // 4. Fetch Quotations created in date range
         let quotQuery = `
-            SELECT id, quotation_number, client_id, created_by, agent_id, amount, status, created_at, issue_date
+            SELECT id, quotation_number, client_id, created_by, amount, status, created_at, issue_date
             FROM quotations
             WHERE 1=1
         `;
         const quotParams = [];
         if (agent_id && agent_id !== 'all') {
-            quotQuery += ` AND (agent_id = ? OR created_by = ?)`;
-            quotParams.push(agent_id, agent_id);
+            quotQuery += ` AND created_by = ?`;
+            quotParams.push(agent_id);
         }
         if (startDate) {
             quotQuery += ` AND DATE(COALESCE(issue_date, created_at)) >= ?`;
