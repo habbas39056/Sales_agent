@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const db = require('../db');
+const bcrypt = require('bcrypt');
 const { sendWhatsAppMessage } = require('../utils/whatsapp');
 
 // Helper to generate next Lead Number (e.g., LEAD-1001)
@@ -338,18 +339,54 @@ router.post('/:id/convert', async (req, res) => {
       return res.status(400).json({ error: 'This lead has already been converted to a Client.' });
     }
 
-    // Insert into clients
-    const [clientRes] = await db.query(`
-      INSERT INTO clients (full_name, business_name, email, whatsapp_number)
-      VALUES (?, ?, ?, ?)
-    `, [
-      lead.contact_name,
-      lead.company_name || lead.title,
-      lead.email || null,
-      lead.whatsapp_number || lead.phone || null
-    ]);
+    // Prepare email & phone with fallbacks to avoid SQL NULL/Duplicate constraint errors
+    const clientFullName = lead.contact_name || 'Converted Client';
+    const clientBusiness = lead.company_name || lead.title || null;
+    const clientPhone = lead.whatsapp_number || lead.phone || null;
+    let clientEmail = (lead.email && lead.email.trim()) ? lead.email.trim() : `client_lead_${lead.id}_${Date.now()}@adwise.com`;
 
-    const newClientId = clientRes.insertId;
+    // Check if a client already exists with this email
+    let newClientId = null;
+    const [existingClients] = await db.query('SELECT id FROM clients WHERE email = ?', [clientEmail]);
+
+    if (existingClients.length > 0) {
+      newClientId = existingClients[0].id;
+    } else {
+      // Check if user account with this email exists
+      let linkedUserId = null;
+      const [existingUsers] = await db.query('SELECT id FROM users WHERE email = ?', [clientEmail]);
+
+      if (existingUsers.length > 0) {
+        linkedUserId = existingUsers[0].id;
+      } else {
+        // Create user account for client portal login
+        try {
+          const defaultPasswordHash = await bcrypt.hash('client123', 10);
+          const [userRes] = await db.query(
+            'INSERT INTO users (name, email, password_hash, role) VALUES (?, ?, ?, ?)',
+            [clientFullName, clientEmail, defaultPasswordHash, 'Client']
+          );
+          linkedUserId = userRes.insertId;
+        } catch (uErr) {
+          console.warn('Could not create user account during lead conversion:', uErr.message);
+        }
+      }
+
+      // Insert into clients table
+      const [clientRes] = await db.query(`
+        INSERT INTO clients (full_name, business_name, email, whatsapp_number, user_id, created_by)
+        VALUES (?, ?, ?, ?, ?, ?)
+      `, [
+        clientFullName,
+        clientBusiness,
+        clientEmail,
+        clientPhone,
+        linkedUserId,
+        currentUserId
+      ]);
+
+      newClientId = clientRes.insertId;
+    }
 
     // Update lead status to 'Won' and link client_id
     await db.query(`
@@ -360,12 +397,12 @@ router.post('/:id/convert', async (req, res) => {
     await db.query(`
       INSERT INTO lead_activities (lead_id, user_id, type, summary)
       VALUES (?, ?, 'Status Change', ?)
-    `, [id, currentUserId, `Lead converted to Client #${newClientId} (${lead.contact_name})`]);
+    `, [id, currentUserId, `Lead converted to Client #${newClientId} (${clientFullName})`]);
 
     res.json({ message: 'Lead converted to Client successfully!', client_id: newClientId });
   } catch (err) {
     console.error('Error converting lead to client:', err);
-    res.status(500).json({ error: 'Failed to convert lead to client' });
+    res.status(500).json({ error: err.message || 'Failed to convert lead to client' });
   }
 });
 
