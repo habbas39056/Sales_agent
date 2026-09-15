@@ -1005,38 +1005,6 @@ export default function CreateQuotation() {
             </tbody>
           </table>
 
-          {/* ITEM ACTIONS BAR BELOW TABLE */}
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '0.75rem', marginBottom: '1.5rem' }} className="print-hide">
-            <button
-              type="button"
-              onClick={addItem}
-              className="btn-purple"
-              style={{ padding: '0.45rem 1rem', fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: '0.4rem', fontWeight: '700' }}
-            >
-              <Plus size={15} /> Add Line Item
-            </button>
-            <a
-              href="/items"
-              target="_blank"
-              rel="noreferrer"
-              style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: '0.35rem',
-                padding: '0.45rem 0.85rem',
-                fontSize: '0.8rem',
-                fontWeight: '700',
-                color: '#0284c7',
-                background: '#e0f2fe',
-                border: '1px solid #bae6fd',
-                borderRadius: '6px',
-                textDecoration: 'none'
-              }}
-            >
-              ⚙️ Items Catalog
-            </a>
-          </div>
-
           {/* TOTALS */}
           <div className="totals-section">
             <div className="totals-grid">
