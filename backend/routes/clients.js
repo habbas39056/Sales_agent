@@ -303,10 +303,18 @@ router.get('/user/:userId/portal-data', async (req, res) => {
 router.put('/:id', async (req, res) => {
   const { full_name, business_name, whatsapp_number, email, physical_address } = req.body;
   try {
+    const [clientRows] = await db.query('SELECT user_id FROM clients WHERE id = ?', [req.params.id]);
+    const userId = clientRows[0]?.user_id;
+
     await db.query(
       'UPDATE clients SET full_name = ?, business_name = ?, whatsapp_number = ?, email = ?, physical_address = ? WHERE id = ?',
       [full_name, business_name, whatsapp_number, email, physical_address, req.params.id]
     );
+
+    if (userId && (email || full_name)) {
+      await db.query('UPDATE users SET name = COALESCE(?, name), email = COALESCE(?, email) WHERE id = ?', [full_name, email, userId]);
+    }
+
     res.json({ message: 'Client updated successfully' });
   } catch (error) {
     if (error.code === 'ER_DUP_ENTRY') {

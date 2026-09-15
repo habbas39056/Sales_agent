@@ -526,9 +526,20 @@ export default function LeadsManagement() {
   };
 
   const handleConvertLeadToClient = async (leadId) => {
-    if (!window.confirm('Convert this lead into an official Client? This will create a Client record and mark lead as Won.')) return;
+    const targetLead = leads.find(l => l.id === leadId) || selectedLeadForDetails || activeLeadDetails || {};
+    const existingEmail = targetLead.email || '';
+    
+    const userEmail = window.prompt(
+      `Convert lead "${targetLead.contact_name || ''}" to Client?\n\nEnter/confirm Client Email Address:`,
+      existingEmail
+    );
+
+    if (userEmail === null) return; // User pressed cancel
+
     try {
-      const res = await axios.post(`/api/leads/${leadId}/convert`);
+      const res = await axios.post(`/api/leads/${leadId}/convert`, {
+        email: userEmail.trim()
+      });
       showAlert('success', res.data.message || 'Lead converted to Client!');
       loadLeads();
       if (activeLeadDetails?.id === leadId) openLeadActivities(leadId);

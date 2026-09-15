@@ -343,7 +343,14 @@ router.post('/:id/convert', async (req, res) => {
     const clientFullName = lead.contact_name || 'Converted Client';
     const clientBusiness = lead.company_name || lead.title || null;
     const clientPhone = lead.whatsapp_number || lead.phone || null;
-    let clientEmail = (lead.email && lead.email.trim()) ? lead.email.trim() : `client_lead_${lead.id}_${Date.now()}@adwise.com`;
+    
+    const requestedEmail = req.body.email && req.body.email.trim() ? req.body.email.trim() : null;
+    let clientEmail = requestedEmail || ((lead.email && lead.email.trim()) ? lead.email.trim() : `client_lead_${lead.id}_${Date.now()}@adwise.com`);
+
+    // If custom email provided, update lead's email record
+    if (requestedEmail && requestedEmail !== lead.email) {
+      await db.query('UPDATE leads SET email = ? WHERE id = ?', [requestedEmail, id]);
+    }
 
     // Check if a client already exists with this email
     let newClientId = null;
