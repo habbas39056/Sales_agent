@@ -3307,20 +3307,27 @@ router.get('/salesperson-leads', async (req, res) => {
             } else if (quick_preset === 'this_year') {
                 startDate = new Date(today.getFullYear(), 0, 1).toISOString().split('T')[0];
                 endDate = new Date(today.getFullYear(), 11, 31).toISOString().split('T')[0];
+            } else if (quick_preset === 'all') {
+                startDate = '';
+                endDate = '';
             }
         }
 
-        // 1. Fetch Salespeople (Users with non-Client role)
-        let userQuery = `SELECT id, name, email, role, profile_image_url FROM users WHERE role != 'Client'`;
-        const userParams = [];
-        if (agent_id && agent_id !== 'all') {
-            userQuery += ` AND id = ?`;
-            userParams.push(agent_id);
-        }
-        userQuery += ` ORDER BY name ASC`;
-        const [users] = await db.query(userQuery, userParams);
+        // 1. Fetch All Salespeople for Dropdown (exclude Client role)
+        const [allUsers] = await db.query(`
+            SELECT id, name, email, role, profile_image_url 
+            FROM users 
+            WHERE (role IS NULL OR role = '' OR LOWER(role) != 'client')
+            ORDER BY name ASC
+        `);
 
-        // 2. Fetch Leads created/assigned in date range
+        // Filtered salespeople list for reports
+        let users = [...allUsers];
+        if (agent_id && agent_id !== 'all') {
+            users = allUsers.filter(u => String(u.id) === String(agent_id));
+        }
+
+        // 2. Fetch Leads
         let leadsQuery = `
             SELECT 
                 l.id, l.lead_number, l.title, l.contact_name, l.company_name, l.email, l.phone, 
@@ -3331,6 +3338,10 @@ router.get('/salesperson-leads', async (req, res) => {
             WHERE 1=1
         `;
         const leadsParams = [];
+        if (agent_id && agent_id !== 'all') {
+            leadsQuery += ` AND (l.assigned_to = ? OR l.created_by = ?)`;
+            leadsParams.push(agent_id, agent_id);
+        }
         if (startDate) {
             leadsQuery += ` AND DATE(l.created_at) >= ?`;
             leadsParams.push(startDate);
@@ -3351,6 +3362,10 @@ router.get('/salesperson-leads', async (req, res) => {
                 WHERE 1=1
             `;
             const actParams = [];
+            if (agent_id && agent_id !== 'all') {
+                actQuery += ` AND user_id = ?`;
+                actParams.push(agent_id);
+            }
             if (startDate) {
                 actQuery += ` AND DATE(created_at) >= ?`;
                 actParams.push(startDate);
@@ -3372,6 +3387,10 @@ router.get('/salesperson-leads', async (req, res) => {
             WHERE 1=1
         `;
         const quotParams = [];
+        if (agent_id && agent_id !== 'all') {
+            quotQuery += ` AND (agent_id = ? OR created_by = ?)`;
+            quotParams.push(agent_id, agent_id);
+        }
         if (startDate) {
             quotQuery += ` AND DATE(COALESCE(issue_date, created_at)) >= ?`;
             quotParams.push(startDate);
@@ -3389,6 +3408,10 @@ router.get('/salesperson-leads', async (req, res) => {
             WHERE 1=1
         `;
         const invParams = [];
+        if (agent_id && agent_id !== 'all') {
+            invQuery += ` AND (agent_id = ? OR created_by = ?)`;
+            invParams.push(agent_id, agent_id);
+        }
         if (startDate) {
             invQuery += ` AND DATE(COALESCE(issue_date, created_at)) >= ?`;
             invParams.push(startDate);
@@ -3406,10 +3429,10 @@ router.get('/salesperson-leads', async (req, res) => {
             // Leads assigned or created by this user
             const userLeads = leads.filter(l => Number(l.assigned_to) === uid || Number(l.created_by) === uid);
             const leadsAdded = userLeads.length;
-            const leadsWon = userLeads.filter(l => l.status === 'Won' || l.client_id).length;
-            const leadsLost = userLeads.filter(l => l.status === 'Lost' || l.status === 'Not Interested').length;
-            const leadsInterested = userLeads.filter(l => ['Interested', 'Qualified', 'Negotiation', 'Proposal Sent', 'Contacted'].includes(l.status)).length;
-            const leadsInProgress = userLeads.filter(l => !['Won', 'Lost', 'Not Interested'].includes(l.status)).length;
+            const leadsWon = userLeads.filter(l => (l.status && (l.status.toLowerCase() === 'won' || l.status.toLowerCase() === 'converted')) || l.client_id).length;
+            const leadsLost = userLeads.filter(l => l.status && (l.status.toLowerCase() === 'lost' || l.status.toLowerCase() === 'not interested')).length;
+            const leadsInterested = userLeads.filter(l => l.status && ['interested', 'qualified', 'negotiation', 'proposal sent', 'contacted'].includes(l.status.toLowerCase())).length;
+            const leadsInProgress = userLeads.filter(l => !l.status || !['won', 'converted', 'lost', 'not interested'].includes(l.status.toLowerCase())).length;
             const conversionRate = leadsAdded > 0 ? Number(((leadsWon / leadsAdded) * 100).toFixed(1)) : 0;
 
             // Status breakdown counts
@@ -3435,7 +3458,7 @@ router.get('/salesperson-leads', async (req, res) => {
                 id: user.id,
                 name: user.name,
                 email: user.email,
-                role: user.role,
+                role: user.role || 'Sales Representative',
                 avatar: user.profile_image_url,
                 leads_added: leadsAdded,
                 leads_won: leadsWon,
@@ -3455,9 +3478,9 @@ router.get('/salesperson-leads', async (req, res) => {
 
         // Compute Grand Totals across all salespeople
         const totalLeadsAdded = leads.length;
-        const totalLeadsWon = leads.filter(l => l.status === 'Won' || l.client_id).length;
-        const totalLeadsLost = leads.filter(l => l.status === 'Lost' || l.status === 'Not Interested').length;
-        const totalLeadsInterested = leads.filter(l => ['Interested', 'Qualified', 'Negotiation', 'Proposal Sent', 'Contacted'].includes(l.status)).length;
+        const totalLeadsWon = leads.filter(l => (l.status && (l.status.toLowerCase() === 'won' || l.status.toLowerCase() === 'converted')) || l.client_id).length;
+        const totalLeadsLost = leads.filter(l => l.status && (l.status.toLowerCase() === 'lost' || l.status.toLowerCase() === 'not interested')).length;
+        const totalLeadsInterested = leads.filter(l => l.status && ['interested', 'qualified', 'negotiation', 'proposal sent', 'contacted'].includes(l.status.toLowerCase())).length;
         const overallConversionRate = totalLeadsAdded > 0 ? Number(((totalLeadsWon / totalLeadsAdded) * 100).toFixed(1)) : 0;
         const totalFollowups = activities.length;
         const totalQuotationsCount = quotations.length;
@@ -3469,6 +3492,7 @@ router.get('/salesperson-leads', async (req, res) => {
         res.json({
             start_date: startDate,
             end_date: endDate,
+            all_salespeople_list: allUsers,
             summary: {
                 total_salespeople: users.length,
                 total_leads_added: totalLeadsAdded,

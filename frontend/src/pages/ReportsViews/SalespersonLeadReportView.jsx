@@ -22,7 +22,7 @@ const PIE_COLORS = ['#10b981', '#3b82f6', '#f59e0b', '#ef4444', '#8b5cf6', '#06b
 
 export default function SalespersonLeadReportView() {
   // Filter States
-  const [quickPreset, setQuickPreset] = useState('this_month');
+  const [quickPreset, setQuickPreset] = useState('all');
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
   const [selectedAgent, setSelectedAgent] = useState('all');
@@ -240,6 +240,32 @@ export default function SalespersonLeadReportView() {
         </div>
 
         <div className="sp-date-pickers">
+          <div className="sp-agent-field" style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', marginRight: '0.5rem' }}>
+            <span className="sp-filter-label" style={{ margin: 0 }}><Users size={14} /> Salesperson:</span>
+            <select 
+              value={selectedAgent} 
+              onChange={(e) => { setSelectedAgent(e.target.value); setCurrentPage(1); }}
+              style={{
+                padding: '0.38rem 0.75rem',
+                borderRadius: '6px',
+                border: '1px solid #cbd5e1',
+                fontSize: '0.8rem',
+                fontWeight: '700',
+                backgroundColor: '#ffffff',
+                color: '#0f172a',
+                outline: 'none',
+                cursor: 'pointer'
+              }}
+            >
+              <option value="all">👥 All Salespeople ({reportData.all_salespeople_list?.length || 0})</option>
+              {(reportData.all_salespeople_list || []).map(sp => (
+                <option key={sp.id} value={sp.id}>
+                  👤 {sp.name} ({sp.role || 'Sales'})
+                </option>
+              ))}
+            </select>
+          </div>
+
           <div className="sp-date-field">
             <label>From:</label>
             <input 
@@ -256,9 +282,9 @@ export default function SalespersonLeadReportView() {
               onChange={(e) => { setEndDate(e.target.value); setQuickPreset(''); }} 
             />
           </div>
-          {(startDate || endDate) && (
-            <button className="sp-clear-btn" onClick={() => { setStartDate(''); setEndDate(''); setQuickPreset('this_month'); }}>
-              Clear Dates
+          {(startDate || endDate || selectedAgent !== 'all') && (
+            <button className="sp-clear-btn" onClick={() => { setStartDate(''); setEndDate(''); setSelectedAgent('all'); setQuickPreset('all'); }}>
+              Reset Filters
             </button>
           )}
         </div>
