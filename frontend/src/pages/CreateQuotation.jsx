@@ -61,12 +61,18 @@ export default function CreateQuotation() {
         axios.get('/api/banks'),
         axios.get('/api/leads')
       ]);
-      setClients(cliRes.data || []);
+
+      const fetchedClients = Array.isArray(cliRes.data) ? cliRes.data : (cliRes.data?.clients || []);
+      const fetchedLeads = Array.isArray(leadsRes.data?.leads) 
+        ? leadsRes.data.leads 
+        : (Array.isArray(leadsRes.data) ? leadsRes.data : []);
+
+      setClients(fetchedClients);
       setProjects(projRes.data || []);
       setProducts(prodRes.data || []);
       setAgents(agentRes.data || []);
       setBanks(banksRes.data || []);
-      setLeads(leadsRes.data || []);
+      setLeads(fetchedLeads);
       
       if (id) {
         const invRes = await axios.get(`/api/quotations/${id}`);
@@ -103,8 +109,8 @@ export default function CreateQuotation() {
 
         if (preselectedClient) {
           setFormData(prev => ({ ...prev, client_id: preselectedClient }));
-        } else if (preselectedLead && leadsRes.data) {
-          const foundLead = leadsRes.data.find(l => String(l.id) === String(preselectedLead));
+        } else if (preselectedLead && fetchedLeads.length > 0) {
+          const foundLead = fetchedLeads.find(l => String(l.id) === String(preselectedLead));
           if (foundLead) {
             if (foundLead.client_id) {
               setFormData(prev => ({ ...prev, client_id: foundLead.client_id }));
@@ -162,11 +168,14 @@ export default function CreateQuotation() {
     return formData.items.reduce((total, item) => total + (item.quantity * item.unit_price), 0);
   };
 
+  const safeClients = Array.isArray(clients) ? clients : [];
+  const safeLeads = Array.isArray(leads) ? leads : [];
+
   // Recipient options for CreatableSelect
   const recipientOptions = [
     {
       label: '🏢 Existing Clients',
-      options: (clients || []).map(c => ({
+      options: safeClients.map(c => ({
         value: `client_${c.id}`,
         type: 'client',
         client: c,
@@ -175,7 +184,7 @@ export default function CreateQuotation() {
     },
     {
       label: '🎯 Sales Leads',
-      options: (leads || []).map(l => ({
+      options: safeLeads.map(l => ({
         value: `lead_${l.id}`,
         type: 'lead',
         lead: l,
@@ -186,7 +195,7 @@ export default function CreateQuotation() {
 
   const getRecipientSelectValue = () => {
     if (formData.client_id) {
-      const foundClient = (clients || []).find(c => String(c.id) === String(formData.client_id));
+      const foundClient = safeClients.find(c => String(c.id) === String(formData.client_id));
       if (foundClient) {
         return {
           value: `client_${foundClient.id}`,
@@ -197,7 +206,7 @@ export default function CreateQuotation() {
       }
     }
     if (formData.manual_client_name) {
-      const foundLead = (leads || []).find(l => 
+      const foundLead = safeLeads.find(l => 
         (l.contact_name && l.contact_name.toLowerCase() === formData.manual_client_name.toLowerCase()) ||
         (l.title && l.title.toLowerCase() === formData.manual_client_name.toLowerCase())
       );
