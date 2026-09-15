@@ -40,6 +40,7 @@ import {
   PhoneCall,
   MessageCircle
 } from 'lucide-react';
+import Pagination from '../components/Pagination';
 import './LeadsManagement.css';
 
 const DEFAULT_STAGES = [
@@ -88,11 +89,15 @@ export default function LeadsManagement() {
   const [saving, setSaving] = useState(false);
   const [viewMode, setViewMode] = useState('board'); // 'board' (Kanban) or 'table'
 
-  // Filters State
+  // Filters & Pagination State
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('All');
   const [sourceFilter, setSourceFilter] = useState('All');
   const [assignedFilter, setAssignedFilter] = useState('All');
+
+  // Pagination State
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 12;
 
   // Modal States
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -147,6 +152,7 @@ export default function LeadsManagement() {
   const [alert, setAlert] = useState({ type: '', message: '' });
 
   useEffect(() => {
+    setCurrentPage(1);
     loadLeads();
     loadDropdowns();
   }, [statusFilter, sourceFilter, assignedFilter]);
@@ -206,6 +212,7 @@ export default function LeadsManagement() {
 
   const handleSearchSubmit = (e) => {
     e.preventDefault();
+    setCurrentPage(1);
     loadLeads();
   };
 
@@ -929,142 +936,157 @@ export default function LeadsManagement() {
               </tr>
             </thead>
             <tbody>
-              {leads.map(lead => {
-                const matchedStage = stages.find(s => s.id === lead.status) || { color: '#3b82f6', bg: '#eff6ff' };
-                return (
-                  <tr 
-                    key={lead.id}
-                    className="stage-colored-row"
-                    style={{
-                      backgroundColor: matchedStage.bg || '#ffffff',
-                      borderLeft: `5px solid ${matchedStage.color || '#cbd5e1'}`
-                    }}
-                  >
-                    <td>
-                      <div className="lead-cell-title">
-                        <strong onClick={() => openFullLeadDetails(lead.id)} className="clickable-lead">
-                          {lead.contact_name}
-                        </strong>
-                        <span className="lead-number-sub">{lead.lead_number || `#${lead.id}`}</span>
-                      </div>
-                    </td>
-
-                    <td>
-                      <div className="company-cell">
-                        <strong>{lead.company_name || '-'}</strong>
-                        {lead.email && <span className="text-sub"><Mail size={12} /> {lead.email}</span>}
-                      </div>
-                    </td>
-
-                    <td>
-                      <div className="phone-cell">
-                        <span><Phone size={12} /> {lead.phone || lead.whatsapp_number || '-'}</span>
-                      </div>
-                    </td>
-
-                    <td>
-                      <div className="service-cell">
-                        <strong>{lead.category_name || lead.title}</strong>
-                        <div style={{ marginTop: '2px', display: 'flex', alignItems: 'center', gap: '4px', flexWrap: 'wrap' }}>
-                          <span className="source-pill">{lead.source}</span>
-                          <span className="deal-value-text">{formatCurrency(lead.estimated_value)}</span>
+              {(() => {
+                const currentTableLeads = leads.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
+                return currentTableLeads.map(lead => {
+                  const matchedStage = stages.find(s => s.id === lead.status) || { color: '#3b82f6', bg: '#eff6ff' };
+                  return (
+                    <tr 
+                      key={lead.id}
+                      className="stage-colored-row"
+                      style={{
+                        backgroundColor: matchedStage.bg || '#ffffff',
+                        borderLeft: `5px solid ${matchedStage.color || '#cbd5e1'}`
+                      }}
+                    >
+                      <td>
+                        <div className="lead-cell-title">
+                          <strong onClick={() => openFullLeadDetails(lead.id)} className="clickable-lead">
+                            {lead.contact_name}
+                          </strong>
+                          <span className="lead-number-sub">{lead.lead_number || `#${lead.id}`}</span>
                         </div>
-                      </div>
-                    </td>
+                      </td>
 
-                    <td>
-                      <select 
-                        className="stage-select-dropdown"
-                        style={{
-                          color: matchedStage.color,
-                          borderColor: matchedStage.color,
-                          backgroundColor: '#ffffff',
-                          fontWeight: 700
-                        }}
-                        value={lead.status}
-                        onChange={(e) => handleQuickStatusChange(lead.id, e.target.value)}
-                      >
-                        {stages.map(s => (
-                          <option key={s.id} value={s.id}>{s.name}</option>
-                        ))}
-                      </select>
-                    </td>
+                      <td>
+                        <div className="company-cell">
+                          <strong>{lead.company_name || '-'}</strong>
+                          {lead.email && <span className="text-sub"><Mail size={12} /> {lead.email}</span>}
+                        </div>
+                      </td>
 
-                    <td>
-                      {(() => {
-                        const displayRemark = lead.notes || lead.latest_activity_summary || '';
-                        return (
-                          <div className="remarks-cell" title={displayRemark || 'No remarks recorded'}>
-                            {displayRemark ? (displayRemark.length > 45 ? displayRemark.substring(0, 45) + '...' : displayRemark) : '-'}
+                      <td>
+                        <div className="phone-cell">
+                          <span><Phone size={12} /> {lead.phone || lead.whatsapp_number || '-'}</span>
+                        </div>
+                      </td>
+
+                      <td>
+                        <div className="service-cell">
+                          <strong>{lead.category_name || lead.title}</strong>
+                          <div style={{ marginTop: '2px', display: 'flex', alignItems: 'center', gap: '4px', flexWrap: 'wrap' }}>
+                            <span className="source-pill">{lead.source}</span>
+                            <span className="deal-value-text">{formatCurrency(lead.estimated_value)}</span>
                           </div>
-                        );
-                      })()}
-                    </td>
-
-                    <td>
-                      <div className="followups-cell">
-                        <div style={{ fontSize: '0.78rem', color: '#64748b' }}>
-                          <strong>Last:</strong> {lead.last_activity_at ? new Date(lead.last_activity_at).toLocaleDateString() : 'None'}
                         </div>
-                        <div style={{ fontSize: '0.78rem', color: lead.next_followup_date ? '#d97706' : '#94a3b8', fontWeight: lead.next_followup_date ? 700 : 400 }}>
-                          <strong>Next:</strong> {lead.next_followup_date ? new Date(lead.next_followup_date).toLocaleDateString() : 'None'}
-                        </div>
-                      </div>
-                    </td>
+                      </td>
 
-                    <td style={{ textAlign: 'right' }}>
-                      <div className="table-actions">
-                        <button 
-                          className="btn-icon text-whatsapp" 
-                          title="Send Professional WhatsApp Message"
-                          onClick={() => handleOpenWhatsApp(lead)}
+                      <td>
+                        <select 
+                          className="stage-select-dropdown"
+                          style={{
+                            color: matchedStage.color,
+                            borderColor: matchedStage.color,
+                            backgroundColor: '#ffffff',
+                            fontWeight: 700
+                          }}
+                          value={lead.status}
+                          onChange={(e) => handleQuickStatusChange(lead.id, e.target.value)}
                         >
-                          <MessageCircle size={16} />
-                        </button>
-                        <button 
-                          className="btn-icon text-blue" 
-                          title="View Full Lead Details"
-                          onClick={() => openFullLeadDetails(lead.id)}
-                        >
-                          <Eye size={16} />
-                        </button>
-                        <button 
-                          className="btn-icon" 
-                          title="Log Activity & Notes"
-                          onClick={() => openLeadActivities(lead.id)}
-                        >
-                          <MessageSquare size={16} />
-                        </button>
-                        {lead.status !== 'Won' && (
+                          {stages.map(s => (
+                            <option key={s.id} value={s.id}>{s.name}</option>
+                          ))}
+                        </select>
+                      </td>
+
+                      <td>
+                        {(() => {
+                          const displayRemark = lead.notes || lead.latest_activity_summary || '';
+                          return (
+                            <div className="remarks-cell" title={displayRemark || 'No remarks recorded'}>
+                              {displayRemark ? (displayRemark.length > 45 ? displayRemark.substring(0, 45) + '...' : displayRemark) : '-'}
+                            </div>
+                          );
+                        })()}
+                      </td>
+
+                      <td>
+                        <div className="followups-cell">
+                          <div style={{ fontSize: '0.78rem', color: '#64748b' }}>
+                            <strong>Last:</strong> {lead.last_activity_at ? new Date(lead.last_activity_at).toLocaleDateString() : 'None'}
+                          </div>
+                          <div style={{ fontSize: '0.78rem', color: lead.next_followup_date ? '#d97706' : '#94a3b8', fontWeight: lead.next_followup_date ? 700 : 400 }}>
+                            <strong>Next:</strong> {lead.next_followup_date ? new Date(lead.next_followup_date).toLocaleDateString() : 'None'}
+                          </div>
+                        </div>
+                      </td>
+
+                      <td style={{ textAlign: 'right' }}>
+                        <div className="table-actions">
                           <button 
-                            className="btn-icon text-emerald" 
-                            title="Convert to Client"
-                            onClick={() => handleConvertLeadToClient(lead.id)}
+                            className="btn-icon text-whatsapp" 
+                            title="Send Professional WhatsApp Message"
+                            onClick={() => handleOpenWhatsApp(lead)}
                           >
-                            <UserPlus size={16} />
+                            <MessageCircle size={16} />
                           </button>
-                        )}
-                        <button 
-                          className="btn-icon" 
-                          title="Edit Lead"
-                          onClick={() => openEditModal(lead)}
-                        >
-                          <Edit3 size={16} />
-                        </button>
-                        <button 
-                          className="btn-icon text-red" 
-                          title="Delete Lead"
-                          onClick={() => handleDeleteLead(lead.id, lead.title)}
-                        >
-                          <Trash2 size={16} />
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                );
-              })}
+                          <button 
+                            className="btn-icon text-blue" 
+                            title="View Full Lead Details"
+                            onClick={() => openFullLeadDetails(lead.id)}
+                          >
+                            <Eye size={16} />
+                          </button>
+                          <button 
+                            className="btn-icon" 
+                            title="Log Activity & Notes"
+                            onClick={() => openLeadActivities(lead.id)}
+                          >
+                            <MessageSquare size={16} />
+                          </button>
+                          {lead.status !== 'Won' && (
+                            <button 
+                              className="btn-icon text-emerald" 
+                              title="Convert to Client"
+                              onClick={() => handleConvertLeadToClient(lead.id)}
+                            >
+                              <UserPlus size={16} />
+                            </button>
+                          )}
+                          <button 
+                            className="btn-icon" 
+                            title="Edit Lead"
+                            onClick={() => openEditModal(lead)}
+                          >
+                            <Edit3 size={16} />
+                          </button>
+                          <button 
+                            className="btn-icon text-red" 
+                            title="Delete Lead"
+                            onClick={() => handleDeleteLead(lead.id, lead.title)}
+                          >
+                            <Trash2 size={16} />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                });
+              })()}
             </tbody>
           </table>
+        </div>
+      )}
+
+      {/* PAGINATION BAR FOR LIST VIEW */}
+      {viewMode === 'table' && leads.length > 0 && (
+        <div style={{ marginTop: '1.25rem' }}>
+          <Pagination 
+            currentPage={currentPage}
+            totalItems={leads.length}
+            itemsPerPage={itemsPerPage}
+            onPageChange={setCurrentPage}
+          />
         </div>
       )}
 
