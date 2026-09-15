@@ -838,6 +838,76 @@ export default function CreateQuotation() {
             </div>
           </div>
 
+          {/* ITEM TEMPLATE SELECTOR BAR */}
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '1rem', marginBottom: '1.25rem', background: '#f8fafc', padding: '0.85rem 1.25rem', borderRadius: '8px', border: '1px solid #e2e8f0' }} className="print-hide">
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flex: 1, maxWidth: '650px' }}>
+              <label style={{ fontWeight: '700', fontSize: '0.85rem', color: '#0f172a', whiteSpace: 'nowrap', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                📦 Select Item Template:
+              </label>
+              <div style={{ flex: 1 }}>
+                <Select
+                  options={(products || []).map(p => ({
+                    value: p.id,
+                    label: `(${Number(p.default_price || 0).toLocaleString('en-PK', { minimumFractionDigits: 2 })}) ${p.name}${p.description ? ` - ${p.description.slice(0, 50)}...` : ''}`,
+                    product: p
+                  }))}
+                  onChange={(selectedOption) => {
+                    if (selectedOption?.product) {
+                      addProductFromCatalog(selectedOption.product);
+                    }
+                  }}
+                  placeholder="Select item template to auto-insert..."
+                  isSearchable={true}
+                  isClearable={true}
+                  styles={{
+                    control: (base) => ({
+                      ...base,
+                      borderColor: '#cbd5e1',
+                      fontSize: '0.85rem',
+                      fontWeight: '600',
+                      backgroundColor: '#ffffff'
+                    }),
+                    menu: (base) => ({
+                      ...base,
+                      zIndex: 9999
+                    })
+                  }}
+                />
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+              <button
+                type="button"
+                onClick={addItem}
+                className="btn-purple"
+                style={{ padding: '0.45rem 0.85rem', fontSize: '0.8rem', gap: '0.35rem' }}
+              >
+                <Plus size={14} /> Add Blank Row
+              </button>
+              <a
+                href="/items"
+                target="_blank"
+                rel="noreferrer"
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '0.35rem',
+                  padding: '0.45rem 0.85rem',
+                  fontSize: '0.8rem',
+                  fontWeight: '700',
+                  color: '#0284c7',
+                  background: '#e0f2fe',
+                  border: '1px solid #bae6fd',
+                  borderRadius: '6px',
+                  textDecoration: 'none'
+                }}
+              >
+                ⚙️ Items Catalog
+              </a>
+            </div>
+          </div>
+
           {/* TABLE */}
           <table className="quotation-table-modern">
             <thead>

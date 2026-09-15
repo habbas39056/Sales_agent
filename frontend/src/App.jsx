@@ -28,6 +28,7 @@ import Expenses from './pages/Expenses';
 import Settings from './pages/Settings';
 import DeadlineWorkflow from './pages/DeadlineWorkflow';
 import Tasks from './pages/Tasks';
+import ItemsList from './pages/ItemsList';
 import Header from './components/Header';
 import './App.css';
 import './App.css';
@@ -418,6 +419,15 @@ function AppContent() {
                             <span>Quotations</span>
                           </Link>
                         </li>
+                        <li>
+                          <Link 
+                            to="/items" 
+                            className={`submodule-link ${location.pathname === '/items' ? 'active' : ''}`}
+                          >
+                            <div className="submodule-dot" />
+                            <span>Items Catalog</span>
+                          </Link>
+                        </li>
                       </>
                     )}
                     {canAccessCashbook && (
@@ -619,6 +629,7 @@ function AppContent() {
             <Route path="/quotations" element={<ProtectedRoute><QuotationsList /></ProtectedRoute>} />
             <Route path="/quotations/new" element={<ProtectedRoute><CreateQuotation /></ProtectedRoute>} />
             <Route path="/quotations/edit/:id" element={<ProtectedRoute><CreateQuotation /></ProtectedRoute>} />
+            <Route path="/items" element={<ProtectedRoute><ItemsList /></ProtectedRoute>} />
             <Route path="/projects" element={<ProtectedRoute><ProjectsList /></ProtectedRoute>} />
             <Route path="/projects/:id" element={<ProtectedRoute><ProjectDetails /></ProtectedRoute>} />
             <Route path="/project-management" element={<ProtectedRoute><ProjectManagement /></ProtectedRoute>} />
