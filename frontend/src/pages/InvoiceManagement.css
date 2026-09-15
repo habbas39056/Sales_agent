@@ -203,7 +203,7 @@
 }
 
 /* --- Balance Row --- */
-.balance-row {
+.invoice-table .balance-row {
   background-color: #f8fafc;
 }
 

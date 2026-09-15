@@ -1,11 +1,11 @@
-/* Professional Modern Invoice Template matching POS / ERP standard (A5 Standard Format) */
+/* Professional Modern Invoice Template matching POS / ERP standard (A4 Standard Format) */
 .inv-tpl-container {
   background-color: #ffffff;
   color: #0f172a;
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-  padding: 1.75rem 2rem;
+  padding: 2.25rem 2.5rem;
   box-sizing: border-box;
-  max-width: 620px; /* A5 proportion optimization */
+  max-width: 820px; /* A4 proportion optimization */
   margin: 0 auto;
   position: relative;
 }
@@ -19,7 +19,7 @@
 }
 
 .inv-tpl-title {
-  font-size: 1.75rem;
+  font-size: 1.85rem;
   font-weight: 800;
   letter-spacing: -0.5px;
   color: #0f172a;
@@ -60,8 +60,8 @@
 }
 
 .inv-tpl-logo {
-  max-width: 160px;
-  max-height: 52px;
+  max-width: 170px;
+  max-height: 55px;
   object-fit: contain;
   margin-bottom: 0.5rem;
   display: inline-block;
@@ -262,27 +262,41 @@
 }
 
 .inv-tpl-summary-table tr.total-row td.label {
-  font-weight: 700;
+  font-weight: 800;
   color: #0f172a;
+}
+
+.inv-tpl-summary-table tr.total-row td.value {
+  font-weight: 800;
+  color: #0f172a;
+}
+
+.inv-tpl-summary-table tr.paid-row td.label {
+  color: #64748b;
+  font-weight: 500;
 }
 
 .inv-tpl-summary-table tr.paid-row td.value {
   color: #16a34a;
+  font-weight: 700;
 }
 
+.inv-tpl-summary-table tr.balance-row,
 .inv-tpl-summary-table tr.balance-row td {
+  background-color: transparent !important;
+  background: transparent !important;
   padding-top: 0.5rem;
   border-top: 1px dashed #cbd5e1;
-  font-size: 1rem;
+  font-size: 1.05rem;
 }
 
 .inv-tpl-summary-table tr.balance-row td.label {
-  font-weight: 800;
+  font-weight: 900;
   color: #0f172a;
 }
 
 .inv-tpl-summary-table tr.balance-row td.value {
-  font-weight: 800;
+  font-weight: 900;
 }
 
 .inv-tpl-summary-table tr.balance-row.zero td.value {
@@ -339,41 +353,102 @@
   margin-top: 0.2rem;
 }
 
-/* Terms section */
-.inv-tpl-terms-container {
-  margin-top: 3rem;
+/* Terms & Conditions Page Styles (Matching Reference Image) */
+.inv-tpl-terms-page {
+  margin-top: 2.5rem;
   page-break-before: always;
+  background-color: #ffffff;
+  color: #0f172a;
 }
 
-.inv-tpl-terms-header {
+.inv-tpl-terms-top-bar {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  border-bottom: 2px solid #0f172a;
-  padding-bottom: 0.75rem;
+}
+
+.inv-tpl-terms-logo {
+  max-width: 140px;
+  max-height: 48px;
+  object-fit: contain;
+}
+
+.inv-tpl-terms-company {
+  font-size: 1.05rem;
+  font-weight: 800;
+  color: #0f172a;
+}
+
+.inv-tpl-terms-subtitle {
+  font-size: 0.82rem;
+  color: #64748b;
+  margin-top: 0.1rem;
+}
+
+.inv-tpl-terms-main-title {
+  font-size: 1.15rem;
+  font-weight: 800;
+  color: #0f172a;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+  margin: 0 0 0.4rem 0;
+}
+
+.inv-tpl-terms-intro {
+  font-size: 0.85rem;
+  color: #64748b;
   margin-bottom: 1.5rem;
 }
 
-.inv-tpl-terms-title {
-  font-size: 1.15rem;
-  font-weight: 700;
-  color: #0f172a;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-  margin: 0;
-}
-
-.inv-tpl-terms-content {
-  font-size: 0.85rem;
+.inv-tpl-terms-body {
+  font-size: 0.82rem;
   color: #334155;
-  line-height: 1.7;
+  line-height: 1.65;
   white-space: pre-wrap;
+  margin-bottom: 3.5rem;
 }
 
-/* Print Specific Rules for A5 Paper */
+.inv-tpl-signatures-grid {
+  display: flex;
+  justify-content: space-between;
+  gap: 2.5rem;
+  margin-top: 3.5rem;
+  margin-bottom: 2.5rem;
+}
+
+.inv-tpl-sig-box {
+  flex: 1;
+  max-width: 260px;
+}
+
+.inv-tpl-sig-line {
+  border-top: 1.5px solid #0f172a;
+  margin-bottom: 0.6rem;
+}
+
+.inv-tpl-sig-title {
+  font-size: 0.88rem;
+  font-weight: 800;
+  color: #0f172a;
+  margin-bottom: 0.15rem;
+}
+
+.inv-tpl-sig-name {
+  font-size: 0.82rem;
+  color: #64748b;
+}
+
+.inv-tpl-terms-footer {
+  text-align: center;
+  font-size: 0.78rem;
+  color: #64748b;
+  margin-top: 1.5rem;
+}
+
+/* Print Specific Rules for A4 Paper */
 @page {
-  size: A5 portrait;
-  margin: 6mm;
+  size: A4 portrait;
+  margin: 10mm;
 }
 
 @media print {
@@ -388,5 +463,6 @@
     box-shadow: none !important;
   }
 }
+
 
 

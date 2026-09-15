@@ -283,15 +283,62 @@ export default function InvoiceTemplate({ invoice = {}, companyDetails = {} }) {
         <div className="inv-tpl-credits-author">Software Powered by Adwise Labs</div>
       </div>
 
-      {/* TERMS & CONDITIONS (IF PRESENT) */}
-      {invoice.terms_and_conditions && (
-        <div className="inv-tpl-terms-container terms-page-break">
-          <div className="inv-tpl-terms-header">
-            {companyLogo && <img src={companyLogo} alt="Logo" style={{ maxWidth: '140px', height: 'auto' }} />}
-            <h2 className="inv-tpl-terms-title">Terms & Conditions</h2>
+      {/* TERMS & CONDITIONS (PAGE 2) */}
+      {(invoice.terms_and_conditions || invoice.terms) && (
+        <div className="inv-tpl-terms-page terms-page-break">
+          {/* TERMS TOP HEADER BAR */}
+          <div className="inv-tpl-terms-top-bar">
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.85rem' }}>
+              {companyLogo && (
+                <img src={companyLogo} alt={companyName} className="inv-tpl-terms-logo" />
+              )}
+              <div>
+                <div className="inv-tpl-terms-company">{companyName}</div>
+                <div className="inv-tpl-terms-subtitle">Terms of Service & Invoicing Agreement</div>
+              </div>
+            </div>
+
+            <div style={{ textAlign: 'right', fontSize: '0.85rem', color: '#64748b' }}>
+              <div>Invoice: <strong style={{ color: '#0f172a' }}>{invoiceNumber}</strong></div>
+              <div>Date: <strong style={{ color: '#0f172a' }}>{issueDate}</strong></div>
+            </div>
           </div>
-          <div className="inv-tpl-terms-content">
-            {invoice.terms_and_conditions}
+
+          <hr className="inv-tpl-divider" style={{ margin: '1rem 0 1.5rem 0' }} />
+
+          {/* MAIN TITLE & INTRO */}
+          <h2 className="inv-tpl-terms-main-title">TERMS & CONDITIONS OF SALE</h2>
+          <div className="inv-tpl-terms-intro">
+            The following standard terms and conditions govern this invoice and the supply of products or services.
+          </div>
+
+          {/* TERMS CONTENT */}
+          <div className="inv-tpl-terms-body">
+            {invoice.terms_and_conditions || invoice.terms}
+          </div>
+
+          {/* SIGNATURES BLOCK */}
+          <div className="inv-tpl-signatures-grid">
+            <div className="inv-tpl-sig-box">
+              <div className="inv-tpl-sig-line"></div>
+              <div className="inv-tpl-sig-title">Authorized Signature & Stamp</div>
+              <div className="inv-tpl-sig-name">{companyName}</div>
+            </div>
+
+            <div className="inv-tpl-sig-box">
+              <div className="inv-tpl-sig-line"></div>
+              <div className="inv-tpl-sig-title">Client Acceptance / Received By</div>
+              <div className="inv-tpl-sig-name">{clientName}</div>
+            </div>
+          </div>
+
+          {/* PAGE 2 FOOTER */}
+          <div className="inv-tpl-terms-footer">
+            <hr className="inv-tpl-divider" style={{ margin: '1.5rem 0 0.85rem 0' }} />
+            <div>Page 2 of 2 • {invoiceNumber}</div>
+            <div className="inv-tpl-credits-author" style={{ marginTop: '0.2rem' }}>
+              Software Powered by Adwise Labs
+            </div>
           </div>
         </div>
       )}
