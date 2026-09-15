@@ -231,16 +231,7 @@ router.get('/management/overview', async (req, res) => {
 
     let query = `
       SELECT 
-        p.id,
-        p.title,
-        p.start_date,
-        p.due_date,
-        p.locked_deadline,
-        p.status,
-        p.remarks,
-        p.created_at,
-        p.pm_id,
-        p.service_type,
+        p.*,
         c.id as client_id,
         c.full_name as client_name,
         c.business_name,

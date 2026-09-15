@@ -654,6 +654,7 @@ async function updateLiveDb() {
     await addColumnIfNotExists('projects', 'pm_id', 'INT NULL');
     await addColumnIfNotExists('projects', 'production_id', 'INT NULL');
     await addColumnIfNotExists('projects', 'service_type', 'VARCHAR(255) NULL');
+    await addColumnIfNotExists('projects', 'due_date', 'DATE NULL');
     await addColumnIfNotExists('projects', 'locked_deadline', 'DATE NULL');
     await addColumnIfNotExists('projects', 'terms_accepted', 'BOOLEAN DEFAULT FALSE');
     await addColumnIfNotExists('projects', 'terms_and_conditions', 'TEXT NULL');
