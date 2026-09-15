@@ -247,23 +247,21 @@ router.get('/management/overview', async (req, res) => {
         pm_user.name as pm_name,
         (SELECT COUNT(*) FROM project_steps WHERE project_steps.project_id = p.id) as dyn_total_steps,
         (SELECT COUNT(*) FROM project_steps WHERE project_steps.project_id = p.id AND project_steps.status = 'Completed') as dyn_completed_steps,
-        (
-          SELECT JSON_OBJECT(
-            'id', inv.id,
-            'invoice_number', inv.invoice_number,
-            'amount', inv.amount,
-            'balance', inv.balance,
-            'due_date', inv.due_date,
-            'status', inv.status
-          )
-          FROM invoices inv
-          WHERE inv.project_id = p.id OR (inv.project_id IS NULL AND inv.client_id = p.client_id)
-          ORDER BY (inv.project_id = p.id) DESC, inv.id DESC
-          LIMIT 1
-        ) as invoice_info
+        inv.id as invoice_id,
+        inv.invoice_number,
+        inv.amount as invoice_amount,
+        inv.balance as invoice_balance,
+        inv.due_date as invoice_due_date,
+        inv.status as invoice_status
       FROM projects p
       LEFT JOIN clients c ON p.client_id = c.id
       LEFT JOIN users pm_user ON p.pm_id = pm_user.id
+      LEFT JOIN invoices inv ON inv.id = (
+        SELECT id FROM invoices 
+        WHERE project_id = p.id OR (project_id IS NULL AND client_id = p.client_id)
+        ORDER BY CASE WHEN project_id = p.id THEN 1 ELSE 0 END DESC, id DESC 
+        LIMIT 1
+      )
     `;
     const params = [];
 
@@ -277,20 +275,14 @@ router.get('/management/overview', async (req, res) => {
     const [rows] = await db.query(query, params);
 
     const processed = rows.map(r => {
-      let inv = null;
-      if (r.invoice_info) {
-        try {
-          inv = typeof r.invoice_info === 'string' ? JSON.parse(r.invoice_info) : r.invoice_info;
-        } catch (e) {
-          inv = null;
-        }
-      }
-
       // Auto-pick status from project and steps
       let autoStatus = r.status || 'Assigned';
-      if (r.status === 'Completed' || (r.dyn_total_steps > 0 && r.dyn_completed_steps === r.dyn_total_steps)) {
+      const totalSteps = Number(r.dyn_total_steps || 0);
+      const completedSteps = Number(r.dyn_completed_steps || 0);
+
+      if (r.status === 'Completed' || (totalSteps > 0 && completedSteps === totalSteps)) {
         autoStatus = 'Completed';
-      } else if (r.dyn_completed_steps > 0 && autoStatus === 'Assigned') {
+      } else if (completedSteps > 0 && autoStatus === 'Assigned') {
         autoStatus = 'In Progress';
       }
 
@@ -302,14 +294,14 @@ router.get('/management/overview', async (req, res) => {
         client_name: r.client_name,
         client_id: r.client_id,
         pm_name: r.pm_name,
-        total_steps: r.dyn_total_steps,
-        completed_steps: r.dyn_completed_steps,
-        invoice_id: inv ? inv.id : null,
-        invoice_number: inv ? inv.invoice_number : null,
-        invoice_amount: inv ? inv.amount : null,
-        balance: inv ? inv.balance : null,
-        invoice_due_date: inv ? inv.due_date : null,
-        invoice_status: inv ? inv.status : null,
+        total_steps: totalSteps,
+        completed_steps: completedSteps,
+        invoice_id: r.invoice_id || null,
+        invoice_number: r.invoice_number || null,
+        invoice_amount: r.invoice_amount != null ? r.invoice_amount : null,
+        balance: r.invoice_balance != null ? r.invoice_balance : null,
+        invoice_due_date: r.invoice_due_date || null,
+        invoice_status: r.invoice_status || null,
         project_due_date: r.due_date || r.locked_deadline,
         status: autoStatus,
         remarks: r.remarks || '',
@@ -319,6 +311,7 @@ router.get('/management/overview', async (req, res) => {
 
     res.json(processed);
   } catch (error) {
+    console.error('Error in GET /api/projects/management/overview:', error);
     res.status(500).json({ error: error.message });
   }
 });
