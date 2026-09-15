@@ -19,6 +19,7 @@ export default function CreateQuotation() {
   const [isEditingInvNum, setIsEditingInvNum] = useState(false);
   const [isEditingBillFrom, setIsEditingBillFrom] = useState(false);
   const [activeTab, setActiveTab] = useState('quotation');
+  const [recipientType, setRecipientType] = useState('client'); // 'client' | 'lead' | 'manual'
         
   const [formData, setFormData] = useState({
     quotation_number: `QT-${Date.now()}`,
@@ -102,6 +103,16 @@ export default function CreateQuotation() {
             unit_price: item.unit_price
           }))
         });
+
+        if (inv.client_id) {
+          setRecipientType('client');
+        } else if (inv.manual_client_name) {
+          const isLeadMatch = fetchedLeads.some(l => 
+            (l.contact_name && l.contact_name.toLowerCase() === inv.manual_client_name.toLowerCase()) ||
+            (l.title && l.title.toLowerCase() === inv.manual_client_name.toLowerCase())
+          );
+          setRecipientType(isLeadMatch ? 'lead' : 'manual');
+        }
       } else {
         const urlParams = new URLSearchParams(window.location.search);
         const preselectedClient = urlParams.get('client_id');
@@ -109,7 +120,9 @@ export default function CreateQuotation() {
 
         if (preselectedClient) {
           setFormData(prev => ({ ...prev, client_id: preselectedClient }));
+          setRecipientType('client');
         } else if (preselectedLead && fetchedLeads.length > 0) {
+          setRecipientType('lead');
           const foundLead = fetchedLeads.find(l => String(l.id) === String(preselectedLead));
           if (foundLead) {
             if (foundLead.client_id) {
@@ -476,73 +489,251 @@ export default function CreateQuotation() {
             </div>
 
             <div className="bill-to-section">
-              <div style={{ textAlign: 'right', paddingRight: '0.5rem' }}>
-                <div className="bill-to-label">BILL TO</div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
+                <div className="bill-to-label" style={{ margin: 0 }}>BILL TO</div>
+                {/* Mode Selector Buttons */}
+                <div style={{ display: 'flex', gap: '0.35rem' }}>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setRecipientType('client');
+                      setFormData(prev => ({
+                        ...prev,
+                        manual_client_name: '',
+                        manual_client_email: '',
+                        manual_client_phone: '',
+                        manual_client_business: '',
+                        manual_client_address: ''
+                      }));
+                    }}
+                    style={{
+                      padding: '0.3rem 0.75rem',
+                      borderRadius: '6px',
+                      border: recipientType === 'client' ? '2px solid #0284c7' : '1px solid #cbd5e1',
+                      background: recipientType === 'client' ? '#e0f2fe' : '#ffffff',
+                      color: recipientType === 'client' ? '#0369a1' : '#64748b',
+                      fontWeight: '700',
+                      fontSize: '0.78rem',
+                      cursor: 'pointer'
+                    }}
+                  >
+                    🏢 Existing Client
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setRecipientType('lead');
+                      setFormData(prev => ({ ...prev, client_id: '' }));
+                    }}
+                    style={{
+                      padding: '0.3rem 0.75rem',
+                      borderRadius: '6px',
+                      border: recipientType === 'lead' ? '2px solid #d97706' : '1px solid #cbd5e1',
+                      background: recipientType === 'lead' ? '#fef3c7' : '#ffffff',
+                      color: recipientType === 'lead' ? '#92400e' : '#64748b',
+                      fontWeight: '700',
+                      fontSize: '0.78rem',
+                      cursor: 'pointer'
+                    }}
+                  >
+                    🎯 Sales Lead
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setRecipientType('manual');
+                      setFormData(prev => ({ ...prev, client_id: '' }));
+                    }}
+                    style={{
+                      padding: '0.3rem 0.75rem',
+                      borderRadius: '6px',
+                      border: recipientType === 'manual' ? '2px solid #4f46e5' : '1px solid #cbd5e1',
+                      background: recipientType === 'manual' ? '#e0e7ff' : '#ffffff',
+                      color: recipientType === 'manual' ? '#4338ca' : '#64748b',
+                      fontWeight: '700',
+                      fontSize: '0.78rem',
+                      cursor: 'pointer'
+                    }}
+                  >
+                    ✍️ Custom Name
+                  </button>
+                </div>
               </div>
               
-              <div className="bill-to-row" style={{ minWidth: '300px' }}>
-                <CreatableSelect
-                  options={recipientOptions}
-                  value={getRecipientSelectValue()}
-                  onChange={handleRecipientSelect}
-                  formatOptionLabel={formatOptionLabel}
-                  onCreateOption={(inputValue) => {
-                    setFormData(prev => ({
-                      ...prev,
-                      client_id: '',
-                      manual_client_name: inputValue,
-                      manual_client_email: '',
-                      manual_client_phone: '',
-                      manual_client_business: '',
-                      manual_client_address: ''
-                    }));
-                  }}
-                  placeholder="Select Sales Lead, Existing Client, or type name..."
-                  formatCreateLabel={(inputValue) => `Type recipient name: "${inputValue}"`}
-                  isSearchable={true}
-                  isClearable={true}
-                  styles={{
-                    control: (base, state) => ({
-                      ...base,
-                      backgroundColor: '#eff6ff',
-                      borderColor: state.isFocused ? 'var(--primary-color)' : 'transparent',
+              {recipientType === 'client' && (
+                <div className="bill-to-row" style={{ minWidth: '300px' }}>
+                  <Select
+                    options={safeClients.map(c => ({
+                      value: c.id,
+                      label: `${c.full_name}${c.business_name ? ` (${c.business_name})` : ''}`,
+                      client: c
+                    }))}
+                    value={(() => {
+                      if (!formData.client_id) return null;
+                      const found = safeClients.find(c => String(c.id) === String(formData.client_id));
+                      return found ? { value: found.id, label: `${found.full_name}${found.business_name ? ` (${found.business_name})` : ''}`, client: found } : null;
+                    })()}
+                    onChange={(selectedOption) => {
+                      if (!selectedOption) {
+                        setFormData(prev => ({ ...prev, client_id: '', manual_client_name: '' }));
+                      } else {
+                        setFormData(prev => ({
+                          ...prev,
+                          client_id: selectedOption.value,
+                          manual_client_name: '',
+                          manual_client_email: '',
+                          manual_client_phone: '',
+                          manual_client_business: '',
+                          manual_client_address: ''
+                        }));
+                      }
+                    }}
+                    placeholder="Search and select Client from list..."
+                    isSearchable={true}
+                    isClearable={true}
+                    styles={{
+                      control: (base, state) => ({
+                        ...base,
+                        backgroundColor: '#eff6ff',
+                        borderColor: state.isFocused ? 'var(--primary-color)' : '#0284c7',
+                        fontWeight: '700',
+                        boxShadow: 'none',
+                        padding: '2px'
+                      }),
+                      singleValue: (base) => ({
+                        ...base,
+                        color: '#0369a1'
+                      }),
+                      menu: (base) => ({
+                        ...base,
+                        zIndex: 9999,
+                        borderRadius: '8px',
+                        overflow: 'hidden'
+                      })
+                    }}
+                  />
+                </div>
+              )}
+
+              {recipientType === 'lead' && (
+                <div className="bill-to-row" style={{ minWidth: '300px' }}>
+                  <Select
+                    options={safeLeads.map(l => ({
+                      value: l.id,
+                      label: `${l.contact_name || l.title}${l.company_name ? ` (${l.company_name})` : ''} - ${l.lead_number || `LEAD-${l.id}`}${l.client_id ? ' [Converted]' : ''}`,
+                      lead: l
+                    }))}
+                    value={(() => {
+                      if (formData.manual_client_name) {
+                        const foundLead = safeLeads.find(l => 
+                          (l.contact_name && l.contact_name.toLowerCase() === formData.manual_client_name.toLowerCase()) ||
+                          (l.title && l.title.toLowerCase() === formData.manual_client_name.toLowerCase())
+                        );
+                        if (foundLead) {
+                          return {
+                            value: foundLead.id,
+                            label: `${foundLead.contact_name || foundLead.title}${foundLead.company_name ? ` (${foundLead.company_name})` : ''} - ${foundLead.lead_number || `LEAD-${foundLead.id}`}${foundLead.client_id ? ' [Converted]' : ''}`,
+                            lead: foundLead
+                          };
+                        }
+                      }
+                      if (formData.client_id) {
+                        const foundLead = safeLeads.find(l => String(l.client_id) === String(formData.client_id));
+                        if (foundLead) {
+                          return {
+                            value: foundLead.id,
+                            label: `${foundLead.contact_name || foundLead.title}${foundLead.company_name ? ` (${foundLead.company_name})` : ''} - ${foundLead.lead_number || `LEAD-${foundLead.id}`} [Converted]`,
+                            lead: foundLead
+                          };
+                        }
+                      }
+                      return null;
+                    })()}
+                    onChange={(selectedOption) => {
+                      if (!selectedOption) {
+                        setFormData(prev => ({
+                          ...prev,
+                          client_id: '',
+                          manual_client_name: '',
+                          manual_client_email: '',
+                          manual_client_phone: '',
+                          manual_client_business: '',
+                          manual_client_address: ''
+                        }));
+                      } else {
+                        const l = selectedOption.lead;
+                        if (l.client_id) {
+                          setFormData(prev => ({
+                            ...prev,
+                            client_id: l.client_id,
+                            manual_client_name: '',
+                            manual_client_email: '',
+                            manual_client_phone: '',
+                            manual_client_business: '',
+                            manual_client_address: ''
+                          }));
+                        } else {
+                          setFormData(prev => ({
+                            ...prev,
+                            client_id: '',
+                            manual_client_name: l.contact_name || l.title || '',
+                            manual_client_email: l.email || '',
+                            manual_client_phone: l.phone || '',
+                            manual_client_business: l.company_name || '',
+                            manual_client_address: l.location || ''
+                          }));
+                        }
+                      }
+                    }}
+                    placeholder="Search and select Sales Lead from list..."
+                    isSearchable={true}
+                    isClearable={true}
+                    styles={{
+                      control: (base, state) => ({
+                        ...base,
+                        backgroundColor: '#fffbeb',
+                        borderColor: state.isFocused ? 'var(--primary-color)' : '#d97706',
+                        fontWeight: '700',
+                        boxShadow: 'none',
+                        padding: '2px'
+                      }),
+                      singleValue: (base) => ({
+                        ...base,
+                        color: '#92400e'
+                      }),
+                      menu: (base) => ({
+                        ...base,
+                        zIndex: 9999,
+                        borderRadius: '8px',
+                        overflow: 'hidden'
+                      })
+                    }}
+                  />
+                </div>
+              )}
+
+              {recipientType === 'manual' && (
+                <div style={{ minWidth: '300px' }}>
+                  <input
+                    type="text"
+                    name="manual_client_name"
+                    value={formData.manual_client_name || ''}
+                    onChange={handleInputChange}
+                    placeholder="Type recipient / client name manually..."
+                    style={{
+                      width: '100%',
+                      padding: '0.6rem 0.75rem',
+                      border: '2px solid #6366f1',
+                      borderRadius: '6px',
                       fontWeight: '700',
-                      boxShadow: 'none',
-                      padding: '2px',
-                      '&:hover': {
-                        borderColor: '#cbd5e1'
-                      }
-                    }),
-                    singleValue: (base) => ({
-                      ...base,
-                      color: 'var(--accent-color)',
-                    }),
-                    menu: (base) => ({
-                      ...base,
-                      zIndex: 9999,
-                      borderRadius: '8px',
-                      boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)',
-                      overflow: 'hidden'
-                    }),
-                    option: (base, state) => ({
-                      ...base,
-                      backgroundColor: state.isSelected 
-                        ? 'var(--primary-color)' 
-                        : state.isFocused 
-                          ? '#f1f5f9' 
-                          : '#ffffff',
-                      color: state.isSelected ? '#ffffff' : '#334155',
-                      cursor: 'pointer',
-                      padding: '10px 16px',
-                      fontWeight: state.isSelected ? '600' : '500',
-                      '&:active': {
-                        backgroundColor: '#0284c7',
-                        color: '#ffffff'
-                      }
-                    })
-                  }}
-                />
-              </div>
+                      fontSize: '0.9rem',
+                      backgroundColor: '#f5f3ff',
+                      color: '#4338ca',
+                      outline: 'none'
+                    }}
+                  />
+                </div>
+              )}
 
               {/* RECIPIENT DETAILS CARD & EDITABLE FIELDS */}
               {formData.client_id ? (
