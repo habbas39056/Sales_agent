@@ -737,6 +737,20 @@ async function updateLiveDb() {
     await addColumnIfNotExists('payrolls', 'other_deductions', 'DECIMAL(10,2) DEFAULT 0.00');
     await addColumnIfNotExists('payrolls', 'gross_salary', 'DECIMAL(10,2) DEFAULT 0.00');
 
+    // leads
+    await addColumnIfNotExists('leads', 'lead_number', 'VARCHAR(50) UNIQUE NULL');
+    await addColumnIfNotExists('leads', 'company_name', 'VARCHAR(255) NULL');
+    await addColumnIfNotExists('leads', 'whatsapp_number', 'VARCHAR(100) NULL');
+    await addColumnIfNotExists('leads', 'source', "VARCHAR(100) DEFAULT 'Website'");
+    await addColumnIfNotExists('leads', 'priority', "VARCHAR(50) DEFAULT 'Medium'");
+    await addColumnIfNotExists('leads', 'estimated_value', 'DECIMAL(12,2) DEFAULT 0.00');
+    await addColumnIfNotExists('leads', 'category_id', 'INT NULL');
+    await addColumnIfNotExists('leads', 'assigned_to', 'INT NULL');
+    await addColumnIfNotExists('leads', 'client_id', 'INT NULL');
+    await addColumnIfNotExists('leads', 'created_by', 'INT NULL');
+    await addColumnIfNotExists('leads', 'next_followup_date', 'DATETIME NULL');
+    await addColumnIfNotExists('leads', 'notes', 'TEXT NULL');
+
     // step_activity: ensure user_id is nullable for system events
     await safeExec('ALTER TABLE `step_activity` MODIFY COLUMN `user_id` INT NULL', 'Allowed step_activity.user_id to be NULL for system auto-events');
 

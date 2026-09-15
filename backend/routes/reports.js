@@ -3330,8 +3330,7 @@ router.get('/salesperson-leads', async (req, res) => {
         // 2. Fetch Leads
         let leadsQuery = `
             SELECT 
-                l.id, l.lead_number, l.title, l.contact_name, l.company_name, l.email, l.phone, 
-                l.status, l.priority, l.estimated_value, l.assigned_to, l.created_by, l.created_at, l.client_id,
+                l.*,
                 u.name as assigned_name
             FROM leads l
             LEFT JOIN users u ON l.assigned_to = u.id
