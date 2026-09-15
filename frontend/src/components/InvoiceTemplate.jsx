@@ -223,7 +223,7 @@ export default function InvoiceTemplate({ invoice = {}, companyDetails = {} }) {
           <div className="inv-tpl-section-label" style={{ textAlign: 'right' }}>PAYMENT SUMMARY:</div>
           <table className="inv-tpl-summary-table">
             <tbody>
-              <tr>
+              <tr className="subtotal-row">
                 <td className="label">Subtotal:</td>
                 <td className="value">{formatMoney(subtotal)}</td>
               </tr>
@@ -233,11 +233,11 @@ export default function InvoiceTemplate({ invoice = {}, companyDetails = {} }) {
               </tr>
               <tr className="paid-row">
                 <td className="label">Amount Paid:</td>
-                <td className="value" style={{ color: '#16a34a' }}>{formatMoney(totalPaid)}</td>
+                <td className="value">{formatMoney(totalPaid)}</td>
               </tr>
               <tr className={`balance-row ${balanceDue <= 0 ? 'zero' : 'due'}`}>
                 <td className="label">Balance Due:</td>
-                <td className="value" style={{ color: balanceDue <= 0 ? '#16a34a' : '#dc2626' }}>
+                <td className="value">
                   {formatMoney(balanceDue)}
                 </td>
               </tr>

@@ -257,7 +257,13 @@
   color: #0f172a;
 }
 
+.inv-tpl-summary-table tr.subtotal-row td {
+  padding-bottom: 0.5rem;
+  border-bottom: 1px solid #e2e8f0;
+}
+
 .inv-tpl-summary-table tr.total-row td {
+  padding-top: 0.5rem;
   font-size: 0.95rem;
 }
 
@@ -277,7 +283,7 @@
 }
 
 .inv-tpl-summary-table tr.paid-row td.value {
-  color: #16a34a;
+  color: #0d9488;
   font-weight: 700;
 }
 
@@ -290,21 +296,16 @@
   font-size: 1.05rem;
 }
 
-.inv-tpl-summary-table tr.balance-row td.label {
-  font-weight: 900;
-  color: #0f172a;
-}
-
-.inv-tpl-summary-table tr.balance-row td.value {
-  font-weight: 900;
-}
-
-.inv-tpl-summary-table tr.balance-row.zero td.value {
-  color: #16a34a;
-}
-
+.inv-tpl-summary-table tr.balance-row.due td.label,
 .inv-tpl-summary-table tr.balance-row.due td.value {
-  color: #dc2626;
+  font-weight: 800;
+  color: #dc2626 !important;
+}
+
+.inv-tpl-summary-table tr.balance-row.zero td.label,
+.inv-tpl-summary-table tr.balance-row.zero td.value {
+  font-weight: 800;
+  color: #16a34a !important;
 }
 
 /* Payments Received Section */
