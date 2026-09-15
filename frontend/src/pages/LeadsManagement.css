@@ -590,36 +590,6 @@
 .action-btn.text-emerald:hover { background-color: #ecfdf5; }
 
 /* TABLE LIST VIEW */
-.table-responsive-card {
-  background: #ffffff;
-  border-radius: 14px;
-  border: 1px solid #e2e8f0;
-  overflow-x: auto;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.02);
-}
-
-.leads-table {
-  width: 100%;
-  border-collapse: collapse;
-  text-align: left;
-  font-size: 0.88rem;
-}
-
-.leads-table th {
-  background-color: #f8fafc;
-  color: #475569;
-  font-weight: 700;
-  padding: 0.9rem 1rem;
-  border-bottom: 1px solid #e2e8f0;
-  white-space: nowrap;
-}
-
-.leads-table td {
-  padding: 0.9rem 1rem;
-  border-bottom: 1px solid #f1f5f9;
-  vertical-align: middle;
-}
-
 .leads-table tr:hover {
   background-color: #f8fafc;
 }
@@ -1317,6 +1287,145 @@
   background-color: #d1fae5;
   color: #047857;
   border-color: #10b981;
+}
+
+/* TABLE LIST VIEW */
+.table-responsive-card {
+  background: #ffffff;
+  border-radius: 14px;
+  border: 1px solid #e2e8f0;
+  overflow-x: auto;
+  position: relative;
+  min-height: 300px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.02);
+}
+
+.leads-table {
+  width: 100%;
+  border-collapse: collapse;
+  text-align: left;
+  font-size: 0.88rem;
+}
+
+.leads-table th {
+  background-color: #f8fafc;
+  color: #475569;
+  font-weight: 700;
+  padding: 0.75rem 0.85rem;
+  border-bottom: 1px solid #e2e8f0;
+  white-space: nowrap;
+  font-size: 0.82rem;
+}
+
+.leads-table td {
+  padding: 0.75rem 0.85rem;
+  border-bottom: 1px solid #f1f5f9;
+  vertical-align: middle;
+}
+
+/* 3-Dots Action Dropdown Menu */
+.action-dots-btn {
+  width: 34px;
+  height: 34px;
+  border-radius: 8px;
+  border: 1px solid #cbd5e1;
+  background-color: #ffffff;
+  color: #475569;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.action-dots-btn:hover,
+.action-dots-btn.active {
+  background-color: #e2e8f0;
+  color: #0f172a;
+  border-color: #64748b;
+}
+
+.action-dropdown-backdrop {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 99998;
+  background: transparent;
+}
+
+.action-dropdown-menu {
+  position: fixed;
+  z-index: 99999;
+  min-width: 220px;
+  background: #ffffff;
+  border-radius: 12px;
+  border: 1px solid #cbd5e1;
+  box-shadow: 0 12px 30px -5px rgba(15, 23, 42, 0.2), 0 8px 12px -6px rgba(15, 23, 42, 0.12);
+  padding: 0.4rem;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.action-dropdown-menu.is-below {
+  animation: fadeInDown 0.15s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.action-dropdown-menu.is-above {
+  animation: fadeInUp 0.15s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes fadeInDown {
+  from { opacity: 0; transform: translateY(-8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes fadeInUp {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.action-dropdown-menu .dropdown-item {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  width: 100%;
+  padding: 0.6rem 0.75rem;
+  border: none;
+  background: transparent;
+  border-radius: 6px;
+  font-size: 0.84rem;
+  font-weight: 600;
+  color: #334155;
+  cursor: pointer;
+  text-align: left;
+  white-space: nowrap;
+  transition: background-color 0.15s ease, color 0.15s ease;
+}
+
+.action-dropdown-menu .dropdown-item:hover {
+  background-color: #f1f5f9;
+  color: #0f172a;
+}
+
+.action-dropdown-menu .dropdown-item.text-whatsapp { color: #059669; }
+.action-dropdown-menu .dropdown-item.text-whatsapp:hover { background-color: #ecfdf5; color: #047857; }
+
+.action-dropdown-menu .dropdown-item.text-blue { color: #2563eb; }
+.action-dropdown-menu .dropdown-item.text-blue:hover { background-color: #eff6ff; color: #1d4ed8; }
+
+.action-dropdown-menu .dropdown-item.text-emerald { color: #059669; }
+.action-dropdown-menu .dropdown-item.text-emerald:hover { background-color: #ecfdf5; color: #047857; }
+
+.action-dropdown-menu .dropdown-item.text-red { color: #dc2626; }
+.action-dropdown-menu .dropdown-item.text-red:hover { background-color: #fef2f2; color: #b91c1c; }
+
+.action-dropdown-menu .dropdown-divider {
+  height: 1px;
+  background-color: #e2e8f0;
+  margin: 0.25rem 0;
 }
 
 

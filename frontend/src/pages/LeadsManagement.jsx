@@ -38,7 +38,8 @@ import {
   Upload,
   FileSpreadsheet,
   PhoneCall,
-  MessageCircle
+  MessageCircle,
+  MoreVertical
 } from 'lucide-react';
 import Pagination from '../components/Pagination';
 import './LeadsManagement.css';
@@ -95,9 +96,59 @@ export default function LeadsManagement() {
   const [sourceFilter, setSourceFilter] = useState('All');
   const [assignedFilter, setAssignedFilter] = useState('All');
 
-  // Pagination State
+  // Pagination & Actions State
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 12;
+  const [actionMenuState, setActionMenuState] = useState(null); // { leadId, lead, top, bottom, right, isAbove }
+
+  const handleActionMenuToggle = (e, lead) => {
+    e.stopPropagation();
+    if (actionMenuState && actionMenuState.leadId === lead.id) {
+      setActionMenuState(null);
+      return;
+    }
+
+    const rect = e.currentTarget.getBoundingClientRect();
+    const windowHeight = window.innerHeight;
+    const windowWidth = window.innerWidth;
+    
+    const menuHeight = 250;
+    const spaceBelow = windowHeight - rect.bottom;
+    const spaceAbove = rect.top;
+
+    let isAbove = false;
+    let top = rect.bottom + 6;
+    let bottom = 'auto';
+
+    if (spaceBelow < menuHeight && spaceAbove > menuHeight) {
+      isAbove = true;
+      top = 'auto';
+      bottom = windowHeight - rect.top + 6;
+    }
+
+    const right = windowWidth - rect.right;
+
+    setActionMenuState({
+      leadId: lead.id,
+      lead,
+      top,
+      bottom,
+      right,
+      isAbove
+    });
+  };
+
+  useEffect(() => {
+    const handleScrollOrResize = () => {
+      if (actionMenuState) setActionMenuState(null);
+    };
+    window.addEventListener('scroll', handleScrollOrResize, true);
+    window.addEventListener('resize', handleScrollOrResize);
+    return () => {
+      window.removeEventListener('scroll', handleScrollOrResize, true);
+      window.removeEventListener('resize', handleScrollOrResize);
+    };
+  }, [actionMenuState]);
 
   // Modal States
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -153,6 +204,7 @@ export default function LeadsManagement() {
 
   useEffect(() => {
     setCurrentPage(1);
+    setActionMenuState(null);
     loadLeads();
     loadDropdowns();
   }, [statusFilter, sourceFilter, assignedFilter]);
@@ -1022,52 +1074,13 @@ export default function LeadsManagement() {
                       </td>
 
                       <td style={{ textAlign: 'right' }}>
-                        <div className="table-actions">
-                          <button 
-                            className="btn-icon text-whatsapp" 
-                            title="Send Professional WhatsApp Message"
-                            onClick={() => handleOpenWhatsApp(lead)}
-                          >
-                            <MessageCircle size={16} />
-                          </button>
-                          <button 
-                            className="btn-icon text-blue" 
-                            title="View Full Lead Details"
-                            onClick={() => openFullLeadDetails(lead.id)}
-                          >
-                            <Eye size={16} />
-                          </button>
-                          <button 
-                            className="btn-icon" 
-                            title="Log Activity & Notes"
-                            onClick={() => openLeadActivities(lead.id)}
-                          >
-                            <MessageSquare size={16} />
-                          </button>
-                          {lead.status !== 'Won' && (
-                            <button 
-                              className="btn-icon text-emerald" 
-                              title="Convert to Client"
-                              onClick={() => handleConvertLeadToClient(lead.id)}
-                            >
-                              <UserPlus size={16} />
-                            </button>
-                          )}
-                          <button 
-                            className="btn-icon" 
-                            title="Edit Lead"
-                            onClick={() => openEditModal(lead)}
-                          >
-                            <Edit3 size={16} />
-                          </button>
-                          <button 
-                            className="btn-icon text-red" 
-                            title="Delete Lead"
-                            onClick={() => handleDeleteLead(lead.id, lead.title)}
-                          >
-                            <Trash2 size={16} />
-                          </button>
-                        </div>
+                        <button 
+                          className={`action-dots-btn ${actionMenuState?.leadId === lead.id ? 'active' : ''}`}
+                          onClick={(e) => handleActionMenuToggle(e, lead)}
+                          title="Lead Actions"
+                        >
+                          <MoreVertical size={18} />
+                        </button>
                       </td>
                     </tr>
                   );
@@ -1789,6 +1802,66 @@ export default function LeadsManagement() {
           </div>
         );
       })()}
+
+      {/* FIXED FLOATING ACTIONS DROPDOWN MENU */}
+      {actionMenuState && actionMenuState.lead && (
+        <>
+          <div 
+            className="action-dropdown-backdrop" 
+            onClick={(e) => { e.stopPropagation(); setActionMenuState(null); }}
+          />
+          <div 
+            className={`action-dropdown-menu fixed-floating ${actionMenuState.isAbove ? 'is-above' : 'is-below'}`}
+            style={{
+              position: 'fixed',
+              top: actionMenuState.top !== 'auto' ? `${actionMenuState.top}px` : 'auto',
+              bottom: actionMenuState.bottom !== 'auto' ? `${actionMenuState.bottom}px` : 'auto',
+              right: `${actionMenuState.right}px`,
+              zIndex: 99999
+            }}
+          >
+            <button 
+              className="dropdown-item text-whatsapp" 
+              onClick={() => { const l = actionMenuState.lead; setActionMenuState(null); handleOpenWhatsApp(l); }}
+            >
+              <MessageCircle size={15} /> Send WhatsApp Message
+            </button>
+            <button 
+              className="dropdown-item text-blue" 
+              onClick={() => { const l = actionMenuState.lead; setActionMenuState(null); openFullLeadDetails(l.id); }}
+            >
+              <Eye size={15} /> View Full Details
+            </button>
+            <button 
+              className="dropdown-item" 
+              onClick={() => { const l = actionMenuState.lead; setActionMenuState(null); openLeadActivities(l.id); }}
+            >
+              <MessageSquare size={15} /> Log Activity & Notes
+            </button>
+            {actionMenuState.lead.status !== 'Won' && (
+              <button 
+                className="dropdown-item text-emerald" 
+                onClick={() => { const l = actionMenuState.lead; setActionMenuState(null); handleConvertLeadToClient(l.id); }}
+              >
+                <UserPlus size={15} /> Convert to Client
+              </button>
+            )}
+            <button 
+              className="dropdown-item" 
+              onClick={() => { const l = actionMenuState.lead; setActionMenuState(null); openEditModal(l); }}
+            >
+              <Edit3 size={15} /> Edit Lead
+            </button>
+            <div className="dropdown-divider" />
+            <button 
+              className="dropdown-item text-red" 
+              onClick={() => { const l = actionMenuState.lead; setActionMenuState(null); handleDeleteLead(l.id, l.title); }}
+            >
+              <Trash2 size={15} /> Delete Lead
+            </button>
+          </div>
+        </>
+      )}
     </div>
   );
 }
