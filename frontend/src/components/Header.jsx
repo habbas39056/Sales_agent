@@ -291,9 +291,9 @@ export default function Header() {
             
             {showNotifDropdown && (
               <div className="notif-dropdown" style={{
-                position: 'absolute', top: '100%', right: 0, marginTop: '0.5rem', width: '320px',
-                backgroundColor: 'white', borderRadius: '12px', boxShadow: '0 8px 30px rgba(0,0,0,0.12)',
-                border: '1px solid var(--border-color)', zIndex: 1000, overflow: 'hidden'
+                position: 'absolute', top: '100%', right: 0, marginTop: '0.5rem', width: '340px',
+                backgroundColor: 'white', borderRadius: '12px', boxShadow: '0 10px 35px rgba(0,0,0,0.18)',
+                border: '1px solid var(--border-color, #cbd5e1)', zIndex: 10000, overflow: 'hidden'
               }}>
                 <div style={{ padding: '1rem', borderBottom: '1px solid #f1f5f9', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                   <h3 style={{ margin: 0, fontSize: '1rem', fontWeight: '700', color: '#0f172a' }}>Notifications</h3>

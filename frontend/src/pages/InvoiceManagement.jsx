@@ -229,7 +229,42 @@ export default function InvoiceManagement() {
     setCurrentPage(1);
   };
 
-  // KPI Calculations across entire dataset
+  // Scoped invoices (filtered by Search, Sales Person, and Date Range)
+  const scopeInvoices = useMemo(() => {
+    const term = searchTerm.trim().toLowerCase();
+
+    return invoices.filter(inv => {
+      // Multi-field search
+      const matchesSearch = !term || 
+        (inv.invoice_number && inv.invoice_number.toLowerCase().includes(term)) || 
+        (inv.client_name && inv.client_name.toLowerCase().includes(term)) || 
+        (inv.business_name && inv.business_name.toLowerCase().includes(term)) || 
+        (inv.agent_name && inv.agent_name.toLowerCase().includes(term)) || 
+        (inv.project_title && inv.project_title.toLowerCase().includes(term)) || 
+        (inv.amount && inv.amount.toString().includes(term)) || 
+        (inv.balance && inv.balance.toString().includes(term)) || 
+        (inv.id && inv.id.toString().includes(term));
+
+      // Sales person filter
+      const matchesSalesPerson = salesPersonFilter === 'All Sales Persons' || inv.agent_name === salesPersonFilter;
+
+      // Date range filter
+      let matchesDate = true;
+      if (fromDate || toDate) {
+        if (inv.issue_date) {
+          const invDateStr = new Date(inv.issue_date).toISOString().slice(0, 10);
+          if (fromDate && invDateStr < fromDate) matchesDate = false;
+          if (toDate && invDateStr > toDate) matchesDate = false;
+        } else {
+          matchesDate = false;
+        }
+      }
+
+      return matchesSearch && matchesSalesPerson && matchesDate;
+    });
+  }, [invoices, searchTerm, salesPersonFilter, fromDate, toDate]);
+
+  // KPI Calculations across active scoped dataset
   const stats = useMemo(() => {
     let totalInvoiced = 0;
     let totalCollected = 0;
@@ -239,7 +274,7 @@ export default function InvoiceManagement() {
     let paidCount = 0;
     const todayStr = new Date().toISOString().slice(0, 10);
 
-    invoices.forEach(inv => {
+    scopeInvoices.forEach(inv => {
       const amt = Number(inv.amount || 0);
       const bal = Number(inv.balance !== undefined && inv.balance !== null ? inv.balance : amt);
       const paid = Math.max(0, amt - bal);
@@ -270,9 +305,9 @@ export default function InvoiceManagement() {
       overdueCount,
       overdueAmount,
       paidCount,
-      totalCount: invoices.length
+      totalCount: scopeInvoices.length
     };
-  }, [invoices]);
+  }, [scopeInvoices]);
 
   // KPI Card click handles instant filter
   const handleKpiFilter = (type) => {
@@ -395,24 +430,11 @@ export default function InvoiceManagement() {
     }
   };
 
-  // Filter Invoices
+  // Filter Invoices (apply statusFilter on scopeInvoices for table display)
   const filteredInvoices = useMemo(() => {
-    const term = searchTerm.trim().toLowerCase();
     const todayStr = new Date().toISOString().slice(0, 10);
 
-    return invoices.filter(inv => {
-      // Multi-field search
-      const matchesSearch = !term || 
-        (inv.invoice_number && inv.invoice_number.toLowerCase().includes(term)) || 
-        (inv.client_name && inv.client_name.toLowerCase().includes(term)) || 
-        (inv.business_name && inv.business_name.toLowerCase().includes(term)) || 
-        (inv.agent_name && inv.agent_name.toLowerCase().includes(term)) || 
-        (inv.project_title && inv.project_title.toLowerCase().includes(term)) || 
-        (inv.amount && inv.amount.toString().includes(term)) || 
-        (inv.balance && inv.balance.toString().includes(term)) || 
-        (inv.id && inv.id.toString().includes(term));
-
-      // Status filter
+    return scopeInvoices.filter(inv => {
       let matchesStatus = true;
       const bal = Number(inv.balance !== undefined && inv.balance !== null ? inv.balance : inv.amount);
       const amt = Number(inv.amount || 0);
@@ -431,20 +453,9 @@ export default function InvoiceManagement() {
         matchesStatus = (bal > 0 && bal < amt);
       }
 
-      // Sales person filter
-      const matchesSalesPerson = salesPersonFilter === 'All Sales Persons' || inv.agent_name === salesPersonFilter;
-
-      // Date range filter
-      let matchesDate = true;
-      if (inv.issue_date) {
-        const invDateStr = new Date(inv.issue_date).toISOString().slice(0, 10);
-        if (fromDate && invDateStr < fromDate) matchesDate = false;
-        if (toDate && invDateStr > toDate) matchesDate = false;
-      }
-
-      return matchesSearch && matchesStatus && matchesSalesPerson && matchesDate;
+      return matchesStatus;
     });
-  }, [invoices, searchTerm, statusFilter, salesPersonFilter, fromDate, toDate]);
+  }, [scopeInvoices, statusFilter]);
 
   // Pagination Slice
   const currentInvoices = useMemo(() => {

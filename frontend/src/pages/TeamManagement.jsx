@@ -55,7 +55,8 @@ export default function TeamManagement() {
         { key: 'DASHBOARD', label: 'Executive Dashboard' },
         { key: 'SALES_PORTAL', label: 'Sales Specialist Portal' },
         { key: 'PM_PORTAL', label: 'Project Manager Portal' },
-        { key: 'PRODUCTION_PORTAL', label: 'Production Portal' }
+        { key: 'PRODUCTION_PORTAL', label: 'Production Portal' },
+        { key: 'CLIENT_PORTAL', label: 'Client Portal' }
       ]
     },
     {
@@ -63,6 +64,12 @@ export default function TeamManagement() {
       modules: [
         { key: 'CLIENTS', label: 'Client Management' },
         { key: 'STAFF MANAGEMENT', label: 'Team Management' }
+      ]
+    },
+    {
+      name: 'Sales & Leads',
+      modules: [
+        { key: 'LEADS', label: 'Leads Management' }
       ]
     },
     {
@@ -80,6 +87,7 @@ export default function TeamManagement() {
       modules: [
         { key: 'INVOICES', label: 'Invoice Management' },
         { key: 'QUOTATIONS', label: 'Quotations & Estimates' },
+        { key: 'ITEMS', label: 'Items Catalog' },
         { key: 'CASHBOOK', label: 'Expenses & Ledger' },
         { key: 'FUTURE_PAYABLES', label: 'Future Payables' },
         { key: 'COMMISSIONS', label: 'Commissions Tracker' },
@@ -91,6 +99,7 @@ export default function TeamManagement() {
       modules: [
         { key: 'REPORTS', label: 'System Reports (Master Access)' },
         { key: 'REPORT_SALES', label: 'Sales Reports' },
+        { key: 'REPORT_SALESPERSON', label: 'Salesperson Performance' },
         { key: 'REPORT_CLIENTS', label: 'Client Reports' },
         { key: 'REPORT_TEAM', label: 'Employee & Team Reports' },
         { key: 'REPORT_EXPENSES', label: 'Expense Reports' },
@@ -108,6 +117,7 @@ export default function TeamManagement() {
       ]
     }
   ];
+
 
   const allModuleKeys = useMemo(() => {
     return moduleCategories.flatMap(c => c.modules.map(m => m.key));
