@@ -79,7 +79,8 @@ export default function TeamManagement() {
         { key: 'PROJECT_MANAGEMENT', label: 'Project Management' },
         { key: 'TASKS', label: 'My Tasks' },
         { key: 'DEADLINES', label: 'Deadline Workflow' },
-        { key: 'DEADLINES_APPROVAL', label: 'Tasks for Approval' }
+        { key: 'DEADLINES_APPROVAL', label: 'Tasks for Approval' },
+        { key: 'RECOVERY', label: 'ERP Recovery Module' }
       ]
     },
     {

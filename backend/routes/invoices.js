@@ -14,11 +14,14 @@ router.get('/', async (req, res) => {
              c.full_name as client_name, 
              c.business_name,
              p.title as project_title,
-             u.name as agent_name
+             u.name as agent_name,
+             rc.id AS recovery_case_id,
+             rc.case_number AS recovery_case_number
       FROM invoices i
       JOIN clients c ON i.client_id = c.id
       LEFT JOIN projects p ON i.project_id = p.id
       LEFT JOIN users u ON i.agent_id = u.id
+      LEFT JOIN recovery_cases rc ON (rc.invoice_id = i.id AND rc.status != 'Closed' AND rc.status != 'Recovered' AND rc.is_active = 1)
     `;
     const params = [];
 
@@ -236,6 +239,60 @@ router.post('/:id/payments', async (req, res) => {
       'UPDATE invoices SET balance = ?, status = ? WHERE id = ?',
       [newBalance, newStatus, invoiceId]
     );
+
+    // Sync with Recovery Module if active recovery case exists for this invoice
+    const [recoveryCases] = await connection.query(
+      "SELECT * FROM recovery_cases WHERE invoice_id = ? AND status != 'Closed' AND status != 'Recovered' AND is_active = 1",
+      [invoiceId]
+    );
+
+    if (recoveryCases.length > 0) {
+      const recCase = recoveryCases[0];
+      const newRecoveredAmount = Number(recCase.recovered_amount || 0) + paymentAmount;
+      const newOutstandingAmount = Math.max(0, Number(recCase.outstanding_amount || 0) - paymentAmount);
+
+      if (newBalance <= 0 || newOutstandingAmount <= 0) {
+        // Full Recovery - Close Case
+        await connection.query(`
+          UPDATE recovery_cases 
+          SET status = 'Recovered', outstanding_amount = 0, recovered_amount = ?, is_active = 0, closed_at = NOW() 
+          WHERE id = ?
+        `, [Number(recCase.outstanding_amount || invoiceAmount), recCase.id]);
+
+        await connection.query(`
+          INSERT INTO recovery_timeline (recovery_case_id, event_type, user_id, title, description)
+          VALUES (?, 'Payment Verified', NULL, 'Recovery Closed - Fully Recovered', ?)
+        `, [recCase.id, `Payment of PKR ${paymentAmount.toLocaleString()} verified in Accounts. Invoice balance reached PKR 0. Recovery case closed.`]);
+
+        // Notify Salesperson and Project Manager
+        await connection.query(`
+          INSERT INTO notifications (user_id, message, link)
+          VALUES (?, ?, ?)
+        `, [recCase.assigned_salesperson_id, `🎉 Recovery Case ${recCase.case_number} completed! Full payment verified.`, `/recovery?case=${recCase.id}`]);
+
+        if (recCase.project_id) {
+          const [[proj]] = await connection.query('SELECT pm_id FROM projects WHERE id = ?', [recCase.project_id]);
+          if (proj && proj.pm_id) {
+            await connection.query(`
+              INSERT INTO notifications (user_id, message, link)
+              VALUES (?, ?, ?)
+            `, [proj.pm_id, `Recovery completed for Project linked to Case ${recCase.case_number}. Review on-hold project for resumption.`, `/projects/${recCase.project_id}`]);
+          }
+        }
+      } else {
+        // Partial Recovery
+        await connection.query(`
+          UPDATE recovery_cases 
+          SET status = 'Partial Payment', outstanding_amount = ?, recovered_amount = ? 
+          WHERE id = ?
+        `, [newOutstandingAmount, newRecoveredAmount, recCase.id]);
+
+        await connection.query(`
+          INSERT INTO recovery_timeline (recovery_case_id, event_type, user_id, title, description)
+          VALUES (?, 'Payment Verified', NULL, 'Partial Payment Verified', ?)
+        `, [recCase.id, `Partial payment of PKR ${paymentAmount.toLocaleString()} verified in Accounts. Remaining balance: PKR ${newOutstandingAmount.toLocaleString()}`]);
+      }
+    }
 
     // Auto-sync with Expense module
     const [[invoiceDetails]] = await connection.query(`

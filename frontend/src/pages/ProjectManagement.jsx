@@ -4,7 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { 
   FolderKanban, Search, Calendar, FileText, DollarSign, Clock, 
   CheckCircle2, AlertCircle, Edit3, Check, X, FileSpreadsheet, 
-  ExternalLink, Eye, Plus, Filter
+  ExternalLink, Eye, Plus, Filter, ShieldAlert, ShieldCheck
 } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import Pagination from '../components/Pagination';
@@ -36,8 +36,22 @@ export default function ProjectManagement() {
   const user = userStr ? JSON.parse(userStr) : null;
   const isPMorAdmin = user?.role === 'Admin' || user?.role === 'Product Manager' || user?.role === 'PM' || user?.role === 'Project Manager';
 
+  // Recovery Modal State
+  const [isRecoveryModalOpen, setIsRecoveryModalOpen] = useState(false);
+  const [targetRecoveryProject, setTargetRecoveryProject] = useState(null);
+  const [salesPeople, setSalesPeople] = useState([]);
+  const [recoveryForm, setRecoveryForm] = useState({
+    assigned_salesperson_id: '',
+    assigned_date: new Date().toISOString().slice(0, 10),
+    reason: 'Manual Manager Trigger',
+    remark: ''
+  });
+
   useEffect(() => {
     fetchProjects();
+    axios.get('/api/users')
+      .then(res => setSalesPeople((res.data || []).filter(u => u.role !== 'Client')))
+      .catch(err => console.error('Failed to fetch users:', err));
   }, []);
 
   const fetchProjects = async () => {
@@ -88,6 +102,46 @@ export default function ProjectManagement() {
       alert('Could not load invoice details.');
     } finally {
       setLoadingInvoice(false);
+    }
+  };
+
+  const handleSendProjectToRecovery = (p) => {
+    setTargetRecoveryProject(p);
+    setRecoveryForm({
+      assigned_salesperson_id: p.salesperson_id || (salesPeople.length > 0 ? salesPeople[0].id : ''),
+      assigned_date: new Date().toISOString().slice(0, 10),
+      reason: 'Manual Manager Trigger',
+      remark: ''
+    });
+    setIsRecoveryModalOpen(true);
+  };
+
+  const submitSendProjectToRecovery = async (e) => {
+    e.preventDefault();
+    if (!recoveryForm.assigned_salesperson_id) {
+      alert("Please select an Assigned Sales Person.");
+      return;
+    }
+    try {
+      const res = await axios.post('/api/recovery/trigger', {
+        project_id: targetRecoveryProject.id,
+        assigned_salesperson_id: recoveryForm.assigned_salesperson_id,
+        trigger_reason: recoveryForm.reason,
+        manager_remark: recoveryForm.remark,
+        assigned_date: recoveryForm.assigned_date
+      }, {
+        headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
+      });
+      if (res.data && res.data.success) {
+        alert(`Project "${targetRecoveryProject.title}" successfully sent to Recovery Queue.`);
+        setIsRecoveryModalOpen(false);
+        setTargetRecoveryProject(null);
+        fetchProjects();
+      } else {
+        alert((res.data && res.data.error) || 'Failed to send project to recovery');
+      }
+    } catch (err) {
+      alert((err.response && err.response.data && err.response.data.error) || 'Error sending to recovery');
     }
   };
 
@@ -471,6 +525,31 @@ export default function ProjectManagement() {
                         <Eye size={12} />
                         View
                       </button>
+                      {isPMorAdmin && (
+                        p.recovery_case_id ? (
+                          <button 
+                            type="button" 
+                            onClick={() => navigate(`/recovery/${p.recovery_case_id}`)}
+                            className="pm-btn-action-small"
+                            style={{ background: '#ecfdf5', color: '#10b981', border: '1px solid #10b981', padding: '4px 8px', display: 'inline-flex', alignItems: 'center', gap: '2px', fontWeight: '700', marginLeft: '4px' }}
+                            title="In Recovery Queue - Click to View Case"
+                          >
+                            <ShieldCheck size={12} />
+                            In Recovery
+                          </button>
+                        ) : (
+                          <button 
+                            type="button" 
+                            onClick={() => handleSendProjectToRecovery(p)}
+                            className="pm-btn-action-small"
+                            style={{ background: '#fef2f2', color: '#ef4444', padding: '4px 8px', display: 'inline-flex', alignItems: 'center', gap: '2px', fontWeight: '700', marginLeft: '4px' }}
+                            title="■ SEND TO RECOVERY"
+                          >
+                            <ShieldAlert size={12} />
+                            Recovery
+                          </button>
+                        )
+                      )}
                     </td>
                   </tr>
                 );
@@ -582,6 +661,106 @@ export default function ProjectManagement() {
                 Go to Invoices Module
               </button>
             </div>
+          </div>
+        </div>
+      )}
+      {/* SEND TO RECOVERY FORM MODAL */}
+      {isRecoveryModalOpen && targetRecoveryProject && (
+        <div className="modal-overlay" style={{ zIndex: 9999 }}>
+          <div className="modal-card" style={{ maxWidth: '520px', background: '#1e293b', color: '#f8fafc', padding: '24px', borderRadius: '12px', border: '1px solid rgba(255,255,255,0.1)' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', borderBottom: '1px solid rgba(255,255,255,0.1)', paddingBottom: '12px' }}>
+              <h3 style={{ margin: 0, display: 'flex', alignItems: 'center', gap: '8px', color: '#ef4444' }}>
+                <ShieldAlert size={20} /> Send Project to Recovery
+              </h3>
+              <button onClick={() => setIsRecoveryModalOpen(false)} style={{ background: 'none', border: 'none', color: '#94a3b8', cursor: 'pointer' }}>
+                <X size={20} />
+              </button>
+            </div>
+
+            <form onSubmit={submitSendProjectToRecovery}>
+              <div style={{ background: 'rgba(15, 23, 42, 0.6)', padding: '12px', borderRadius: '8px', marginBottom: '16px', border: '1px solid rgba(255,255,255,0.05)' }}>
+                <div style={{ fontSize: '0.85rem', color: '#94a3b8' }}>Target Project:</div>
+                <div style={{ fontSize: '1rem', fontWeight: '700', color: '#f8fafc' }}>
+                  {targetRecoveryProject.title} ({targetRecoveryProject.client_name || targetRecoveryProject.business_name || 'Client'})
+                </div>
+              </div>
+
+              <div className="form-group" style={{ marginBottom: '14px' }}>
+                <label style={{ display: 'block', fontSize: '0.85rem', color: '#cbd5e1', marginBottom: '6px' }}>Assigned Sales Person *</label>
+                <select 
+                  value={recoveryForm.assigned_salesperson_id} 
+                  onChange={(e) => setRecoveryForm({ ...recoveryForm, assigned_salesperson_id: e.target.value })}
+                  style={{ width: '100%', padding: '10px', background: '#0f172a', border: '1px solid #334155', borderRadius: '6px', color: '#fff' }}
+                  required
+                >
+                  <option value="">Select Salesperson</option>
+                  {salesPeople.map(sp => {
+                    const displayName = sp.name || sp.full_name || sp.username || `User #${sp.id}`;
+                    return (
+                      <option key={sp.id} value={sp.id}>
+                        {displayName} {sp.role ? `(${sp.role})` : ''}
+                      </option>
+                    );
+                  })}
+                </select>
+              </div>
+
+              <div className="form-group" style={{ marginBottom: '14px' }}>
+                <label style={{ display: 'block', fontSize: '0.85rem', color: '#cbd5e1', marginBottom: '6px' }}>Assigned Date (Auto)</label>
+                <input 
+                  type="date" 
+                  value={recoveryForm.assigned_date}
+                  onChange={(e) => setRecoveryForm({ ...recoveryForm, assigned_date: e.target.value })}
+                  style={{ width: '100%', padding: '10px', background: '#0f172a', border: '1px solid #334155', borderRadius: '6px', color: '#fff' }}
+                  required
+                />
+              </div>
+
+              <div className="form-group" style={{ marginBottom: '14px' }}>
+                <label style={{ display: 'block', fontSize: '0.85rem', color: '#cbd5e1', marginBottom: '6px' }}>Reason / Category *</label>
+                <select 
+                  value={recoveryForm.reason} 
+                  onChange={(e) => setRecoveryForm({ ...recoveryForm, reason: e.target.value })}
+                  style={{ width: '100%', padding: '10px', background: '#0f172a', border: '1px solid #334155', borderRadius: '6px', color: '#fff' }}
+                  required
+                >
+                  <option value="Manual Manager Trigger">Manual Manager Trigger</option>
+                  <option value="Promise Missed">Promise Missed</option>
+                  <option value="Repeated Delay">Repeated Delay</option>
+                  <option value="No Response">No Response</option>
+                  <option value="Dispute / Issue">Dispute / Issue</option>
+                  <option value="High-Value Recovery">High-Value Recovery</option>
+                  <option value="Management Escalation">Management Escalation</option>
+                </select>
+              </div>
+
+              <div className="form-group" style={{ marginBottom: '20px' }}>
+                <label style={{ display: 'block', fontSize: '0.85rem', color: '#cbd5e1', marginBottom: '6px' }}>Description / Remarks</label>
+                <textarea 
+                  rows="3" 
+                  placeholder="Enter detailed description or remarks..."
+                  value={recoveryForm.remark}
+                  onChange={(e) => setRecoveryForm({ ...recoveryForm, remark: e.target.value })}
+                  style={{ width: '100%', padding: '10px', background: '#0f172a', border: '1px solid #334155', borderRadius: '6px', color: '#fff' }}
+                ></textarea>
+              </div>
+
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
+                <button 
+                  type="button" 
+                  onClick={() => setIsRecoveryModalOpen(false)}
+                  style={{ padding: '8px 16px', background: '#334155', border: 'none', borderRadius: '6px', color: '#fff', cursor: 'pointer' }}
+                >
+                  Cancel
+                </button>
+                <button 
+                  type="submit" 
+                  style={{ padding: '8px 18px', background: '#ef4444', border: 'none', borderRadius: '6px', color: '#fff', fontWeight: '600', cursor: 'pointer' }}
+                >
+                  Confirm & Send to Recovery
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

@@ -128,6 +128,9 @@ async function updateLiveDb() {
         \`assignee_id\` INT NULL,
         \`deadline\` DATE NULL,
         \`completed_at\` TIMESTAMP NULL,
+        \`submitted_for_review_at\` DATETIME NULL,
+        \`is_terms_accepted\` TINYINT(1) DEFAULT 0,
+        \`terms_accepted_at\` DATETIME NULL,
         \`forgive_late_commission\` BOOLEAN DEFAULT FALSE,
         \`requires_client_form\` BOOLEAN DEFAULT FALSE,
         \`client_form_schema\` JSON NULL,
@@ -351,6 +354,148 @@ async function updateLiveDb() {
         CONSTRAINT \`quotation_items_fk\` FOREIGN KEY (\`quotation_id\`) REFERENCES \`quotations\` (\`id\`) ON DELETE CASCADE
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
     `);
+
+    // 17. recovery_cases
+    await connection.query(`
+      CREATE TABLE IF NOT EXISTS \`recovery_cases\` (
+        \`id\` INT AUTO_INCREMENT PRIMARY KEY,
+        \`case_number\` VARCHAR(50) UNIQUE NOT NULL,
+        \`invoice_id\` INT NOT NULL,
+        \`project_id\` INT NULL,
+        \`client_id\` INT NOT NULL,
+        \`assigned_salesperson_id\` INT NOT NULL,
+        \`original_salesperson_id\` INT NULL,
+        \`created_by_user_id\` INT NULL,
+        \`trigger_type\` ENUM('Manual Manager', 'Automatic 15-Day Overdue') NOT NULL DEFAULT 'Manual Manager',
+        \`manager_reason\` TEXT NULL,
+        \`manager_remark\` TEXT NULL,
+        \`outstanding_amount\` DECIMAL(12,2) NOT NULL DEFAULT 0.00,
+        \`recovered_amount\` DECIMAL(12,2) NOT NULL DEFAULT 0.00,
+        \`status\` VARCHAR(50) NOT NULL DEFAULT 'New',
+        \`category\` VARCHAR(100) NOT NULL DEFAULT 'Contact Required',
+        \`tone_guidance\` VARCHAR(150) NULL,
+        \`priority_score\` INT NOT NULL DEFAULT 0,
+        \`is_high_value\` TINYINT(1) NOT NULL DEFAULT 0,
+        \`promised_amount\` DECIMAL(12,2) NULL,
+        \`promised_date\` DATE NULL,
+        \`next_followup_date\` DATETIME NULL,
+        \`last_followup_date\` DATETIME NULL,
+        \`last_followup_remark\` TEXT NULL,
+        \`missed_promises_count\` INT NOT NULL DEFAULT 0,
+        \`unsuccessful_attempts_count\` INT NOT NULL DEFAULT 0,
+        \`escalation_level\` VARCHAR(50) NOT NULL DEFAULT 'None',
+        \`escalation_reason\` TEXT NULL,
+        \`is_active\` TINYINT(1) NOT NULL DEFAULT 1,
+        \`closed_at\` DATETIME NULL,
+        \`created_at\` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        \`updated_at\` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        KEY \`invoice_id\` (\`invoice_id\`),
+        KEY \`client_id\` (\`client_id\`),
+        KEY \`assigned_salesperson_id\` (\`assigned_salesperson_id\`)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+    `);
+
+    // 18. recovery_followups
+    await connection.query(`
+      CREATE TABLE IF NOT EXISTS \`recovery_followups\` (
+        \`id\` INT AUTO_INCREMENT PRIMARY KEY,
+        \`recovery_case_id\` INT NOT NULL,
+        \`user_id\` INT NOT NULL,
+        \`method\` VARCHAR(50) NOT NULL DEFAULT 'Call',
+        \`outcome\` VARCHAR(50) NOT NULL DEFAULT 'Other',
+        \`remark\` TEXT NOT NULL,
+        \`promised_amount\` DECIMAL(12,2) NULL,
+        \`promised_date\` DATE NULL,
+        \`next_followup_date\` DATETIME NULL,
+        \`attachment_url\` VARCHAR(255) NULL,
+        \`created_at\` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        KEY \`recovery_case_id\` (\`recovery_case_id\`),
+        KEY \`user_id\` (\`user_id\`)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+    `);
+
+    // 19. recovery_timeline
+    await connection.query(`
+      CREATE TABLE IF NOT EXISTS \`recovery_timeline\` (
+        \`id\` INT AUTO_INCREMENT PRIMARY KEY,
+        \`recovery_case_id\` INT NOT NULL,
+        \`event_type\` VARCHAR(100) NOT NULL,
+        \`user_id\` INT NULL,
+        \`title\` VARCHAR(255) NOT NULL,
+        \`description\` TEXT NULL,
+        \`metadata\` JSON NULL,
+        \`created_at\` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        KEY \`recovery_case_id\` (\`recovery_case_id\`)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+    `);
+
+    // 20. recovery_contacts
+    await connection.query(`
+      CREATE TABLE IF NOT EXISTS \`recovery_contacts\` (
+        \`id\` INT AUTO_INCREMENT PRIMARY KEY,
+        \`recovery_case_id\` INT NOT NULL,
+        \`contact_name\` VARCHAR(255) NOT NULL,
+        \`role_designation\` VARCHAR(255) NULL,
+        \`phone\` VARCHAR(50) NULL,
+        \`email\` VARCHAR(255) NULL,
+        \`notes\` TEXT NULL,
+        \`created_at\` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        KEY \`recovery_case_id\` (\`recovery_case_id\`)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+    `);
+
+    // 21. recovery_settings
+    await connection.query(`
+      CREATE TABLE IF NOT EXISTS \`recovery_settings\` (
+        \`id\` INT AUTO_INCREMENT PRIMARY KEY,
+        \`high_value_threshold\` DECIMAL(12,2) NOT NULL DEFAULT 100000.00,
+        \`no_response_attempts_threshold\` INT NOT NULL DEFAULT 3,
+        \`missed_promises_threshold\` INT NOT NULL DEFAULT 2,
+        \`auto_overdue_days\` INT NOT NULL DEFAULT 15,
+        \`updated_at\` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+    `);
+
+    // Seed baseline recovery_settings if empty
+    const [[recSetCount]] = await connection.query('SELECT COUNT(*) as count FROM `recovery_settings`');
+    if (!recSetCount || recSetCount.count === 0) {
+      await connection.query(`
+        INSERT INTO \`recovery_settings\` (\`high_value_threshold\`, \`no_response_attempts_threshold\`, \`missed_promises_threshold\`, \`auto_overdue_days\`)
+        VALUES (100000.00, 3, 2, 15);
+      `);
+    }
+
+    // 22. recovery_categories
+    await connection.query(`
+      CREATE TABLE IF NOT EXISTS \`recovery_categories\` (
+        \`id\` INT AUTO_INCREMENT PRIMARY KEY,
+        \`name\` VARCHAR(100) UNIQUE NOT NULL,
+        \`color\` VARCHAR(20) DEFAULT '#4f46e5',
+        \`created_at\` TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+    `);
+
+    // Seed baseline recovery_categories if empty
+    const [[recCatCount]] = await connection.query('SELECT COUNT(*) as count FROM `recovery_categories`');
+    if (!recCatCount || recCatCount.count === 0) {
+      const defaultCategories = [
+        ['Contact Required', '#6366f1'],
+        ['Normal Follow-up', '#3b82f6'],
+        ['Payment Promised', '#10b981'],
+        ['Promise Missed', '#ef4444'],
+        ['Repeated Delay', '#f59e0b'],
+        ['No Response', '#94a3b8'],
+        ['Dispute', '#ec4899'],
+        ['High-Value Recovery', '#8b5cf6'],
+        ['Management Escalation', '#dc2626']
+      ];
+      for (const [name, color] of defaultCategories) {
+        await connection.query(
+          'INSERT IGNORE INTO `recovery_categories` (`name`, `color`) VALUES (?, ?)',
+          [name, color]
+        );
+      }
+    }
 
     // 17. project_categories
     await connection.query(`
@@ -678,7 +823,10 @@ async function updateLiveDb() {
     await addColumnIfNotExists('project_steps', 'deliverable_url', 'VARCHAR(1000) DEFAULT NULL');
     await addColumnIfNotExists('project_steps', 'reassign_todos', 'LONGTEXT DEFAULT NULL');
     await addColumnIfNotExists('project_steps', 'reject_todos', 'LONGTEXT DEFAULT NULL');
-    await safeExec("ALTER TABLE `project_steps` MODIFY COLUMN `status` ENUM('Pending', 'In Progress', 'Completed', 'Pending Approval', 'Overdue') DEFAULT 'Pending'", 'Updated project_steps.status ENUM');
+    await addColumnIfNotExists('project_steps', 'submitted_for_review_at', 'DATETIME NULL');
+    await addColumnIfNotExists('project_steps', 'is_terms_accepted', 'TINYINT(1) DEFAULT 0');
+    await addColumnIfNotExists('project_steps', 'terms_accepted_at', 'DATETIME NULL');
+    await safeExec("ALTER TABLE `project_steps` MODIFY COLUMN `status` ENUM('Pending', 'In Progress', 'Completed', 'Pending Approval', 'Overdue', 'Submitted for Review') DEFAULT 'Pending'", 'Updated project_steps.status ENUM');
     await safeExec("ALTER TABLE `project_steps` MODIFY COLUMN `deadline_status` ENUM('Accepted', 'Pending Acceptance', 'Appealed', 'Rejected') DEFAULT 'Pending Acceptance'", 'Updated project_steps.deadline_status ENUM');
     await safeExec("UPDATE `project_steps` SET `reassign_todos` = NULL WHERE `reassign_todos` = '0' OR `reassign_todos` = 0");
     await safeExec("UPDATE `project_steps` SET `reject_todos` = NULL WHERE `reject_todos` = '0' OR `reject_todos` = 0");

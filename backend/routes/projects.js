@@ -152,7 +152,23 @@ router.get('/', async (req, res) => {
       SELECT DISTINCT projects.*, clients.full_name as client_name,
       assigned_user.name as pm_name,
       (SELECT COUNT(*) FROM project_steps WHERE project_steps.project_id = projects.id) as dyn_total_steps,
-      (SELECT COUNT(*) FROM project_steps WHERE project_steps.project_id = projects.id AND project_steps.status = 'Completed') as dyn_completed_steps
+      (SELECT COUNT(*) FROM project_steps WHERE project_steps.project_id = projects.id AND project_steps.status = 'Completed') as dyn_completed_steps,
+      (
+        SELECT rc.id FROM recovery_cases rc 
+        WHERE (rc.project_id = projects.id OR (rc.invoice_id IS NOT NULL AND rc.invoice_id IN (
+          SELECT id FROM invoices WHERE project_id = projects.id OR (project_id IS NULL AND client_id = projects.client_id)
+        )))
+        AND rc.status != 'Closed' AND rc.status != 'Recovered' AND rc.is_active = 1
+        ORDER BY rc.id DESC LIMIT 1
+      ) as recovery_case_id,
+      (
+        SELECT rc.case_number FROM recovery_cases rc 
+        WHERE (rc.project_id = projects.id OR (rc.invoice_id IS NOT NULL AND rc.invoice_id IN (
+          SELECT id FROM invoices WHERE project_id = projects.id OR (project_id IS NULL AND client_id = projects.client_id)
+        )))
+        AND rc.status != 'Closed' AND rc.status != 'Recovered' AND rc.is_active = 1
+        ORDER BY rc.id DESC LIMIT 1
+      ) as recovery_case_number
       FROM projects 
       LEFT JOIN clients ON projects.client_id = clients.id
       LEFT JOIN users assigned_user ON projects.pm_id = assigned_user.id
@@ -243,7 +259,23 @@ router.get('/management/overview', async (req, res) => {
           WHERE project_id = p.id OR (project_id IS NULL AND client_id = p.client_id)
           ORDER BY CASE WHEN project_id = p.id THEN 1 ELSE 0 END DESC, id DESC 
           LIMIT 1
-        ) as linked_invoice_id
+        ) as linked_invoice_id,
+        (
+          SELECT rc.id FROM recovery_cases rc 
+          WHERE (rc.project_id = p.id OR (rc.invoice_id IS NOT NULL AND rc.invoice_id IN (
+            SELECT id FROM invoices WHERE project_id = p.id OR (project_id IS NULL AND client_id = p.client_id)
+          )))
+          AND rc.status != 'Closed' AND rc.status != 'Recovered' AND rc.is_active = 1
+          ORDER BY rc.id DESC LIMIT 1
+        ) as recovery_case_id,
+        (
+          SELECT rc.case_number FROM recovery_cases rc 
+          WHERE (rc.project_id = p.id OR (rc.invoice_id IS NOT NULL AND rc.invoice_id IN (
+            SELECT id FROM invoices WHERE project_id = p.id OR (project_id IS NULL AND client_id = p.client_id)
+          )))
+          AND rc.status != 'Closed' AND rc.status != 'Recovered' AND rc.is_active = 1
+          ORDER BY rc.id DESC LIMIT 1
+        ) as recovery_case_number
       FROM projects p
       LEFT JOIN clients c ON p.client_id = c.id
       LEFT JOIN users pm_user ON p.pm_id = pm_user.id
@@ -302,7 +334,9 @@ router.get('/management/overview', async (req, res) => {
         project_due_date: r.due_date || r.locked_deadline,
         status: autoStatus,
         remarks: r.remarks || '',
-        created_at: r.created_at
+        created_at: r.created_at,
+        recovery_case_id: r.recovery_case_id,
+        recovery_case_number: r.recovery_case_number
       };
     });
 
@@ -320,7 +354,23 @@ router.get('/:id', async (req, res) => {
       SELECT projects.*, 
       clients.full_name as client_name,
       (SELECT COUNT(*) FROM project_steps WHERE project_steps.project_id = projects.id) as dyn_total_steps,
-      (SELECT COUNT(*) FROM project_steps WHERE project_steps.project_id = projects.id AND project_steps.status = 'Completed') as dyn_completed_steps
+      (SELECT COUNT(*) FROM project_steps WHERE project_steps.project_id = projects.id AND project_steps.status = 'Completed') as dyn_completed_steps,
+      (
+        SELECT rc.id FROM recovery_cases rc 
+        WHERE (rc.project_id = projects.id OR (rc.invoice_id IS NOT NULL AND rc.invoice_id IN (
+          SELECT id FROM invoices WHERE project_id = projects.id OR (project_id IS NULL AND client_id = projects.client_id)
+        )))
+        AND rc.status != 'Closed' AND rc.status != 'Recovered' AND rc.is_active = 1
+        ORDER BY rc.id DESC LIMIT 1
+      ) as recovery_case_id,
+      (
+        SELECT rc.case_number FROM recovery_cases rc 
+        WHERE (rc.project_id = projects.id OR (rc.invoice_id IS NOT NULL AND rc.invoice_id IN (
+          SELECT id FROM invoices WHERE project_id = projects.id OR (project_id IS NULL AND client_id = projects.client_id)
+        )))
+        AND rc.status != 'Closed' AND rc.status != 'Recovered' AND rc.is_active = 1
+        ORDER BY rc.id DESC LIMIT 1
+      ) as recovery_case_number
       FROM projects 
       LEFT JOIN clients ON projects.client_id = clients.id
       WHERE projects.id = ?

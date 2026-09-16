@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Search, ChevronDown, ShoppingCart, Users, Package, Banknote, MoreHorizontal, AlertTriangle, Clock, ArrowRight, FileText } from 'lucide-react';
+import { Search, ChevronDown, ShoppingCart, Users, Package, Banknote, MoreHorizontal, AlertTriangle, Clock, ArrowRight, FileText, ShieldAlert } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
@@ -11,6 +11,7 @@ export default function Dashboard() {
   const [invoices, setInvoices] = useState([]);
   const [teamMembers, setTeamMembers] = useState([]);
   const [payablesAlert, setPayablesAlert] = useState({ due_today_count: 0, due_today_amount: 0, overdue_count: 0, overdue_amount: 0 });
+  const [recoveryAlert, setRecoveryAlert] = useState({ active_cases: 0, pending_touch_cases: 0, total_outstanding: 0 });
   const [selectedGoalUser, setSelectedGoalUser] = useState('all');
   const [selectedGoalMonth, setSelectedGoalMonth] = useState('current');
   const [loading, setLoading] = useState(true);
@@ -51,7 +52,8 @@ export default function Dashboard() {
           axios.get(`/api/projects${queryParams}`),
           axios.get(`/api/invoices${queryParams}`),
           axios.get('/api/settings'),
-          axios.get('/api/future-payables').catch(() => ({ data: { summary: {} } }))
+          axios.get('/api/future-payables').catch(() => ({ data: { summary: {} } })),
+          axios.get(`/api/recovery/stats${user?.role === 'Admin' ? '' : '?salesperson_id=' + user?.id}`).catch(() => ({ data: {} }))
         ];
         if (user?.role === 'Admin') {
           requests.push(axios.get('/api/users'));
@@ -63,6 +65,9 @@ export default function Dashboard() {
         setInvoices(results[2].data);
         if (results[4]?.data?.summary) {
           setPayablesAlert(results[4].data.summary);
+        }
+        if (results[5]?.data) {
+          setRecoveryAlert(results[5].data);
         }
         
         const settingsRes = results[3];
@@ -81,8 +86,8 @@ export default function Dashboard() {
           }
         }
 
-        if (results[5]) {
-          setTeamMembers(results[5].data || []);
+        if (results[6]) {
+          setTeamMembers(results[6].data || []);
         }
       } catch (error) {
         console.error('Failed to fetch dashboard data:', error);
@@ -409,6 +414,74 @@ export default function Dashboard() {
             }}
           >
             Review & Settle Payables <ArrowRight size={15} />
+          </Link>
+        </div>
+      )}
+
+      {/* Pending Recovery Cases Alert Banner */}
+      {(recoveryAlert.pending_touch_cases > 0 || recoveryAlert.active_cases > 0) && (
+        <div style={{
+          background: 'linear-gradient(135deg, #fef2f2, #fff1f2)',
+          border: '1px solid #fecdd3',
+          borderRadius: '12px',
+          padding: '1rem 1.25rem',
+          marginBottom: '1.5rem',
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          flexWrap: 'wrap',
+          gap: '1rem',
+          boxShadow: '0 4px 12px rgba(225, 29, 72, 0.08)'
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+            <div style={{
+              background: '#ef4444',
+              color: '#ffffff',
+              width: '38px',
+              height: '38px',
+              borderRadius: '10px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              flexShrink: 0
+            }}>
+              <ShieldAlert size={20} />
+            </div>
+            <div>
+              <div style={{ fontWeight: '800', color: '#9f1239', fontSize: '0.95rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                <span>Pending Recovery Action Alert</span>
+                {recoveryAlert.pending_touch_cases > 0 && (
+                  <span style={{ background: '#be123c', color: '#ffffff', fontSize: '0.7rem', padding: '0.1rem 0.5rem', borderRadius: '9999px', fontWeight: '800' }}>
+                    {recoveryAlert.pending_touch_cases} TOUCH PENDING
+                  </span>
+                )}
+                <span style={{ background: '#475569', color: '#ffffff', fontSize: '0.7rem', padding: '0.1rem 0.5rem', borderRadius: '9999px', fontWeight: '800' }}>
+                  {recoveryAlert.active_cases} ACTIVE CASES
+                </span>
+              </div>
+              <div style={{ fontSize: '0.82rem', color: '#be123c', marginTop: '0.15rem' }}>
+                Total Overdue Recovery Balance: <strong>PKR {Number(recoveryAlert.total_outstanding || 0).toLocaleString()}</strong>
+              </div>
+            </div>
+          </div>
+
+          <Link 
+            to="/recovery" 
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '0.4rem',
+              background: '#be123c',
+              color: '#ffffff',
+              padding: '0.55rem 1rem',
+              borderRadius: '8px',
+              fontSize: '0.82rem',
+              fontWeight: '700',
+              textDecoration: 'none',
+              transition: 'all 0.2s ease'
+            }}
+          >
+            Action Recovery Queue <ArrowRight size={15} />
           </Link>
         </div>
       )}

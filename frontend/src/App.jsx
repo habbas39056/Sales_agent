@@ -1,6 +1,6 @@
 import React from 'react';
 import { BrowserRouter as Router, Routes, Route, Link, useLocation, useNavigate, Navigate } from 'react-router-dom';
-import { LayoutDashboard, Users, FileText, PlusCircle, Calendar, Clock, CheckSquare, MessageSquare, RotateCcw, CreditCard, Banknote, LogOut, Shield, Settings as SettingsIcon, CheckCircle2, FolderKanban, TrendingUp, FileSpreadsheet, Package, CheckCircle, Activity, PieChart, ChevronDown, Briefcase, Target } from 'lucide-react';
+import { LayoutDashboard, Users, FileText, PlusCircle, Calendar, Clock, CheckSquare, MessageSquare, RotateCcw, CreditCard, Banknote, LogOut, Shield, Settings as SettingsIcon, CheckCircle2, FolderKanban, TrendingUp, FileSpreadsheet, Package, CheckCircle, Activity, PieChart, ChevronDown, Briefcase, Target, ShieldAlert } from 'lucide-react';
 import Dashboard from './pages/Dashboard';
 import Login from './pages/Login';
 import ClientsList from './pages/ClientsList';
@@ -29,6 +29,8 @@ import Settings from './pages/Settings';
 import DeadlineWorkflow from './pages/DeadlineWorkflow';
 import Tasks from './pages/Tasks';
 import ItemsList from './pages/ItemsList';
+import RecoveryPortal from './pages/RecoveryPortal';
+import RecoveryCaseDetail from './pages/RecoveryCaseDetail';
 import Header from './components/Header';
 import './App.css';
 import './App.css';
@@ -95,7 +97,7 @@ function AppContent() {
       users: path.startsWith('/clients') || path.startsWith('/team'),
       sales: path.startsWith('/leads'),
       operations: path.startsWith('/projects') || path.startsWith('/tasks') || path.startsWith('/project-management') || path.startsWith('/deadlines'),
-      finance: path.startsWith('/invoices') || path.startsWith('/quotations') || path.startsWith('/expenses') || path.startsWith('/commissions') || path.startsWith('/payroll'),
+      finance: path.startsWith('/invoices') || path.startsWith('/quotations') || path.startsWith('/expenses') || path.startsWith('/commissions') || path.startsWith('/payroll') || path.startsWith('/recovery'),
       reports: path.startsWith('/reports')
     };
   });
@@ -109,7 +111,7 @@ function AppContent() {
       setExpandedModules(prev => ({ ...prev, sales: true }));
     } else if (path.startsWith('/projects') || path.startsWith('/tasks') || path.startsWith('/project-management') || path.startsWith('/deadlines')) {
       setExpandedModules(prev => ({ ...prev, operations: true }));
-    } else if (path.startsWith('/invoices') || path.startsWith('/quotations') || path.startsWith('/expenses') || path.startsWith('/commissions') || path.startsWith('/payroll')) {
+    } else if (path.startsWith('/invoices') || path.startsWith('/quotations') || path.startsWith('/expenses') || path.startsWith('/commissions') || path.startsWith('/payroll') || path.startsWith('/recovery')) {
       setExpandedModules(prev => ({ ...prev, finance: true }));
     } else if (path.startsWith('/reports')) {
       setExpandedModules(prev => ({ ...prev, reports: true }));
@@ -147,7 +149,18 @@ function AppContent() {
   const canAccessFuturePayables = !user || user.role === 'Admin' || (user.modules_access && user.modules_access.includes('FUTURE_PAYABLES'));
   const canAccessCommissions = !user || user.role === 'Admin' || (user.modules_access && user.modules_access.includes('COMMISSIONS'));
   const canAccessPayroll = !user || user.role === 'Admin' || (user.modules_access && user.modules_access.includes('PAYROLL'));
-  const hasFinance = canAccessInvoiceManagement || canAccessQuotations || canAccessItems || canAccessExpenses || canAccessFuturePayables || canAccessCommissions || canAccessPayroll;
+  const canAccessRecovery = !user || 
+    user.role === 'Admin' || 
+    user.role === 'Product Manager' || 
+    user.role === 'PM' || 
+    user.role === 'Project Manager' || 
+    (user.modules_access && (
+      user.modules_access.includes('RECOVERY') || 
+      user.modules_access.includes('INVOICES') ||
+      user.modules_access.includes('Recovery') ||
+      user.modules_access.includes('ERP Recovery')
+    ));
+  const hasFinance = canAccessInvoiceManagement || canAccessQuotations || canAccessItems || canAccessExpenses || canAccessFuturePayables || canAccessCommissions || canAccessPayroll || canAccessRecovery;
 
   const canAccessReportSales = !user || user.role === 'Admin' || (user.modules_access && (user.modules_access.includes('REPORTS') || user.modules_access.includes('REPORT_SALES')));
   const canAccessReportSalesperson = !user || user.role === 'Admin' || (user.modules_access && (user.modules_access.includes('REPORTS') || user.modules_access.includes('REPORT_SALESPERSON')));
@@ -167,7 +180,7 @@ function AppContent() {
   const isUsersActive = location.pathname.startsWith('/clients') || location.pathname.startsWith('/team');
   const isSalesActive = location.pathname.startsWith('/leads');
   const isOperationsActive = location.pathname.startsWith('/projects') || location.pathname.startsWith('/tasks') || location.pathname.startsWith('/project-management') || location.pathname.startsWith('/deadlines');
-  const isFinanceActive = location.pathname.startsWith('/invoices') || location.pathname.startsWith('/quotations') || location.pathname.startsWith('/expenses') || location.pathname.startsWith('/commissions') || location.pathname.startsWith('/payroll');
+  const isFinanceActive = location.pathname.startsWith('/invoices') || location.pathname.startsWith('/quotations') || location.pathname.startsWith('/expenses') || location.pathname.startsWith('/commissions') || location.pathname.startsWith('/payroll') || location.pathname.startsWith('/recovery');
   const isReportsActive = location.pathname.startsWith('/reports');
 
   const handleLogout = () => {
@@ -218,6 +231,15 @@ function AppContent() {
                 <LayoutDashboard size={20} /> Dashboard
               </Link>
             </li>
+
+            {/* ERP Recovery Module */}
+            {canAccessRecovery && (
+              <li>
+                <Link to="/recovery" className={location.pathname.startsWith('/recovery') ? 'active' : ''}>
+                  <ShieldAlert size={20} /> ERP Recovery
+                </Link>
+              </li>
+            )}
             
             {/* 2. User Management Module */}
             {hasUserManagement && (
@@ -372,6 +394,17 @@ function AppContent() {
                         </Link>
                       </li>
                     )}
+                    {canAccessRecovery && (
+                      <li>
+                        <Link 
+                          to="/recovery" 
+                          className={`submodule-link ${location.pathname.startsWith('/recovery') ? 'active' : ''}`}
+                        >
+                          <div className="submodule-dot" />
+                          <span>ERP Recovery Module</span>
+                        </Link>
+                      </li>
+                    )}
                   </ul>
                 )}
               </li>
@@ -473,6 +506,7 @@ function AppContent() {
                         </Link>
                       </li>
                     )}
+
                   </ul>
                 )}
               </li>
@@ -675,6 +709,8 @@ function AppContent() {
             <Route path="/expenses" element={<ProtectedRoute><Expenses /></ProtectedRoute>} />
             <Route path="/commissions" element={<ProtectedRoute><Commissions /></ProtectedRoute>} />
             <Route path="/payroll" element={<ProtectedRoute><Payroll /></ProtectedRoute>} />
+            <Route path="/recovery" element={<ProtectedRoute><RecoveryPortal /></ProtectedRoute>} />
+            <Route path="/recovery/:id" element={<ProtectedRoute><RecoveryCaseDetail /></ProtectedRoute>} />
             <Route path="/reports" element={<ProtectedRoute><Reports /></ProtectedRoute>} />
             <Route path="/settings" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
           </Routes>

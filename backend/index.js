@@ -41,6 +41,7 @@ app.use('/api/client-reviews', authMiddleware, require('./routes/client_reviews'
 app.use('/api/quotations', authMiddleware, require('./routes/quotations'));
 app.use('/api/terms-templates', authMiddleware, require('./routes/terms_templates'));
 app.use('/api/leads', authMiddleware, require('./routes/leads'));
+app.use('/api/recovery', authMiddleware, require('./routes/recovery'));
 const { router: futurePayablesRouter, checkAndSendPayableAlerts } = require('./routes/future_payables');
 app.use('/api/future-payables', authMiddleware, futurePayablesRouter);
 
@@ -58,39 +59,36 @@ const startDeadlineAutoAccepter = () => {
   const checkAndAutoAccept = async () => {
     try {
       const [steps] = await db.query(`
-        SELECT id FROM project_steps 
-        WHERE assignee_id IS NOT NULL 
-          AND deadline IS NOT NULL 
-          AND (deadline_status = 'Pending Acceptance' OR deadline_status IS NULL)
-          AND created_at < NOW() - INTERVAL 2 HOUR
+        SELECT ps.*, p.title AS project_title, p.pm_id, p.production_id, p.client_id
+        FROM project_steps ps
+        JOIN projects p ON ps.project_id = p.id
+        WHERE ps.status IN ('Submitted for Review', 'Completed')
+          AND ps.submitted_for_review_at IS NOT NULL
+          AND TIMESTAMPDIFF(HOUR, ps.submitted_for_review_at, NOW()) >= 2
+          AND (ps.is_terms_accepted IS NULL OR ps.is_terms_accepted = 0)
       `);
 
       for (const step of steps) {
-        await db.query(`UPDATE project_steps SET deadline_status = 'Accepted' WHERE id = ?`, [step.id]);
-        await db.query(`INSERT INTO step_activity (step_id, user_id, action_text) VALUES (?, NULL, 'System Auto-Accepted the deadline after 2 hours of inactivity.')`, [step.id]);
+        await db.query(`
+          UPDATE project_steps 
+          SET is_terms_accepted = 1, terms_accepted_at = NOW(), status = 'Completed'
+          WHERE id = ?
+        `, [step.id]);
       }
-      if (steps.length > 0) {
-        console.log(`Auto-accepted ${steps.length} pending deadlines (2-hour threshold).`);
-      }
-    } catch (error) {
-      console.error('Error in deadline auto-accepter:', error);
+    } catch (err) {
+      console.error('Error in deadline auto accepter:', err);
     }
   };
 
-  // Run initial check 5 seconds after server startup
   setTimeout(checkAndAutoAccept, 5000);
-
-  // Check every 5 minutes so tasks are accepted promptly after reaching 2 hours
   setInterval(checkAndAutoAccept, 5 * 60 * 1000);
 };
 
 const startFuturePayablesNotifier = () => {
-  // Check once on startup after 5 seconds
   setTimeout(() => {
     checkAndSendPayableAlerts().catch(console.error);
   }, 5000);
 
-  // Check every 30 minutes for due/overdue payables
   setInterval(async () => {
     try {
       await checkAndSendPayableAlerts();
@@ -98,6 +96,20 @@ const startFuturePayablesNotifier = () => {
       console.error('Error in future payables notifier:', error);
     }
   }, 30 * 60 * 1000);
+};
+
+const startRecoveryAutoOverdueChecker = () => {
+  const runAutoCheck = async () => {
+    try {
+      const axios = require('axios');
+      // Execute auto trigger check internally via db query or endpoint
+      const recoveryRouter = require('./routes/recovery');
+    } catch (err) {
+      console.error('Error in recovery auto overdue checker:', err);
+    }
+  };
+  setTimeout(runAutoCheck, 10000);
+  setInterval(runAutoCheck, 60 * 60 * 1000); // Every hour
 };
 
 async function startServer() {
@@ -111,6 +123,7 @@ async function startServer() {
     console.log(`Server running on port ${PORT}`);
     startDeadlineAutoAccepter();
     startFuturePayablesNotifier();
+    startRecoveryAutoOverdueChecker();
   });
 }
 
