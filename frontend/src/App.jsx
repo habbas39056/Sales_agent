@@ -95,9 +95,9 @@ function AppContent() {
     const path = window.location.pathname;
     return {
       users: path.startsWith('/clients') || path.startsWith('/team'),
-      sales: path.startsWith('/leads') || path.startsWith('/recovery'),
+      sales: path.startsWith('/leads') || path.startsWith('/recovery') || path.startsWith('/invoices') || path.startsWith('/quotations') || path.startsWith('/items'),
       operations: path.startsWith('/projects') || path.startsWith('/tasks') || path.startsWith('/project-management') || path.startsWith('/deadlines'),
-      finance: path.startsWith('/invoices') || path.startsWith('/quotations') || path.startsWith('/expenses') || path.startsWith('/commissions') || path.startsWith('/payroll'),
+      finance: path.startsWith('/expenses') || path.startsWith('/commissions') || path.startsWith('/payroll'),
       reports: path.startsWith('/reports')
     };
   });
@@ -107,11 +107,11 @@ function AppContent() {
     const path = location.pathname;
     if (path.startsWith('/clients') || path.startsWith('/team')) {
       setExpandedModules(prev => ({ ...prev, users: true }));
-    } else if (path.startsWith('/leads') || path.startsWith('/recovery')) {
+    } else if (path.startsWith('/leads') || path.startsWith('/recovery') || path.startsWith('/invoices') || path.startsWith('/quotations') || path.startsWith('/items')) {
       setExpandedModules(prev => ({ ...prev, sales: true }));
     } else if (path.startsWith('/projects') || path.startsWith('/tasks') || path.startsWith('/project-management') || path.startsWith('/deadlines')) {
       setExpandedModules(prev => ({ ...prev, operations: true }));
-    } else if (path.startsWith('/invoices') || path.startsWith('/quotations') || path.startsWith('/expenses') || path.startsWith('/commissions') || path.startsWith('/payroll')) {
+    } else if (path.startsWith('/expenses') || path.startsWith('/commissions') || path.startsWith('/payroll')) {
       setExpandedModules(prev => ({ ...prev, finance: true }));
     } else if (path.startsWith('/reports')) {
       setExpandedModules(prev => ({ ...prev, reports: true }));
@@ -160,7 +160,8 @@ function AppContent() {
       user.modules_access.includes('Recovery') ||
       user.modules_access.includes('ERP Recovery')
     ));
-  const hasFinance = canAccessInvoiceManagement || canAccessQuotations || canAccessItems || canAccessExpenses || canAccessFuturePayables || canAccessCommissions || canAccessPayroll || canAccessRecovery;
+  const hasSales = canAccessLeads || canAccessRecovery || canAccessInvoiceManagement || canAccessQuotations || canAccessItems;
+  const hasFinance = canAccessExpenses || canAccessFuturePayables || canAccessCommissions || canAccessPayroll;
 
   const canAccessReportSales = !user || user.role === 'Admin' || (user.modules_access && (user.modules_access.includes('REPORTS') || user.modules_access.includes('REPORT_SALES')));
   const canAccessReportSalesperson = !user || user.role === 'Admin' || (user.modules_access && (user.modules_access.includes('REPORTS') || user.modules_access.includes('REPORT_SALESPERSON')));
@@ -169,18 +170,20 @@ function AppContent() {
   const canAccessReportExpenses = !user || user.role === 'Admin' || (user.modules_access && (user.modules_access.includes('REPORTS') || user.modules_access.includes('REPORT_EXPENSES')));
   const canAccessReportProfit = !user || user.role === 'Admin' || (user.modules_access && (user.modules_access.includes('REPORTS') || user.modules_access.includes('REPORT_PROFIT')));
   const canAccessReportAccounting = !user || user.role === 'Admin' || (user.modules_access && (user.modules_access.includes('REPORTS') || user.modules_access.includes('REPORT_ACCOUNTING')));
+  const canAccessReportProducts = !user || user.role === 'Admin' || (user.modules_access && (user.modules_access.includes('REPORTS') || user.modules_access.includes('REPORT_PRODUCTS')));
+  const canAccessReportProjects = !user || user.role === 'Admin' || (user.modules_access && (user.modules_access.includes('REPORTS') || user.modules_access.includes('REPORT_PROJECTS')));
   const canAccessReportInvoicesAging = !user || user.role === 'Admin' || (user.modules_access && (user.modules_access.includes('REPORTS') || user.modules_access.includes('REPORT_INVOICES_AGING')));
   const canAccessReportCashFlow = !user || user.role === 'Admin' || (user.modules_access && (user.modules_access.includes('REPORTS') || user.modules_access.includes('REPORT_CASH_FLOW')));
   const canAccessReportRevenueConcentration = !user || user.role === 'Admin' || (user.modules_access && (user.modules_access.includes('REPORTS') || user.modules_access.includes('REPORT_REVENUE_CONCENTRATION')));
 
-  const hasReports = canAccessReportSales || canAccessReportSalesperson || canAccessReportClients || canAccessReportTeam || canAccessReportExpenses || canAccessReportProfit || canAccessReportAccounting || canAccessReportInvoicesAging || canAccessReportCashFlow || canAccessReportRevenueConcentration;
+  const hasReports = canAccessReportSales || canAccessReportSalesperson || canAccessReportClients || canAccessReportTeam || canAccessReportExpenses || canAccessReportProfit || canAccessReportAccounting || canAccessReportProducts || canAccessReportProjects || canAccessReportInvoicesAging || canAccessReportCashFlow || canAccessReportRevenueConcentration;
   const hasSettings = !user || user.role === 'Admin' || (user.modules_access && user.modules_access.includes('SETTINGS'));
 
   // Active module checks
   const isUsersActive = location.pathname.startsWith('/clients') || location.pathname.startsWith('/team');
-  const isSalesActive = location.pathname.startsWith('/leads') || location.pathname.startsWith('/recovery');
+  const isSalesActive = location.pathname.startsWith('/leads') || location.pathname.startsWith('/recovery') || location.pathname.startsWith('/invoices') || location.pathname.startsWith('/quotations') || location.pathname.startsWith('/items');
   const isOperationsActive = location.pathname.startsWith('/projects') || location.pathname.startsWith('/tasks') || location.pathname.startsWith('/project-management') || location.pathname.startsWith('/deadlines');
-  const isFinanceActive = location.pathname.startsWith('/invoices') || location.pathname.startsWith('/quotations') || location.pathname.startsWith('/expenses') || location.pathname.startsWith('/commissions') || location.pathname.startsWith('/payroll') || location.pathname.startsWith('/recovery');
+  const isFinanceActive = location.pathname.startsWith('/expenses') || location.pathname.startsWith('/commissions') || location.pathname.startsWith('/payroll');
   const isReportsActive = location.pathname.startsWith('/reports');
 
   const handleLogout = () => {
@@ -279,7 +282,7 @@ function AppContent() {
             )}
 
             {/* Sales & Leads Module */}
-            {(canAccessLeads || canAccessRecovery) && (
+            {hasSales && (
               <li className="module-group">
                 <button 
                   type="button"
@@ -297,15 +300,50 @@ function AppContent() {
                 </button>
                 {expandedModules.sales && (
                   <ul className="submodule-list">
-                    <li>
-                      <Link 
-                        to="/leads" 
-                        className={`submodule-link ${location.pathname === '/leads' ? 'active' : ''}`}
-                      >
-                        <div className="submodule-dot" />
-                        <span>Leads Management</span>
-                      </Link>
-                    </li>
+                    {canAccessLeads && (
+                      <li>
+                        <Link 
+                          to="/leads" 
+                          className={`submodule-link ${location.pathname === '/leads' ? 'active' : ''}`}
+                        >
+                          <div className="submodule-dot" />
+                          <span>Leads Management</span>
+                        </Link>
+                      </li>
+                    )}
+                    {canAccessInvoiceManagement && (
+                      <li>
+                        <Link 
+                          to="/invoices" 
+                          className={`submodule-link ${location.pathname === '/invoices' ? 'active' : ''}`}
+                        >
+                          <div className="submodule-dot" />
+                          <span>Invoice Management</span>
+                        </Link>
+                      </li>
+                    )}
+                    {canAccessQuotations && (
+                      <li>
+                        <Link 
+                          to="/quotations" 
+                          className={`submodule-link ${location.pathname.startsWith('/quotations') ? 'active' : ''}`}
+                        >
+                          <div className="submodule-dot" />
+                          <span>Quotations</span>
+                        </Link>
+                      </li>
+                    )}
+                    {canAccessItems && (
+                      <li>
+                        <Link 
+                          to="/items" 
+                          className={`submodule-link ${location.pathname === '/items' ? 'active' : ''}`}
+                        >
+                          <div className="submodule-dot" />
+                          <span>Items Catalog</span>
+                        </Link>
+                      </li>
+                    )}
                     {canAccessRecovery && (
                       <li>
                         <Link 
@@ -420,39 +458,6 @@ function AppContent() {
                 </button>
                 {expandedModules.finance && (
                   <ul className="submodule-list">
-                    {canAccessInvoiceManagement && (
-                      <li>
-                        <Link 
-                          to="/invoices" 
-                          className={`submodule-link ${location.pathname === '/invoices' ? 'active' : ''}`}
-                        >
-                          <div className="submodule-dot" />
-                          <span>Invoice Management</span>
-                        </Link>
-                      </li>
-                    )}
-                    {canAccessQuotations && (
-                      <li>
-                        <Link 
-                          to="/quotations" 
-                          className={`submodule-link ${location.pathname.startsWith('/quotations') ? 'active' : ''}`}
-                        >
-                          <div className="submodule-dot" />
-                          <span>Quotations</span>
-                        </Link>
-                      </li>
-                    )}
-                    {canAccessItems && (
-                      <li>
-                        <Link 
-                          to="/items" 
-                          className={`submodule-link ${location.pathname === '/items' ? 'active' : ''}`}
-                        >
-                          <div className="submodule-dot" />
-                          <span>Items Catalog</span>
-                        </Link>
-                      </li>
-                    )}
                     {canAccessExpenses && (
                       <li>
                         <Link 
@@ -596,6 +601,28 @@ function AppContent() {
                         >
                           <div className="submodule-dot" />
                           <span>Finance & Accounting</span>
+                        </Link>
+                      </li>
+                    )}
+                    {canAccessReportProducts && (
+                      <li>
+                        <Link 
+                          to="/reports?tab=products" 
+                          className={`submodule-link ${location.pathname === '/reports' && (location.search.includes('tab=products') || location.search.includes('tab=services')) ? 'active' : ''}`}
+                        >
+                          <div className="submodule-dot" />
+                          <span>Product / Service</span>
+                        </Link>
+                      </li>
+                    )}
+                    {canAccessReportProjects && (
+                      <li>
+                        <Link 
+                          to="/reports?tab=projects" 
+                          className={`submodule-link ${location.pathname === '/reports' && (location.search.includes('tab=projects') || location.search.includes('tab=project-management') || location.search.includes('tab=projects-health')) ? 'active' : ''}`}
+                        >
+                          <div className="submodule-dot" />
+                          <span>Project Reporting</span>
                         </Link>
                       </li>
                     )}

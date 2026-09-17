@@ -496,18 +496,10 @@ const handleTriggerCase = async (req, res) => {
       if (invByProj.length > 0) {
         invoice_id = invByProj[0].id;
       } else {
-        // Find project client and invoice
-        const [projRows] = await db.query('SELECT client_id, invoice_number FROM projects WHERE id = ?', [project_id]);
-        if (projRows.length > 0 && projRows[0].invoice_number) {
-          const [invByNum] = await db.query('SELECT id FROM invoices WHERE invoice_number = ?', [projRows[0].invoice_number]);
-          if (invByNum.length > 0) invoice_id = invByNum[0].id;
-        }
-        if (!invoice_id && projRows.length > 0) {
-          const [invByClient] = await db.query('SELECT id FROM invoices WHERE client_id = ? ORDER BY id DESC LIMIT 1', [projRows[0].client_id]);
-          if (invByClient.length > 0) invoice_id = invByClient[0].id;
-        }
+        // Find project client
+        const [projRows] = await db.query('SELECT client_id FROM projects WHERE id = ?', [project_id]);
 
-        // Auto-create recovery invoice if still no invoice found for project
+        // Auto-create recovery invoice if still no invoice found specifically for this project
         if (!invoice_id && projRows.length > 0) {
           const p = projRows[0];
           const invNum = `INV-REC-${Date.now().toString().slice(-6)}`;
@@ -531,6 +523,12 @@ const handleTriggerCase = async (req, res) => {
     }
     const inv = invRows[0];
     const outstanding = Number(inv.balance !== undefined && inv.balance !== null ? inv.balance : inv.amount);
+
+    // Ensure invoice is linked to project if project_id was passed
+    if (project_id && !inv.project_id) {
+      await db.query('UPDATE invoices SET project_id = ? WHERE id = ?', [project_id, invoice_id]);
+      inv.project_id = project_id;
+    }
 
     // Prevent active duplicate case for same invoice
     const [existingCases] = await db.query(
@@ -810,60 +808,66 @@ router.post('/:id/escalate', async (req, res) => {
 /**
  * 11. POST /api/recovery/auto-trigger-check - Auto 15-Day Overdue & Escalation Evaluator
  */
+const runAutoOverdueCheck = async () => {
+  const [settings] = await db.query('SELECT * FROM recovery_settings LIMIT 1');
+  const autoDays = Number(settings[0]?.auto_overdue_days || 15);
+
+  // Find invoices >= 15 days overdue with balance > 0 and no active recovery case
+  const [overdueInvoices] = await db.query(`
+    SELECT i.*, c.user_id AS client_salesperson_id
+    FROM invoices i
+    JOIN clients c ON i.client_id = c.id
+    WHERE i.balance > 0 
+      AND i.due_date IS NOT NULL 
+      AND DATEDIFF(CURRENT_DATE, i.due_date) >= ?
+      AND i.id NOT IN (
+        SELECT invoice_id FROM recovery_cases WHERE status != 'Closed' AND status != 'Recovered' AND is_active = 1
+      )
+  `, [autoDays]);
+
+  let createdCount = 0;
+  for (const inv of overdueInvoices) {
+    const caseNumber = `REC-AUTO-${Date.now().toString().slice(-6)}-${inv.id}`;
+    const outstanding = Number(inv.balance);
+    const targetSalespersonId = inv.client_salesperson_id || 1;
+
+    const [result] = await db.query(`
+      INSERT INTO recovery_cases (
+        case_number, invoice_id, project_id, client_id, assigned_salesperson_id,
+        trigger_type, manager_reason, manager_remark, outstanding_amount, status, category, tone_guidance
+      ) VALUES (?, ?, ?, ?, ?, 'Automatic 15-Day Overdue', ?, 'Automatic system trigger at 15+ days past due date', ?, 'New', 'Contact Required', 'Professional / Helpful')
+    `, [caseNumber, inv.id, inv.project_id || null, inv.client_id, targetSalespersonId, `Automatic Trigger (${autoDays} days past due date)`, outstanding]);
+
+    const caseId = result.insertId;
+
+    const evalData = evaluateCaseCategoryAndTone({ outstanding_amount: outstanding, category: 'Contact Required' }, settings[0]);
+    await db.query(`
+      UPDATE recovery_cases 
+      SET category = ?, tone_guidance = ?, priority_score = ?, is_high_value = ? 
+      WHERE id = ?
+    `, [evalData.category, evalData.tone, evalData.priorityScore, evalData.isHighValue, caseId]);
+
+    await db.query(`
+      INSERT INTO notifications (user_id, message, link)
+      VALUES (?, ?, ?)
+    `, [targetSalespersonId, `🚨 Auto-Recovery Alert: Invoice ${inv.invoice_number} (PKR ${outstanding.toLocaleString()}) is 15+ days overdue and assigned to you.`, `/recovery?case=${caseId}`]);
+
+    notifyUserWhatsApp(
+      targetSalespersonId,
+      `*Automatic Overdue Recovery Alert!* 🚨\n\nInvoice *${inv.invoice_number}* is 15+ days overdue.\n\nSystem generated Recovery Case *${caseNumber}* (PKR ${outstanding.toLocaleString()}) assigned to you.\n\n_Log in to CRM to record client discussion._`
+    ).catch(err => console.error('WhatsApp notify error:', err));
+
+    createdCount++;
+  }
+  return { created_cases: createdCount };
+};
+
+router.runAutoOverdueCheck = runAutoOverdueCheck;
+
 router.post('/auto-trigger-check', async (req, res) => {
   try {
-    const [settings] = await db.query('SELECT * FROM recovery_settings LIMIT 1');
-    const autoDays = Number(settings[0]?.auto_overdue_days || 15);
-
-    // Find invoices >= 15 days overdue with balance > 0 and no active recovery case
-    const [overdueInvoices] = await db.query(`
-      SELECT i.*, c.user_id AS client_salesperson_id
-      FROM invoices i
-      JOIN clients c ON i.client_id = c.id
-      WHERE i.balance > 0 
-        AND i.due_date IS NOT NULL 
-        AND DATEDIFF(CURRENT_DATE, i.due_date) >= ?
-        AND i.id NOT IN (
-          SELECT invoice_id FROM recovery_cases WHERE status != 'Closed' AND status != 'Recovered' AND is_active = 1
-        )
-    `, [autoDays]);
-
-    let createdCount = 0;
-    for (const inv of overdueInvoices) {
-      const caseNumber = `REC-AUTO-${Date.now().toString().slice(-6)}-${inv.id}`;
-      const outstanding = Number(inv.balance);
-      const targetSalespersonId = inv.client_salesperson_id || 1;
-
-      const [result] = await db.query(`
-        INSERT INTO recovery_cases (
-          case_number, invoice_id, project_id, client_id, assigned_salesperson_id,
-          trigger_type, manager_reason, manager_remark, outstanding_amount, status, category, tone_guidance
-        ) VALUES (?, ?, ?, ?, ?, 'Automatic 15-Day Overdue', ?, 'Automatic system trigger at 15+ days past due date', ?, 'New', 'Contact Required', 'Professional / Helpful')
-      `, [caseNumber, inv.id, inv.project_id || null, inv.client_id, targetSalespersonId, `Automatic Trigger (${autoDays} days past due date)`, outstanding]);
-
-      const caseId = result.insertId;
-
-      const evalData = evaluateCaseCategoryAndTone({ outstanding_amount: outstanding, category: 'Contact Required' }, settings[0]);
-      await db.query(`
-        UPDATE recovery_cases 
-        SET category = ?, tone_guidance = ?, priority_score = ?, is_high_value = ? 
-        WHERE id = ?
-      `, [evalData.category, evalData.tone, evalData.priorityScore, evalData.isHighValue, caseId]);
-
-      await db.query(`
-        INSERT INTO notifications (user_id, message, link)
-        VALUES (?, ?, ?)
-      `, [targetSalespersonId, `🚨 Auto-Recovery Alert: Invoice ${inv.invoice_number} (PKR ${outstanding.toLocaleString()}) is 15+ days overdue and assigned to you.`, `/recovery?case=${caseId}`]);
-
-      notifyUserWhatsApp(
-        targetSalespersonId,
-        `*Automatic Overdue Recovery Alert!* 🚨\n\nInvoice *${inv.invoice_number}* is 15+ days overdue.\n\nSystem generated Recovery Case *${caseNumber}* (PKR ${outstanding.toLocaleString()}) assigned to you.\n\n_Log in to CRM to record client discussion._`
-      ).catch(err => console.error('WhatsApp notify error:', err));
-
-      createdCount++;
-    }
-
-    res.json({ message: 'Auto overdue evaluation completed', created_cases: createdCount });
+    const result = await runAutoOverdueCheck();
+    res.json({ message: 'Auto overdue evaluation completed', ...result });
   } catch (error) {
     console.error('Error running auto trigger check:', error);
     res.status(500).json({ error: 'Failed to run auto trigger check' });

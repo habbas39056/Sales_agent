@@ -101,9 +101,10 @@ const startFuturePayablesNotifier = () => {
 const startRecoveryAutoOverdueChecker = () => {
   const runAutoCheck = async () => {
     try {
-      const axios = require('axios');
-      // Execute auto trigger check internally via db query or endpoint
       const recoveryRouter = require('./routes/recovery');
+      if (recoveryRouter && typeof recoveryRouter.runAutoOverdueCheck === 'function') {
+        await recoveryRouter.runAutoOverdueCheck();
+      }
     } catch (err) {
       console.error('Error in recovery auto overdue checker:', err);
     }

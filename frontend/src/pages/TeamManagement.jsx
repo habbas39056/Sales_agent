@@ -70,6 +70,9 @@ export default function TeamManagement() {
       name: 'Sales & Leads',
       modules: [
         { key: 'LEADS', label: 'Leads Management' },
+        { key: 'INVOICES', label: 'Invoice Management' },
+        { key: 'QUOTATIONS', label: 'Quotations & Estimates' },
+        { key: 'ITEMS', label: 'Items Catalog' },
         { key: 'RECOVERY', label: 'ERP Recovery Module' }
       ]
     },
@@ -86,9 +89,6 @@ export default function TeamManagement() {
     {
       name: 'Financial Management',
       modules: [
-        { key: 'INVOICES', label: 'Invoice Management' },
-        { key: 'QUOTATIONS', label: 'Quotations & Estimates' },
-        { key: 'ITEMS', label: 'Items Catalog' },
         { key: 'CASHBOOK', label: 'Expenses & Ledger' },
         { key: 'FUTURE_PAYABLES', label: 'Future Payables' },
         { key: 'COMMISSIONS', label: 'Commissions Tracker' },
@@ -106,6 +106,8 @@ export default function TeamManagement() {
         { key: 'REPORT_EXPENSES', label: 'Expense Reports' },
         { key: 'REPORT_PROFIT', label: 'Expenses vs Income' },
         { key: 'REPORT_ACCOUNTING', label: 'Finance & Accounting' },
+        { key: 'REPORT_PRODUCTS', label: 'Product / Service Reports' },
+        { key: 'REPORT_PROJECTS', label: 'Project Reporting' },
         { key: 'REPORT_INVOICES_AGING', label: 'Invoicing Aging' },
         { key: 'REPORT_CASH_FLOW', label: 'Cash Flow Analysis' },
         { key: 'REPORT_REVENUE_CONCENTRATION', label: 'Revenue Concentration' }
@@ -121,7 +123,7 @@ export default function TeamManagement() {
 
 
   const allModuleKeys = useMemo(() => {
-    return moduleCategories.flatMap(c => c.modules.map(m => m.key));
+    return Array.from(new Set(moduleCategories.flatMap(c => c.modules.map(m => m.key))));
   }, [moduleCategories]);
 
   const handleGrantAllModules = () => {

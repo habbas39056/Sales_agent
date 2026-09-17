@@ -158,7 +158,7 @@ router.get('/', async (req, res) => {
         WHERE (rc.project_id = projects.id OR (rc.invoice_id IS NOT NULL AND rc.invoice_id IN (
           SELECT id FROM invoices WHERE project_id = projects.id OR (project_id IS NULL AND client_id = projects.client_id)
         )))
-        AND rc.status != 'Closed' AND rc.status != 'Recovered' AND rc.is_active = 1
+        AND rc.status != 'Closed' AND rc.status != 'Recovered' AND (rc.is_active = 1 OR rc.is_active IS NULL)
         ORDER BY rc.id DESC LIMIT 1
       ) as recovery_case_id,
       (
@@ -166,7 +166,7 @@ router.get('/', async (req, res) => {
         WHERE (rc.project_id = projects.id OR (rc.invoice_id IS NOT NULL AND rc.invoice_id IN (
           SELECT id FROM invoices WHERE project_id = projects.id OR (project_id IS NULL AND client_id = projects.client_id)
         )))
-        AND rc.status != 'Closed' AND rc.status != 'Recovered' AND rc.is_active = 1
+        AND rc.status != 'Closed' AND rc.status != 'Recovered' AND (rc.is_active = 1 OR rc.is_active IS NULL)
         ORDER BY rc.id DESC LIMIT 1
       ) as recovery_case_number
       FROM projects 
@@ -265,7 +265,7 @@ router.get('/management/overview', async (req, res) => {
           WHERE (rc.project_id = p.id OR (rc.invoice_id IS NOT NULL AND rc.invoice_id IN (
             SELECT id FROM invoices WHERE project_id = p.id OR (project_id IS NULL AND client_id = p.client_id)
           )))
-          AND rc.status != 'Closed' AND rc.status != 'Recovered' AND rc.is_active = 1
+          AND rc.status != 'Closed' AND rc.status != 'Recovered' AND (rc.is_active = 1 OR rc.is_active IS NULL)
           ORDER BY rc.id DESC LIMIT 1
         ) as recovery_case_id,
         (
@@ -273,7 +273,7 @@ router.get('/management/overview', async (req, res) => {
           WHERE (rc.project_id = p.id OR (rc.invoice_id IS NOT NULL AND rc.invoice_id IN (
             SELECT id FROM invoices WHERE project_id = p.id OR (project_id IS NULL AND client_id = p.client_id)
           )))
-          AND rc.status != 'Closed' AND rc.status != 'Recovered' AND rc.is_active = 1
+          AND rc.status != 'Closed' AND rc.status != 'Recovered' AND (rc.is_active = 1 OR rc.is_active IS NULL)
           ORDER BY rc.id DESC LIMIT 1
         ) as recovery_case_number
       FROM projects p
@@ -360,7 +360,7 @@ router.get('/:id', async (req, res) => {
         WHERE (rc.project_id = projects.id OR (rc.invoice_id IS NOT NULL AND rc.invoice_id IN (
           SELECT id FROM invoices WHERE project_id = projects.id OR (project_id IS NULL AND client_id = projects.client_id)
         )))
-        AND rc.status != 'Closed' AND rc.status != 'Recovered' AND rc.is_active = 1
+        AND rc.status != 'Closed' AND rc.status != 'Recovered' AND (rc.is_active = 1 OR rc.is_active IS NULL)
         ORDER BY rc.id DESC LIMIT 1
       ) as recovery_case_id,
       (
@@ -368,7 +368,7 @@ router.get('/:id', async (req, res) => {
         WHERE (rc.project_id = projects.id OR (rc.invoice_id IS NOT NULL AND rc.invoice_id IN (
           SELECT id FROM invoices WHERE project_id = projects.id OR (project_id IS NULL AND client_id = projects.client_id)
         )))
-        AND rc.status != 'Closed' AND rc.status != 'Recovered' AND rc.is_active = 1
+        AND rc.status != 'Closed' AND rc.status != 'Recovered' AND (rc.is_active = 1 OR rc.is_active IS NULL)
         ORDER BY rc.id DESC LIMIT 1
       ) as recovery_case_number
       FROM projects 

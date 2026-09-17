@@ -182,6 +182,12 @@ export default function Header() {
     if (location.search.includes('tab=salesperson-leads')) {
       title = 'Salesperson Performance & Lead Analytics 🎯';
       subtitle = 'Detailed sales representative conversion rates, follow-ups, quotations, and revenue generated';
+    } else if (location.search.includes('tab=products') || location.search.includes('tab=services')) {
+      title = 'Product / Service Reports 📦';
+      subtitle = 'Analyze product sales, service revenue, quantity sold, and profitability';
+    } else if (location.search.includes('tab=projects') || location.search.includes('tab=project-management') || location.search.includes('tab=projects-health')) {
+      title = 'Project Reporting 📊';
+      subtitle = 'Project delivery health, milestones, budgets, and team efficiency metrics';
     } else {
       title = 'System Reports';
       subtitle = '360-degree view of clients, sales performance, and team activity';
