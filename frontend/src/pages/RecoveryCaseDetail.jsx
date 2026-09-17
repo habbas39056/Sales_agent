@@ -266,7 +266,7 @@ export default function RecoveryCaseDetail() {
         {activeTab === 'contact' && (
           <div className="tab-panel">
             <div className="panel-section-header">
-              <h3>Client Contact Information</h3>
+              <h3>Client Contact Information & Account Overview</h3>
               <button className="btn-secondary-sm" onClick={() => setIsContactOpen(true)}>
                 <UserPlus size={14} /> + Add Contact Detail
               </button>
@@ -290,8 +290,38 @@ export default function RecoveryCaseDetail() {
               </div>
             </div>
 
+            {/* Overall Client Financial & Project Summary */}
+            {caseData.client_stats && (
+              <div className="client-overall-stats-section" style={{ marginTop: '1.5rem', background: '#0f172a', padding: '1.25rem', borderRadius: '10px', border: '1px solid #1e293b' }}>
+                <h4 style={{ color: '#38bdf8', marginBottom: '1rem', fontSize: '0.95rem', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                  Client Lifetime Portfolio Summary
+                </h4>
+                <div className="fin-summary-cards" style={{ marginBottom: 0 }}>
+                  <div className="fin-summary-box">
+                    <span className="lbl">Total Invoiced (All Time)</span>
+                    <span className="val">PKR {Number(caseData.client_stats.total_invoiced || 0).toLocaleString()}</span>
+                  </div>
+                  <div className="fin-summary-box">
+                    <span className="lbl">Total Paid Amount</span>
+                    <span className="val success">PKR {Number(caseData.client_stats.total_paid || 0).toLocaleString()}</span>
+                  </div>
+                  <div className="fin-summary-box">
+                    <span className="lbl">Net Outstanding Debt</span>
+                    <span className="val danger">PKR {Number(caseData.client_stats.total_outstanding || 0).toLocaleString()}</span>
+                  </div>
+                  <div className="fin-summary-box">
+                    <span className="lbl">Total Client Projects</span>
+                    <span className="val">{caseData.client_stats.total_projects || 0}</span>
+                    <span className="fin-sub" style={{ color: '#94a3b8', fontSize: '0.75rem' }}>
+                      {caseData.client_stats.active_projects || 0} Active / {caseData.client_stats.completed_projects || 0} Completed
+                    </span>
+                  </div>
+                </div>
+              </div>
+            )}
+
             {caseData.contacts && caseData.contacts.length > 0 && (
-              <div className="additional-contacts-area">
+              <div className="additional-contacts-area" style={{ marginTop: '1.5rem' }}>
                 <h4>Additional Client Key Contacts</h4>
                 <table className="contacts-table">
                   <thead>
@@ -320,13 +350,13 @@ export default function RecoveryCaseDetail() {
           </div>
         )}
 
-        {/* TAB 2: FINANCIAL SUMMARY */}
+        {/* TAB 2: FINANCIAL SUMMARY & PAYMENT HISTORY */}
         {activeTab === 'financial' && (
           <div className="tab-panel">
             <h3>Financial Summary & Payment History</h3>
             <div className="fin-summary-cards">
               <div className="fin-summary-box">
-                <span className="lbl">Total Invoice Amount</span>
+                <span className="lbl">Case Invoice Amount</span>
                 <span className="val">PKR {Number(c.invoice_amount || 0).toLocaleString()}</span>
               </div>
               <div className="fin-summary-box">
@@ -339,55 +369,202 @@ export default function RecoveryCaseDetail() {
               </div>
             </div>
 
-            <h4 style={{ marginTop: '1.5rem' }}>Invoice Line Items</h4>
-            <table className="items-table">
-              <thead>
-                <tr>
-                  <th>Description</th>
-                  <th style={{ textAlign: 'center' }}>Qty</th>
-                  <th style={{ textAlign: 'right' }}>Unit Price (PKR)</th>
-                  <th style={{ textAlign: 'right' }}>Total (PKR)</th>
-                </tr>
-              </thead>
-              <tbody>
-                {caseData.financial?.invoice_items?.map((item, idx) => (
-                  <tr key={idx}>
-                    <td>{item.description}</td>
-                    <td style={{ textAlign: 'center' }}>{item.quantity}</td>
-                    <td style={{ textAlign: 'right' }}>PKR {Number(item.unit_price).toLocaleString()}</td>
-                    <td style={{ textAlign: 'right' }}><strong>PKR {Number(item.total).toLocaleString()}</strong></td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+            {/* 1. Payment Received Log (Kab kitni amount ayi thi) */}
+            <div style={{ marginTop: '1.5rem' }}>
+              <h4 style={{ color: '#38bdf8', marginBottom: '0.75rem', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <DollarSign size={18} color="#10b981" /> Payment Received History (Kab & Kitni Amount Ayi Thi)
+              </h4>
+              {caseData.financial?.payment_history && caseData.financial.payment_history.length > 0 ? (
+                <table className="items-table" style={{ width: '100%' }}>
+                  <thead>
+                    <tr>
+                      <th>Payment Date</th>
+                      <th>Invoice #</th>
+                      <th>Payment Method</th>
+                      <th>Bank / Ref</th>
+                      <th>Notes / Remarks</th>
+                      <th style={{ textAlign: 'right' }}>Amount Paid (PKR)</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {caseData.financial.payment_history.map((p, idx) => (
+                      <tr key={idx}>
+                        <td><strong>{p.payment_date ? new Date(p.payment_date).toLocaleDateString('en-GB') : 'N/A'}</strong></td>
+                        <td>{p.invoice_number || c.invoice_number}</td>
+                        <td><span style={{ padding: '2px 8px', borderRadius: '6px', background: '#0284c7', color: '#fff', fontSize: '0.75rem' }}>{p.payment_method || 'Received'}</span></td>
+                        <td>{p.bank || p.transaction_id || '-'}</td>
+                        <td>{p.notes || p.description || '-'}</td>
+                        <td style={{ textAlign: 'right', color: '#10b981' }}>
+                          <strong>+ PKR {Number(p.amount || 0).toLocaleString()}</strong>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              ) : (
+                <p style={{ color: '#94a3b8', fontSize: '0.9rem', fontStyle: 'italic', background: '#0f172a', padding: '1rem', borderRadius: '8px' }}>
+                  No payment transactions recorded for this invoice yet.
+                </p>
+              )}
+            </div>
+
+            {/* 2. All Client Invoices History */}
+            <div style={{ marginTop: '2rem' }}>
+              <h4 style={{ color: '#38bdf8', marginBottom: '0.75rem', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <FileText size={18} color="#38bdf8" /> Complete Client Invoices History
+              </h4>
+              {caseData.financial?.all_invoices && caseData.financial.all_invoices.length > 0 ? (
+                <table className="items-table" style={{ width: '100%' }}>
+                  <thead>
+                    <tr>
+                      <th>Invoice #</th>
+                      <th>Issue Date</th>
+                      <th>Due Date</th>
+                      <th style={{ textAlign: 'right' }}>Total Amount</th>
+                      <th style={{ textAlign: 'right' }}>Paid Amount</th>
+                      <th style={{ textAlign: 'right' }}>Balance Due</th>
+                      <th style={{ textAlign: 'center' }}>Status</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {caseData.financial.all_invoices.map((inv) => {
+                      const isCurrentCaseInv = inv.id === c.invoice_id;
+                      return (
+                        <tr key={inv.id} style={{ background: isCurrentCaseInv ? 'rgba(56, 189, 248, 0.08)' : 'transparent' }}>
+                          <td>
+                            <strong>{inv.invoice_number}</strong>
+                            {isCurrentCaseInv && <span style={{ marginLeft: '6px', fontSize: '0.7rem', background: '#e11d48', color: '#fff', padding: '1px 5px', borderRadius: '4px' }}>CURRENT CASE</span>}
+                          </td>
+                          <td>{inv.issue_date ? new Date(inv.issue_date).toLocaleDateString('en-GB') : '-'}</td>
+                          <td>{inv.due_date ? new Date(inv.due_date).toLocaleDateString('en-GB') : '-'}</td>
+                          <td style={{ textAlign: 'right' }}>PKR {Number(inv.amount || 0).toLocaleString()}</td>
+                          <td style={{ textAlign: 'right', color: '#10b981' }}>PKR {Number(inv.paid_amount || (inv.amount - inv.balance) || 0).toLocaleString()}</td>
+                          <td style={{ textAlign: 'right', color: inv.balance > 0 ? '#ef4444' : '#94a3b8' }}>
+                            <strong>PKR {Number(inv.balance || 0).toLocaleString()}</strong>
+                          </td>
+                          <td style={{ textAlign: 'center' }}>
+                            <span className={`status-badge ${inv.status === 'Paid' ? 'status-recovered' : inv.status === 'Overdue' ? 'status-disputed' : 'status-promised'}`}>
+                              {inv.status}
+                            </span>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              ) : (
+                <p style={{ color: '#94a3b8', fontSize: '0.9rem' }}>No other invoices found for this client.</p>
+              )}
+            </div>
+
+            {/* 3. Invoice Line Items Breakdown */}
+            {caseData.financial?.invoice_items && caseData.financial.invoice_items.length > 0 && (
+              <div style={{ marginTop: '2rem' }}>
+                <h4 style={{ color: '#38bdf8', marginBottom: '0.75rem' }}>Current Case Invoice Line Items</h4>
+                <table className="items-table" style={{ width: '100%' }}>
+                  <thead>
+                    <tr>
+                      <th>Description</th>
+                      <th style={{ textAlign: 'center' }}>Qty</th>
+                      <th style={{ textAlign: 'right' }}>Unit Price (PKR)</th>
+                      <th style={{ textAlign: 'right' }}>Total (PKR)</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {caseData.financial.invoice_items.map((item, idx) => (
+                      <tr key={idx}>
+                        <td>{item.description}</td>
+                        <td style={{ textAlign: 'center' }}>{item.quantity}</td>
+                        <td style={{ textAlign: 'right' }}>PKR {Number(item.unit_price || 0).toLocaleString()}</td>
+                        <td style={{ textAlign: 'right' }}><strong>PKR {Number(item.total || 0).toLocaleString()}</strong></td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </div>
         )}
 
         {/* TAB 3: PROJECT & DELIVERABLES */}
         {activeTab === 'project' && (
           <div className="tab-panel">
-            <h3>Project & Deliverables Overview</h3>
-            {c.project_title ? (
-              <div>
-                <div className="proj-overview-box">
-                  <h4>{c.project_title}</h4>
-                  <p>{c.project_description || 'No description provided.'}</p>
-                  <span className="proj-status-tag">Status: {c.project_status}</span>
-                </div>
+            <h3>Project & Deliverables History</h3>
 
-                <h4 style={{ marginTop: '1.5rem' }}>Project Milestone Steps</h4>
-                <div className="steps-list">
-                  {caseData.project?.steps?.map((step, idx) => (
-                    <div key={idx} className="step-item-card">
-                      <span className="step-num">Step {idx + 1}</span>
-                      <span className="step-title">{step.title}</span>
-                      <span className={`step-status ${step.status === 'Completed' ? 'completed' : ''}`}>{step.status}</span>
-                    </div>
-                  ))}
-                </div>
+            {/* 1. All Projects of this Client */}
+            <div style={{ marginBottom: '2rem' }}>
+              <h4 style={{ color: '#38bdf8', marginBottom: '0.75rem', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <Layers size={18} color="#38bdf8" /> All Client Projects (Pending, Active & Completed)
+              </h4>
+              {caseData.project?.all_projects && caseData.project.all_projects.length > 0 ? (
+                <table className="items-table" style={{ width: '100%' }}>
+                  <thead>
+                    <tr>
+                      <th>Project Title</th>
+                      <th>Status</th>
+                      <th>Steps Progress</th>
+                      <th>Created Date</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {caseData.project.all_projects.map((proj) => {
+                      const isCurrentProj = proj.id === c.project_id;
+                      return (
+                        <tr key={proj.id} style={{ background: isCurrentProj ? 'rgba(56, 189, 248, 0.08)' : 'transparent' }}>
+                          <td>
+                            <strong>{proj.title}</strong>
+                            {isCurrentProj && <span style={{ marginLeft: '6px', fontSize: '0.7rem', background: '#38bdf8', color: '#0f172a', padding: '1px 5px', borderRadius: '4px', fontWeight: 'bold' }}>ACTIVE CASE PROJECT</span>}
+                            {proj.description && <div style={{ fontSize: '0.8rem', color: '#94a3b8' }}>{proj.description}</div>}
+                          </td>
+                          <td>
+                            <span className={`status-badge ${proj.status === 'Completed' || proj.status === 'Paid' ? 'status-recovered' : proj.status === 'In Progress' ? 'status-active' : 'status-promised'}`}>
+                              {proj.status}
+                            </span>
+                          </td>
+                          <td>
+                            <span style={{ fontSize: '0.85rem' }}>
+                              {proj.completed_steps_calc || proj.completed_steps || 0} / {proj.total_steps_calc || proj.total_steps || 0} Steps
+                            </span>
+                          </td>
+                          <td>{proj.created_at ? new Date(proj.created_at).toLocaleDateString('en-GB') : '-'}</td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              ) : (
+                <p style={{ color: '#94a3b8', fontSize: '0.9rem' }}>No projects registered for this client.</p>
+              )}
+            </div>
+
+            {/* 2. Case Specific Project Overview & Steps */}
+            {c.project_title && (
+              <div style={{ marginTop: '1.5rem', background: '#0f172a', padding: '1.25rem', borderRadius: '10px', border: '1px solid #1e293b' }}>
+                <h4 style={{ color: '#38bdf8', marginBottom: '0.5rem' }}>Current Recovery Case Project: {c.project_title}</h4>
+                <p style={{ color: '#cbd5e1', fontSize: '0.9rem', margin: '0 0 1rem 0' }}>{c.project_description || 'No description provided.'}</p>
+                <span className="proj-status-tag" style={{ background: '#0284c7', color: '#fff', padding: '3px 10px', borderRadius: '12px', fontSize: '0.8rem', fontWeight: '600' }}>
+                  Status: {c.project_status}
+                </span>
+
+                <h4 style={{ marginTop: '1.5rem', marginBottom: '0.75rem' }}>Project Milestone Steps & Deliverables</h4>
+                {caseData.project?.steps && caseData.project.steps.length > 0 ? (
+                  <div className="steps-list">
+                    {caseData.project.steps.map((step, idx) => (
+                      <div key={idx} className="step-item-card" style={{ display: 'flex', justifyContent: 'space-between', padding: '10px 14px', background: '#1e293b', borderRadius: '8px', marginBottom: '8px' }}>
+                        <div>
+                          <span className="step-num" style={{ fontWeight: 'bold', color: '#38bdf8', marginRight: '8px' }}>Step {idx + 1}:</span>
+                          <span className="step-title" style={{ color: '#f8fafc' }}>{step.title}</span>
+                        </div>
+                        <span className={`step-status ${step.status === 'Completed' ? 'completed' : ''}`} style={{ color: step.status === 'Completed' ? '#10b981' : '#f59e0b', fontWeight: 'bold', fontSize: '0.85rem' }}>
+                          {step.status}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p style={{ color: '#94a3b8', fontSize: '0.88rem' }}>No individual milestone steps logged for this project.</p>
+                )}
               </div>
-            ) : (
-              <p>This recovery case is linked directly to an invoice without a standalone project.</p>
             )}
           </div>
         )}
@@ -449,16 +626,26 @@ export default function RecoveryCaseDetail() {
         {/* TAB 6: DOCUMENTS & INVOICES */}
         {activeTab === 'documents' && (
           <div className="tab-panel">
-            <h3>Documents & Linked Invoices</h3>
+            <h3>Documents & Linked Invoices / Quotations</h3>
             <div className="docs-list">
               <div className="doc-item">
                 <FileText size={20} color="#2563eb" />
                 <div className="doc-info">
-                  <span className="doc-name">Invoice #{c.invoice_number}</span>
+                  <span className="doc-name">Case Invoice #{c.invoice_number}</span>
                   <span className="doc-sub">Amount: PKR {Number(c.invoice_amount).toLocaleString()}</span>
                 </div>
                 <Link to="/invoices" className="btn-secondary-sm"><ExternalLink size={14} /> View Invoice</Link>
               </div>
+              {caseData.quotations?.map(q => (
+                <div key={q.id} className="doc-item" style={{ marginTop: '10px' }}>
+                  <FileText size={20} color="#10b981" />
+                  <div className="doc-info">
+                    <span className="doc-name">Quotation #{q.quotation_number}</span>
+                    <span className="doc-sub">Amount: PKR {Number(q.amount || 0).toLocaleString()} | Status: {q.status}</span>
+                  </div>
+                  <Link to="/quotations" className="btn-secondary-sm"><ExternalLink size={14} /> View Quotation</Link>
+                </div>
+              ))}
             </div>
           </div>
         )}

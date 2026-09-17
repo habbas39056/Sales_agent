@@ -344,18 +344,86 @@ router.get('/:id', async (req, res) => {
     if (caseData.invoice_id) {
       const [iRows] = await db.query('SELECT * FROM invoice_items WHERE invoice_id = ?', [caseData.invoice_id]);
       invoiceItems = iRows;
-      const [pRows] = await db.query('SELECT * FROM cashbook WHERE invoice_id = ? ORDER BY entry_date DESC', [caseData.invoice_id]);
-      paymentHistory = pRows;
     }
 
-    // Tab 3: Project Steps & Deliverables
+    // Fetch payments for case invoice and client invoices (from invoice_payments and cashbook)
+    let clientPayments = [];
+    if (caseData.client_id || caseData.invoice_id) {
+      const [ipRows] = await db.query(`
+        SELECT ip.*, i.invoice_number 
+        FROM invoice_payments ip
+        JOIN invoices i ON ip.invoice_id = i.id
+        WHERE i.client_id = ? OR ip.invoice_id = ?
+        ORDER BY ip.payment_date DESC, ip.id DESC
+      `, [caseData.client_id || 0, caseData.invoice_id || 0]);
+
+      const [cbRows] = await db.query(`
+        SELECT id, entry_date AS payment_date, amount, payment_mode AS payment_method, description AS notes, 'Cashbook' AS bank
+        FROM cashbook 
+        WHERE invoice_id = ? OR (invoice_id IN (SELECT id FROM invoices WHERE client_id = ?))
+        ORDER BY entry_date DESC
+      `, [caseData.invoice_id || 0, caseData.client_id || 0]);
+
+      // Combine and deduplicate
+      paymentHistory = ipRows.length > 0 ? ipRows : cbRows;
+      clientPayments = [...ipRows, ...cbRows];
+    }
+
+    // All Client Invoices
+    let allClientInvoices = [];
+    let clientStats = { total_invoices: 0, total_invoiced: 0, total_paid: 0, total_outstanding: 0, total_projects: 0, active_projects: 0, completed_projects: 0 };
+    if (caseData.client_id) {
+      const [invs] = await db.query(`
+        SELECT i.*, (i.amount - i.balance) AS paid_amount 
+        FROM invoices i 
+        WHERE i.client_id = ? 
+        ORDER BY i.created_at DESC
+      `, [caseData.client_id]);
+      allClientInvoices = invs;
+
+      const [statRows] = await db.query(`
+        SELECT 
+          COUNT(id) AS total_invoices,
+          COALESCE(SUM(amount), 0) AS total_invoiced,
+          COALESCE(SUM(amount - balance), 0) AS total_paid,
+          COALESCE(SUM(balance), 0) AS total_outstanding
+        FROM invoices 
+        WHERE client_id = ?
+      `, [caseData.client_id]);
+      
+      if (statRows.length > 0) {
+        clientStats.total_invoices = Number(statRows[0].total_invoices || 0);
+        clientStats.total_invoiced = Number(statRows[0].total_invoiced || 0);
+        clientStats.total_paid = Number(statRows[0].total_paid || 0);
+        clientStats.total_outstanding = Number(statRows[0].total_outstanding || 0);
+      }
+    }
+
+    // Tab 3: Project Steps & Deliverables & All Client Projects
     let projectSteps = [];
     let deliverables = [];
+    let allClientProjects = [];
     if (caseData.project_id) {
       const [sRows] = await db.query('SELECT * FROM project_steps WHERE project_id = ? ORDER BY step_order ASC', [caseData.project_id]);
       projectSteps = sRows;
       const [dRows] = await db.query('SELECT * FROM deliverables WHERE project_id = ? ORDER BY created_at DESC', [caseData.project_id]);
       deliverables = dRows;
+    }
+
+    if (caseData.client_id) {
+      const [pRows] = await db.query(`
+        SELECT p.*, 
+          (SELECT COUNT(*) FROM project_steps WHERE project_id = p.id) AS total_steps_calc,
+          (SELECT COUNT(*) FROM project_steps WHERE project_id = p.id AND status = 'Completed') AS completed_steps_calc
+        FROM projects p 
+        WHERE p.client_id = ? 
+        ORDER BY p.created_at DESC
+      `, [caseData.client_id]);
+      allClientProjects = pRows;
+
+      clientStats.total_projects = pRows.length;
+      clientStats.completed_projects = pRows.filter(pr => pr.status === 'Completed' || pr.status === 'Paid').length;
+      clientStats.active_projects = pRows.filter(pr => pr.status !== 'Completed' && pr.status !== 'Cancelled').length;
     }
 
     // Tab 4: Timeline Events
@@ -388,12 +456,16 @@ router.get('/:id', async (req, res) => {
       contacts,
       financial: {
         invoice_items: invoiceItems,
-        payment_history: paymentHistory
+        payment_history: paymentHistory,
+        all_invoices: allClientInvoices,
+        client_payments: clientPayments
       },
       project: {
         steps: projectSteps,
-        deliverables
+        deliverables,
+        all_projects: allClientProjects
       },
+      client_stats: clientStats,
       timeline,
       followups,
       quotations
