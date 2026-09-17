@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useParams, Link } from 'react-router-dom';
+import { useParams, Link, useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { 
   User, Phone, Mail, MapPin, Building, ArrowLeft, Folder, FileText, 
@@ -10,6 +10,7 @@ import './ClientProfile.css';
 
 export default function ClientProfile() {
   const { id } = useParams();
+  const navigate = useNavigate();
   const [data, setData] = useState(null);
   const [activeTab, setActiveTab] = useState('projects');
   const [loading, setLoading] = useState(true);
@@ -113,9 +114,14 @@ export default function ClientProfile() {
     <div className="client-profile-container modern-ui">
       {/* Top Header with Back Navigation & Quick Actions */}
       <div className="profile-header">
-        <Link to="/clients" className="back-link">
-          <ArrowLeft size={16} /> Back to Clients Directory
-        </Link>
+        <button 
+          type="button" 
+          onClick={() => navigate(-1)} 
+          className="back-link" 
+          style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}
+        >
+          <ArrowLeft size={16} /> Back
+        </button>
         
         <div className="profile-top-actions">
           {cleanPhone && (
@@ -230,7 +236,7 @@ export default function ClientProfile() {
                 {projects.map(p => (
                   <tr key={p.id}>
                     <td><strong>{p.title}</strong></td>
-                    <td><span className={`status-pill ${p.status ? p.status.toLowerCase() : ''}`}>{p.status}</span></td>
+                    <td><span className={`status-pill ${p.status ? p.status.toLowerCase().replace(/\s+/g, '-') : ''}`}>{p.status}</span></td>
                     <td>{p.locked_deadline ? new Date(p.locked_deadline).toLocaleDateString() : 'TBD'}</td>
                   </tr>
                 ))}
@@ -259,7 +265,7 @@ export default function ClientProfile() {
                     <td>Rs {inv.amount}</td>
                     <td>Rs {inv.balance}</td>
                     <td>{new Date(inv.due_date).toLocaleDateString()}</td>
-                    <td><span className={`status-pill ${inv.status.toLowerCase()}`}>{inv.status}</span></td>
+                    <td><span className={`status-pill ${inv.status ? inv.status.toLowerCase().replace(/\s+/g, '-') : ''}`}>{inv.status}</span></td>
                   </tr>
                 ))}
                 {invoices.length === 0 && <tr><td colSpan="5" className="empty-state">No invoices found.</td></tr>}
@@ -287,7 +293,7 @@ export default function ClientProfile() {
                     <td>Rs {sub.price}</td>
                     <td>{sub.start_date ? new Date(sub.start_date).toLocaleDateString() : 'N/A'}</td>
                     <td>{sub.end_date ? new Date(sub.end_date).toLocaleDateString() : 'Ongoing'}</td>
-                    <td><span className={`status-pill ${sub.status.toLowerCase()}`}>{sub.status}</span></td>
+                    <td><span className={`status-pill ${sub.status ? sub.status.toLowerCase().replace(/\s+/g, '-') : ''}`}>{sub.status}</span></td>
                   </tr>
                 ))}
                 {subscriptions.length === 0 && <tr><td colSpan="5" className="empty-state">No subscriptions found.</td></tr>}

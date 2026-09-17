@@ -211,6 +211,10 @@ export default function RecoveryPortal() {
   const pendingCasesCount = useMemo(() => cases.filter(c => !c.last_followup_date).length, [cases]);
   const recordedCasesCount = useMemo(() => cases.filter(c => c.last_followup_date).length, [cases]);
 
+  const activeCaseInvoiceIds = useMemo(() => {
+    return new Set(cases.filter(c => c.is_active && c.status !== 'Closed' && c.status !== 'Recovered').map(c => c.invoice_id));
+  }, [cases]);
+
   // Client-side search & follow-up status filtering
   const filteredCases = useMemo(() => {
     let list = cases;
@@ -584,7 +588,7 @@ export default function RecoveryPortal() {
                 {currentCases.map(c => {
                   const isHighVal = Number(c.outstanding_amount) >= 100000;
                   return (
-                    <tr key={c.id} className="rec-table-row" onClick={() => navigate(`/recovery/${c.id}`)}>
+                    <tr key={c.id} className="rec-table-row" onClick={() => navigate(c.client_id ? `/clients/${c.client_id}` : `/recovery/${c.id}`)}>
                       {/* Case & Invoice */}
                       <td>
                         <div className="case-id-block">
@@ -744,11 +748,14 @@ export default function RecoveryPortal() {
                   required
                 >
                   <option value="">-- Choose Invoice --</option>
-                  {invoices.map(inv => (
-                    <option key={inv.id} value={inv.id}>
-                      {inv.invoice_number} - {inv.client_name || 'Client'} (Bal: PKR {Number(inv.balance || inv.amount).toLocaleString()})
-                    </option>
-                  ))}
+                  {invoices.map(inv => {
+                    const hasActiveCase = activeCaseInvoiceIds.has(inv.id);
+                    return (
+                      <option key={inv.id} value={inv.id} disabled={hasActiveCase}>
+                        {inv.invoice_number} - {inv.client_name || 'Client'} (Bal: PKR {Number(inv.balance || inv.amount).toLocaleString()}){hasActiveCase ? ' — [Active Case Exists]' : ''}
+                      </option>
+                    );
+                  })}
                 </select>
               </div>
 

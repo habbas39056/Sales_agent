@@ -238,7 +238,7 @@
   padding: 1rem 1.5rem;
   font-size: 0.95rem;
   font-weight: 600;
-  color: var(--text-secondary);
+  color: #64748b;
   cursor: pointer;
   display: flex;
   align-items: center;
@@ -248,17 +248,115 @@
 }
 
 .profile-tabs button:hover {
-  color: var(--primary-color);
+  color: #e11d48;
 }
 
 .profile-tabs button.active {
-  color: var(--primary-color);
-  border-bottom-color: var(--primary-color);
+  color: #e11d48;
+  border-bottom-color: #e11d48;
 }
 
 .tab-content {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 14px;
   padding: 1.5rem;
   min-height: 300px;
+  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.04);
+}
+
+.table-responsive-ref {
+  width: 100%;
+  overflow-x: auto;
+  border-radius: 10px;
+  border: 1px solid #e2e8f0;
+  background: #ffffff;
+}
+
+.ref-table {
+  width: 100%;
+  border-collapse: collapse;
+  background: #ffffff;
+  margin: 0;
+}
+
+.ref-table th {
+  text-align: left;
+  padding: 0.85rem 1rem;
+  font-size: 0.75rem;
+  color: #475569;
+  font-weight: 700;
+  border-bottom: 1px solid #e2e8f0;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  background: #f8fafc;
+}
+
+.ref-table td {
+  padding: 0.95rem 1rem;
+  font-size: 0.88rem;
+  color: #0f172a;
+  border-bottom: 1px solid #f1f5f9;
+  vertical-align: middle;
+  background: #ffffff;
+}
+
+.ref-table tr:last-child td {
+  border-bottom: none;
+}
+
+.ref-table tr:hover td {
+  background-color: #f8fafc;
+}
+
+.ref-table td strong {
+  color: #0f172a;
+  font-weight: 600;
+}
+
+.status-pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.25rem 0.75rem;
+  border-radius: 9999px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  background: #f1f5f9;
+  color: #475569;
+  border: 1px solid #cbd5e1;
+}
+
+.status-pill.paid, 
+.status-pill.completed {
+  background: #f0fdf4;
+  color: #16a34a;
+  border: 1px solid #bbf7d0;
+}
+
+.status-pill.in-progress,
+.status-pill.in_progress,
+.status-pill.progress,
+.status-pill.in {
+  background: #eff6ff;
+  color: #2563eb;
+  border: 1px solid #bfdbfe;
+}
+
+.status-pill.pending,
+.status-pill.unpaid {
+  background: #fffbeb;
+  color: #d97706;
+  border: 1px solid #fef3c7;
+}
+
+.status-pill.overdue,
+.status-pill.void,
+.status-pill.cancelled {
+  background: #fef2f2;
+  color: #dc2626;
+  border: 1px solid #fecdd3;
 }
 
 .loading {

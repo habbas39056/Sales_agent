@@ -45,12 +45,6 @@ export default function RecoveryCaseDetail() {
     fetchSalespeople();
   }, [id]);
 
-  useEffect(() => {
-    if (!loading && (!caseData || !caseData.case)) {
-      navigate('/recovery', { replace: true });
-    }
-  }, [loading, caseData, navigate]);
-
   const fetchCaseDetails = async () => {
     setLoading(true);
     try {
@@ -151,7 +145,16 @@ export default function RecoveryCaseDetail() {
   }
 
   if (!caseData || !caseData.case) {
-    return null;
+    return (
+      <div className="recovery-detail-container" style={{ padding: '60px 24px', textAlign: 'center', color: '#f8fafc' }}>
+        <ShieldAlert size={52} color="#ef4444" style={{ marginBottom: '16px' }} />
+        <h2 style={{ color: '#ef4444', marginBottom: '8px', fontSize: '1.5rem' }}>Recovery Case Details Not Available</h2>
+        <p style={{ color: '#94a3b8', marginBottom: '24px', fontSize: '0.95rem' }}>Could not load details for case "{id}". It may have been archived or removed.</p>
+        <button className="btn-master-action primary" onClick={() => navigate('/recovery')} style={{ margin: '0 auto', display: 'inline-flex', alignItems: 'center', gap: '8px', padding: '10px 20px', borderRadius: '8px', background: '#2563eb', color: '#fff', border: 'none', cursor: 'pointer', fontWeight: 'bold' }}>
+          <ArrowLeft size={16} /> Return to Recovery Queue
+        </button>
+      </div>
+    );
   }
 
   const c = caseData.case;
@@ -292,8 +295,8 @@ export default function RecoveryCaseDetail() {
 
             {/* Overall Client Financial & Project Summary */}
             {caseData.client_stats && (
-              <div className="client-overall-stats-section" style={{ marginTop: '1.5rem', background: '#0f172a', padding: '1.25rem', borderRadius: '10px', border: '1px solid #1e293b' }}>
-                <h4 style={{ color: '#38bdf8', marginBottom: '1rem', fontSize: '0.95rem', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+              <div className="client-overall-stats-section" style={{ marginTop: '1.5rem', background: '#f8fafc', padding: '1.25rem', borderRadius: '10px', border: '1px solid #e2e8f0' }}>
+                <h4 style={{ color: '#2563eb', marginBottom: '1rem', fontSize: '0.95rem', textTransform: 'uppercase', letterSpacing: '0.5px', fontWeight: '800' }}>
                   Client Lifetime Portfolio Summary
                 </h4>
                 <div className="fin-summary-cards" style={{ marginBottom: 0 }}>
@@ -312,7 +315,7 @@ export default function RecoveryCaseDetail() {
                   <div className="fin-summary-box">
                     <span className="lbl">Total Client Projects</span>
                     <span className="val">{caseData.client_stats.total_projects || 0}</span>
-                    <span className="fin-sub" style={{ color: '#94a3b8', fontSize: '0.75rem' }}>
+                    <span className="fin-sub" style={{ color: '#64748b', fontSize: '0.75rem', fontWeight: '600' }}>
                       {caseData.client_stats.active_projects || 0} Active / {caseData.client_stats.completed_projects || 0} Completed
                     </span>
                   </div>
@@ -322,7 +325,7 @@ export default function RecoveryCaseDetail() {
 
             {caseData.contacts && caseData.contacts.length > 0 && (
               <div className="additional-contacts-area" style={{ marginTop: '1.5rem' }}>
-                <h4>Additional Client Key Contacts</h4>
+                <h4 style={{ color: '#0f172a', fontWeight: '700', marginBottom: '0.75rem' }}>Additional Client Key Contacts</h4>
                 <table className="contacts-table">
                   <thead>
                     <tr>
@@ -371,8 +374,8 @@ export default function RecoveryCaseDetail() {
 
             {/* 1. Payment Received Log (Kab kitni amount ayi thi) */}
             <div style={{ marginTop: '1.5rem' }}>
-              <h4 style={{ color: '#38bdf8', marginBottom: '0.75rem', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <DollarSign size={18} color="#10b981" /> Payment Received History (Kab & Kitni Amount Ayi Thi)
+              <h4 style={{ color: '#0f172a', marginBottom: '0.75rem', display: 'flex', alignItems: 'center', gap: '8px', fontWeight: '700' }}>
+                <DollarSign size={18} color="#16a34a" /> Payment Received History (Kab & Kitni Amount Ayi Thi)
               </h4>
               {caseData.financial?.payment_history && caseData.financial.payment_history.length > 0 ? (
                 <table className="items-table" style={{ width: '100%' }}>
@@ -391,10 +394,10 @@ export default function RecoveryCaseDetail() {
                       <tr key={idx}>
                         <td><strong>{p.payment_date ? new Date(p.payment_date).toLocaleDateString('en-GB') : 'N/A'}</strong></td>
                         <td>{p.invoice_number || c.invoice_number}</td>
-                        <td><span style={{ padding: '2px 8px', borderRadius: '6px', background: '#0284c7', color: '#fff', fontSize: '0.75rem' }}>{p.payment_method || 'Received'}</span></td>
+                        <td><span style={{ padding: '2px 8px', borderRadius: '6px', background: '#e0f2fe', color: '#0369a1', fontSize: '0.75rem', fontWeight: '700' }}>{p.payment_method || 'Received'}</span></td>
                         <td>{p.bank || p.transaction_id || '-'}</td>
                         <td>{p.notes || p.description || '-'}</td>
-                        <td style={{ textAlign: 'right', color: '#10b981' }}>
+                        <td style={{ textAlign: 'right', color: '#16a34a' }}>
                           <strong>+ PKR {Number(p.amount || 0).toLocaleString()}</strong>
                         </td>
                       </tr>
@@ -402,7 +405,7 @@ export default function RecoveryCaseDetail() {
                   </tbody>
                 </table>
               ) : (
-                <p style={{ color: '#94a3b8', fontSize: '0.9rem', fontStyle: 'italic', background: '#0f172a', padding: '1rem', borderRadius: '8px' }}>
+                <p style={{ color: '#64748b', fontSize: '0.9rem', fontStyle: 'italic', background: '#f8fafc', padding: '1rem', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
                   No payment transactions recorded for this invoice yet.
                 </p>
               )}
@@ -410,8 +413,8 @@ export default function RecoveryCaseDetail() {
 
             {/* 2. All Client Invoices History */}
             <div style={{ marginTop: '2rem' }}>
-              <h4 style={{ color: '#38bdf8', marginBottom: '0.75rem', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <FileText size={18} color="#38bdf8" /> Complete Client Invoices History
+              <h4 style={{ color: '#0f172a', marginBottom: '0.75rem', display: 'flex', alignItems: 'center', gap: '8px', fontWeight: '700' }}>
+                <FileText size={18} color="#2563eb" /> Complete Client Invoices History
               </h4>
               {caseData.financial?.all_invoices && caseData.financial.all_invoices.length > 0 ? (
                 <table className="items-table" style={{ width: '100%' }}>
@@ -430,16 +433,16 @@ export default function RecoveryCaseDetail() {
                     {caseData.financial.all_invoices.map((inv) => {
                       const isCurrentCaseInv = inv.id === c.invoice_id;
                       return (
-                        <tr key={inv.id} style={{ background: isCurrentCaseInv ? 'rgba(56, 189, 248, 0.08)' : 'transparent' }}>
+                        <tr key={inv.id} style={{ background: isCurrentCaseInv ? '#eff6ff' : '#ffffff' }}>
                           <td>
-                            <strong>{inv.invoice_number}</strong>
-                            {isCurrentCaseInv && <span style={{ marginLeft: '6px', fontSize: '0.7rem', background: '#e11d48', color: '#fff', padding: '1px 5px', borderRadius: '4px' }}>CURRENT CASE</span>}
+                            <strong style={{ color: '#0f172a' }}>{inv.invoice_number}</strong>
+                            {isCurrentCaseInv && <span style={{ marginLeft: '6px', fontSize: '0.7rem', background: '#e11d48', color: '#fff', padding: '1px 5px', borderRadius: '4px', fontWeight: 'bold' }}>CURRENT CASE</span>}
                           </td>
                           <td>{inv.issue_date ? new Date(inv.issue_date).toLocaleDateString('en-GB') : '-'}</td>
                           <td>{inv.due_date ? new Date(inv.due_date).toLocaleDateString('en-GB') : '-'}</td>
-                          <td style={{ textAlign: 'right' }}>PKR {Number(inv.amount || 0).toLocaleString()}</td>
-                          <td style={{ textAlign: 'right', color: '#10b981' }}>PKR {Number(inv.paid_amount || (inv.amount - inv.balance) || 0).toLocaleString()}</td>
-                          <td style={{ textAlign: 'right', color: inv.balance > 0 ? '#ef4444' : '#94a3b8' }}>
+                          <td style={{ textAlign: 'right', fontWeight: '600' }}>PKR {Number(inv.amount || 0).toLocaleString()}</td>
+                          <td style={{ textAlign: 'right', color: '#16a34a', fontWeight: '600' }}>PKR {Number(inv.paid_amount || (inv.amount - inv.balance) || 0).toLocaleString()}</td>
+                          <td style={{ textAlign: 'right', color: inv.balance > 0 ? '#dc2626' : '#64748b' }}>
                             <strong>PKR {Number(inv.balance || 0).toLocaleString()}</strong>
                           </td>
                           <td style={{ textAlign: 'center' }}>
@@ -453,14 +456,14 @@ export default function RecoveryCaseDetail() {
                   </tbody>
                 </table>
               ) : (
-                <p style={{ color: '#94a3b8', fontSize: '0.9rem' }}>No other invoices found for this client.</p>
+                <p style={{ color: '#64748b', fontSize: '0.9rem' }}>No other invoices found for this client.</p>
               )}
             </div>
 
             {/* 3. Invoice Line Items Breakdown */}
             {caseData.financial?.invoice_items && caseData.financial.invoice_items.length > 0 && (
               <div style={{ marginTop: '2rem' }}>
-                <h4 style={{ color: '#38bdf8', marginBottom: '0.75rem' }}>Current Case Invoice Line Items</h4>
+                <h4 style={{ color: '#0f172a', marginBottom: '0.75rem', fontWeight: '700' }}>Current Case Invoice Line Items</h4>
                 <table className="items-table" style={{ width: '100%' }}>
                   <thead>
                     <tr>
@@ -493,8 +496,8 @@ export default function RecoveryCaseDetail() {
 
             {/* 1. All Projects of this Client */}
             <div style={{ marginBottom: '2rem' }}>
-              <h4 style={{ color: '#38bdf8', marginBottom: '0.75rem', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <Layers size={18} color="#38bdf8" /> All Client Projects (Pending, Active & Completed)
+              <h4 style={{ color: '#0f172a', marginBottom: '0.75rem', display: 'flex', alignItems: 'center', gap: '8px', fontWeight: '700' }}>
+                <Layers size={18} color="#2563eb" /> All Client Projects (Pending, Active & Completed)
               </h4>
               {caseData.project?.all_projects && caseData.project.all_projects.length > 0 ? (
                 <table className="items-table" style={{ width: '100%' }}>
@@ -510,11 +513,11 @@ export default function RecoveryCaseDetail() {
                     {caseData.project.all_projects.map((proj) => {
                       const isCurrentProj = proj.id === c.project_id;
                       return (
-                        <tr key={proj.id} style={{ background: isCurrentProj ? 'rgba(56, 189, 248, 0.08)' : 'transparent' }}>
+                        <tr key={proj.id} style={{ background: isCurrentProj ? '#eff6ff' : '#ffffff' }}>
                           <td>
-                            <strong>{proj.title}</strong>
-                            {isCurrentProj && <span style={{ marginLeft: '6px', fontSize: '0.7rem', background: '#38bdf8', color: '#0f172a', padding: '1px 5px', borderRadius: '4px', fontWeight: 'bold' }}>ACTIVE CASE PROJECT</span>}
-                            {proj.description && <div style={{ fontSize: '0.8rem', color: '#94a3b8' }}>{proj.description}</div>}
+                            <strong style={{ color: '#0f172a' }}>{proj.title}</strong>
+                            {isCurrentProj && <span style={{ marginLeft: '6px', fontSize: '0.7rem', background: '#2563eb', color: '#ffffff', padding: '1px 5px', borderRadius: '4px', fontWeight: 'bold' }}>ACTIVE CASE PROJECT</span>}
+                            {proj.description && <div style={{ fontSize: '0.8rem', color: '#64748b' }}>{proj.description}</div>}
                           </td>
                           <td>
                             <span className={`status-badge ${proj.status === 'Completed' || proj.status === 'Paid' ? 'status-recovered' : proj.status === 'In Progress' ? 'status-active' : 'status-promised'}`}>
@@ -522,7 +525,7 @@ export default function RecoveryCaseDetail() {
                             </span>
                           </td>
                           <td>
-                            <span style={{ fontSize: '0.85rem' }}>
+                            <span style={{ fontSize: '0.85rem', color: '#334155', fontWeight: '600' }}>
                               {proj.completed_steps_calc || proj.completed_steps || 0} / {proj.total_steps_calc || proj.total_steps || 0} Steps
                             </span>
                           </td>
@@ -533,36 +536,36 @@ export default function RecoveryCaseDetail() {
                   </tbody>
                 </table>
               ) : (
-                <p style={{ color: '#94a3b8', fontSize: '0.9rem' }}>No projects registered for this client.</p>
+                <p style={{ color: '#64748b', fontSize: '0.9rem' }}>No projects registered for this client.</p>
               )}
             </div>
 
             {/* 2. Case Specific Project Overview & Steps */}
             {c.project_title && (
-              <div style={{ marginTop: '1.5rem', background: '#0f172a', padding: '1.25rem', borderRadius: '10px', border: '1px solid #1e293b' }}>
-                <h4 style={{ color: '#38bdf8', marginBottom: '0.5rem' }}>Current Recovery Case Project: {c.project_title}</h4>
-                <p style={{ color: '#cbd5e1', fontSize: '0.9rem', margin: '0 0 1rem 0' }}>{c.project_description || 'No description provided.'}</p>
+              <div style={{ marginTop: '1.5rem', background: '#f8fafc', padding: '1.25rem', borderRadius: '10px', border: '1px solid #e2e8f0' }}>
+                <h4 style={{ color: '#0f172a', marginBottom: '0.5rem', fontWeight: '700' }}>Current Recovery Case Project: {c.project_title}</h4>
+                <p style={{ color: '#475569', fontSize: '0.9rem', margin: '0 0 1rem 0' }}>{c.project_description || 'No description provided.'}</p>
                 <span className="proj-status-tag" style={{ background: '#0284c7', color: '#fff', padding: '3px 10px', borderRadius: '12px', fontSize: '0.8rem', fontWeight: '600' }}>
                   Status: {c.project_status}
                 </span>
 
-                <h4 style={{ marginTop: '1.5rem', marginBottom: '0.75rem' }}>Project Milestone Steps & Deliverables</h4>
+                <h4 style={{ marginTop: '1.5rem', marginBottom: '0.75rem', color: '#0f172a', fontWeight: '700' }}>Project Milestone Steps & Deliverables</h4>
                 {caseData.project?.steps && caseData.project.steps.length > 0 ? (
                   <div className="steps-list">
                     {caseData.project.steps.map((step, idx) => (
-                      <div key={idx} className="step-item-card" style={{ display: 'flex', justifyContent: 'space-between', padding: '10px 14px', background: '#1e293b', borderRadius: '8px', marginBottom: '8px' }}>
+                      <div key={idx} className="step-item-card" style={{ display: 'flex', justifyContent: 'space-between', padding: '10px 14px', background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '8px', marginBottom: '8px' }}>
                         <div>
-                          <span className="step-num" style={{ fontWeight: 'bold', color: '#38bdf8', marginRight: '8px' }}>Step {idx + 1}:</span>
-                          <span className="step-title" style={{ color: '#f8fafc' }}>{step.title}</span>
+                          <span className="step-num" style={{ fontWeight: 'bold', color: '#2563eb', marginRight: '8px' }}>Step {idx + 1}:</span>
+                          <span className="step-title" style={{ color: '#0f172a', fontWeight: '600' }}>{step.title}</span>
                         </div>
-                        <span className={`step-status ${step.status === 'Completed' ? 'completed' : ''}`} style={{ color: step.status === 'Completed' ? '#10b981' : '#f59e0b', fontWeight: 'bold', fontSize: '0.85rem' }}>
+                        <span className={`step-status ${step.status === 'Completed' ? 'completed' : ''}`} style={{ color: step.status === 'Completed' ? '#16a34a' : '#d97706', fontWeight: 'bold', fontSize: '0.85rem' }}>
                           {step.status}
                         </span>
                       </div>
                     ))}
                   </div>
                 ) : (
-                  <p style={{ color: '#94a3b8', fontSize: '0.88rem' }}>No individual milestone steps logged for this project.</p>
+                  <p style={{ color: '#64748b', fontSize: '0.88rem' }}>No individual milestone steps logged for this project.</p>
                 )}
               </div>
             )}

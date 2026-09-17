@@ -324,10 +324,10 @@ router.get('/:id', async (req, res) => {
       LEFT JOIN users u ON rc.assigned_salesperson_id = u.id
       LEFT JOIN users orig_u ON rc.original_salesperson_id = orig_u.id
       LEFT JOIN users creator ON rc.created_by_user_id = creator.id
-      WHERE (rc.id = ? OR rc.case_number = ? OR rc.project_id = ? OR rc.invoice_id = ?)
-      ORDER BY CASE WHEN rc.id = ? THEN 1 WHEN rc.case_number = ? THEN 2 WHEN rc.project_id = ? THEN 3 ELSE 4 END, rc.id DESC
+      WHERE (rc.id = ? OR rc.case_number = ?)
+      ORDER BY CASE WHEN rc.id = ? THEN 1 WHEN rc.case_number = ? THEN 2 ELSE 3 END, rc.id DESC
       LIMIT 1
-    `, [caseId, caseId, caseId, caseId, caseId, caseId, caseId]);
+    `, [caseId, caseId, caseId, caseId]);
 
     if (caseRows.length === 0) {
       return res.status(404).json({ error: 'Recovery case not found' });
@@ -346,7 +346,7 @@ router.get('/:id', async (req, res) => {
       invoiceItems = iRows;
     }
 
-    // Fetch payments for case invoice and client invoices (from invoice_payments and cashbook)
+    // Fetch payments for case invoice and client invoices (from invoice_payments)
     let clientPayments = [];
     if (caseData.client_id || caseData.invoice_id) {
       const [ipRows] = await db.query(`
@@ -357,16 +357,8 @@ router.get('/:id', async (req, res) => {
         ORDER BY ip.payment_date DESC, ip.id DESC
       `, [caseData.client_id || 0, caseData.invoice_id || 0]);
 
-      const [cbRows] = await db.query(`
-        SELECT id, entry_date AS payment_date, amount, payment_mode AS payment_method, description AS notes, 'Cashbook' AS bank
-        FROM cashbook 
-        WHERE invoice_id = ? OR (invoice_id IN (SELECT id FROM invoices WHERE client_id = ?))
-        ORDER BY entry_date DESC
-      `, [caseData.invoice_id || 0, caseData.client_id || 0]);
-
-      // Combine and deduplicate
-      paymentHistory = ipRows.length > 0 ? ipRows : cbRows;
-      clientPayments = [...ipRows, ...cbRows];
+      paymentHistory = ipRows;
+      clientPayments = ipRows;
     }
 
     // All Client Invoices
@@ -404,7 +396,7 @@ router.get('/:id', async (req, res) => {
     let deliverables = [];
     let allClientProjects = [];
     if (caseData.project_id) {
-      const [sRows] = await db.query('SELECT * FROM project_steps WHERE project_id = ? ORDER BY step_order ASC', [caseData.project_id]);
+      const [sRows] = await db.query('SELECT * FROM project_steps WHERE project_id = ? ORDER BY id ASC', [caseData.project_id]);
       projectSteps = sRows;
       const [dRows] = await db.query('SELECT * FROM deliverables WHERE project_id = ? ORDER BY created_at DESC', [caseData.project_id]);
       deliverables = dRows;
@@ -484,7 +476,21 @@ const handleTriggerCase = async (req, res) => {
     let { invoice_id, project_id, trigger_reason, manager_reason, manager_remark, assigned_salesperson_id, user_id } = req.body;
     const reason = trigger_reason || manager_reason || 'Manual Manager Trigger';
 
-    // If project_id is provided but invoice_id is missing, look up invoice for project
+    // If project_id is provided, check if active recovery case already exists for project
+    if (project_id) {
+      const [pCases] = await db.query(
+        "SELECT id, case_number FROM recovery_cases WHERE project_id = ? AND status != 'Closed' AND status != 'Recovered' AND is_active = 1",
+        [project_id]
+      );
+      if (pCases.length > 0) {
+        return res.status(400).json({
+          success: false,
+          error: `An active recovery case (${pCases[0].case_number}) already exists for this project.`
+        });
+      }
+    }
+
+    // If project_id is provided but invoice_id is missing, look up or create invoice for project
     if (!invoice_id && project_id) {
       const [invByProj] = await db.query('SELECT id FROM invoices WHERE project_id = ? ORDER BY id DESC LIMIT 1', [project_id]);
       if (invByProj.length > 0) {
@@ -499,6 +505,17 @@ const handleTriggerCase = async (req, res) => {
         if (!invoice_id && projRows.length > 0) {
           const [invByClient] = await db.query('SELECT id FROM invoices WHERE client_id = ? ORDER BY id DESC LIMIT 1', [projRows[0].client_id]);
           if (invByClient.length > 0) invoice_id = invByClient[0].id;
+        }
+
+        // Auto-create recovery invoice if still no invoice found for project
+        if (!invoice_id && projRows.length > 0) {
+          const p = projRows[0];
+          const invNum = `INV-REC-${Date.now().toString().slice(-6)}`;
+          const [invRes] = await db.query(`
+            INSERT INTO invoices (invoice_number, client_id, project_id, amount, balance, status, issue_date, due_date, created_by)
+            VALUES (?, ?, ?, 0.00, 0.00, 'Overdue', CURRENT_DATE, CURRENT_DATE, ?)
+          `, [invNum, p.client_id || 1, project_id, user_id || 1]);
+          invoice_id = invRes.insertId;
         }
       }
     }
@@ -524,7 +541,7 @@ const handleTriggerCase = async (req, res) => {
     if (existingCases.length > 0) {
       return res.status(400).json({ 
         success: false,
-        error: `An active recovery case (${existingCases[0].case_number}) already exists for this invoice/project.` 
+        error: `An active recovery case (${existingCases[0].case_number}) already exists for this invoice.` 
       });
     }
 
@@ -532,7 +549,7 @@ const handleTriggerCase = async (req, res) => {
     let targetSalespersonId = assigned_salesperson_id;
     if (!targetSalespersonId) {
       const [clientRows] = await db.query('SELECT user_id FROM clients WHERE id = ?', [inv.client_id]);
-      targetSalespersonId = clientRows[0]?.user_id || user_id || 1;
+      targetSalespersonId = clientRows[0]?.user_id || inv.agent_id || user_id || 1;
     }
 
     // Generate unique case number
@@ -583,7 +600,7 @@ const handleTriggerCase = async (req, res) => {
     res.status(201).json({ success: true, id: newCaseId, case_number: caseNumber, message: 'Recovery case created successfully' });
   } catch (error) {
     console.error('Error creating manual recovery case:', error);
-    res.status(500).json({ success: false, error: 'Failed to create recovery case' });
+    res.status(500).json({ success: false, error: error.message || 'Failed to create recovery case' });
   }
 };
 

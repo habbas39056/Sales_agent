@@ -232,15 +232,6 @@ function AppContent() {
               </Link>
             </li>
 
-            {/* ERP Recovery Module */}
-            {canAccessRecovery && (
-              <li>
-                <Link to="/recovery" className={location.pathname.startsWith('/recovery') ? 'active' : ''}>
-                  <ShieldAlert size={20} /> ERP Recovery
-                </Link>
-              </li>
-            )}
-            
             {/* 2. User Management Module */}
             {hasUserManagement && (
               <li className="module-group">
