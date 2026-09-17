@@ -146,12 +146,20 @@ export default function SalesReportView() {
     setLoading(true);
     setError('');
     try {
+      const userStr = localStorage.getItem('user');
+      const user = userStr ? JSON.parse(userStr) : null;
+
       const params = new URLSearchParams();
       if (startDate) params.append('start_date', startDate);
       if (endDate) params.append('end_date', endDate);
       if (selectedClient && selectedClient !== 'all') params.append('client_id', selectedClient);
       if (selectedAgent && selectedAgent !== 'all') params.append('agent_id', selectedAgent);
       if (selectedStatus && selectedStatus !== 'all') params.append('status', selectedStatus);
+
+      if (user) {
+        params.append('user_id', user.id);
+        params.append('role', user.role);
+      }
 
       const res = await axios.get(`${API_URL}/reports/sales?${params.toString()}`);
       

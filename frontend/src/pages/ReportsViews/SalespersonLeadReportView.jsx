@@ -21,11 +21,24 @@ const API_URL = import.meta.env.VITE_API_URL || '/api';
 const PIE_COLORS = ['#10b981', '#3b82f6', '#f59e0b', '#ef4444', '#8b5cf6', '#06b6d4', '#ec4899'];
 
 export default function SalespersonLeadReportView() {
+  const userStr = localStorage.getItem('user');
+  const loggedInUser = useMemo(() => {
+    try {
+      return userStr ? JSON.parse(userStr) : null;
+    } catch (e) {
+      return null;
+    }
+  }, [userStr]);
+
+  const isUserAdminRole = loggedInUser?.role === 'Admin' || loggedInUser?.role === 'Super Admin';
+
   // Filter States
   const [quickPreset, setQuickPreset] = useState('all');
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
-  const [selectedAgent, setSelectedAgent] = useState('all');
+  const [selectedAgent, setSelectedAgent] = useState(() => {
+    return (!isUserAdminRole && loggedInUser?.id) ? String(loggedInUser.id) : 'all';
+  });
   const [searchTerm, setSearchTerm] = useState('');
 
   // Pagination
@@ -66,7 +79,16 @@ export default function SalespersonLeadReportView() {
       if (quickPreset) params.append('quick_preset', quickPreset);
       if (startDate) params.append('start_date', startDate);
       if (endDate) params.append('end_date', endDate);
-      if (selectedAgent && selectedAgent !== 'all') params.append('agent_id', selectedAgent);
+
+      const effectiveAgent = (!isUserAdminRole && loggedInUser?.id) ? String(loggedInUser.id) : selectedAgent;
+      if (effectiveAgent && effectiveAgent !== 'all') {
+        params.append('agent_id', effectiveAgent);
+      }
+
+      if (loggedInUser) {
+        params.append('user_id', loggedInUser.id);
+        params.append('role', loggedInUser.role);
+      }
 
       const res = await axios.get(`${API_URL}/reports/salesperson-leads?${params.toString()}`);
       setReportData(res.data);
@@ -242,28 +264,43 @@ export default function SalespersonLeadReportView() {
         <div className="sp-date-pickers">
           <div className="sp-agent-field" style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', marginRight: '0.5rem' }}>
             <span className="sp-filter-label" style={{ margin: 0 }}><Users size={14} /> Salesperson:</span>
-            <select 
-              value={selectedAgent} 
-              onChange={(e) => { setSelectedAgent(e.target.value); setCurrentPage(1); }}
-              style={{
-                padding: '0.38rem 0.75rem',
-                borderRadius: '6px',
-                border: '1px solid #cbd5e1',
-                fontSize: '0.8rem',
-                fontWeight: '700',
-                backgroundColor: '#ffffff',
-                color: '#0f172a',
-                outline: 'none',
-                cursor: 'pointer'
-              }}
-            >
-              <option value="all">👥 All Salespeople ({reportData.all_salespeople_list?.length || 0})</option>
-              {(reportData.all_salespeople_list || []).map(sp => (
-                <option key={sp.id} value={sp.id}>
-                  👤 {sp.name} ({sp.role || 'Sales'})
-                </option>
-              ))}
-            </select>
+            {(() => {
+              const currentUserStr = localStorage.getItem('user');
+              const currentUserObj = currentUserStr ? JSON.parse(currentUserStr) : null;
+              const isUserAdminRole = currentUserObj?.role === 'Admin' || currentUserObj?.role === 'Super Admin';
+              
+              return (
+                <select 
+                  value={!isUserAdminRole ? String(currentUserObj?.id || '') : selectedAgent} 
+                  onChange={(e) => { setSelectedAgent(e.target.value); setCurrentPage(1); }}
+                  disabled={!isUserAdminRole}
+                  style={{
+                    padding: '0.38rem 0.75rem',
+                    borderRadius: '6px',
+                    border: '1px solid #cbd5e1',
+                    fontSize: '0.8rem',
+                    fontWeight: '700',
+                    backgroundColor: !isUserAdminRole ? '#f1f5f9' : '#ffffff',
+                    color: '#0f172a',
+                    outline: 'none',
+                    cursor: !isUserAdminRole ? 'not-allowed' : 'pointer'
+                  }}
+                >
+                  {!isUserAdminRole ? (
+                    <option value={currentUserObj?.id}>👤 {currentUserObj?.name || 'My Sales Metrics'} ({currentUserObj?.role || 'Sales'})</option>
+                  ) : (
+                    <>
+                      <option value="all">👥 All Salespeople ({reportData.all_salespeople_list?.length || 0})</option>
+                      {(reportData.all_salespeople_list || []).map(sp => (
+                        <option key={sp.id} value={sp.id}>
+                          👤 {sp.name} ({sp.role || 'Sales'})
+                        </option>
+                      ))}
+                    </>
+                  )}
+                </select>
+              );
+            })()}
           </div>
 
           <div className="sp-date-field">

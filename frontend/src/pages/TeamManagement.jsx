@@ -69,7 +69,8 @@ export default function TeamManagement() {
     {
       name: 'Sales & Leads',
       modules: [
-        { key: 'LEADS', label: 'Leads Management' }
+        { key: 'LEADS', label: 'Leads Management' },
+        { key: 'RECOVERY', label: 'ERP Recovery Module' }
       ]
     },
     {
@@ -79,8 +80,7 @@ export default function TeamManagement() {
         { key: 'PROJECT_MANAGEMENT', label: 'Project Management' },
         { key: 'TASKS', label: 'My Tasks' },
         { key: 'DEADLINES', label: 'Deadline Workflow' },
-        { key: 'DEADLINES_APPROVAL', label: 'Tasks for Approval' },
-        { key: 'RECOVERY', label: 'ERP Recovery Module' }
+        { key: 'DEADLINES_APPROVAL', label: 'Tasks for Approval' }
       ]
     },
     {

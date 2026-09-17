@@ -1,7 +1,9 @@
 .reports-container {
-    padding: 2rem;
-    max-width: 1400px;
-    margin: 0 auto;
+    padding: 0.5rem 0;
+    width: 100%;
+    max-width: 100%;
+    margin: 0;
+    box-sizing: border-box;
     animation: fadeIn 0.4s ease-out;
 }
 
@@ -569,9 +571,11 @@
 .reports-layout {
     display: flex;
     gap: 2rem;
-    max-width: 1500px;
-    margin: 0 auto;
-    padding: 2rem;
+    width: 100%;
+    max-width: 100%;
+    margin: 0;
+    padding: 1rem 0;
+    box-sizing: border-box;
     min-height: calc(100vh - 80px);
 }
 

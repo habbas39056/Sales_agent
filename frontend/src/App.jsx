@@ -95,9 +95,9 @@ function AppContent() {
     const path = window.location.pathname;
     return {
       users: path.startsWith('/clients') || path.startsWith('/team'),
-      sales: path.startsWith('/leads'),
+      sales: path.startsWith('/leads') || path.startsWith('/recovery'),
       operations: path.startsWith('/projects') || path.startsWith('/tasks') || path.startsWith('/project-management') || path.startsWith('/deadlines'),
-      finance: path.startsWith('/invoices') || path.startsWith('/quotations') || path.startsWith('/expenses') || path.startsWith('/commissions') || path.startsWith('/payroll') || path.startsWith('/recovery'),
+      finance: path.startsWith('/invoices') || path.startsWith('/quotations') || path.startsWith('/expenses') || path.startsWith('/commissions') || path.startsWith('/payroll'),
       reports: path.startsWith('/reports')
     };
   });
@@ -107,11 +107,11 @@ function AppContent() {
     const path = location.pathname;
     if (path.startsWith('/clients') || path.startsWith('/team')) {
       setExpandedModules(prev => ({ ...prev, users: true }));
-    } else if (path.startsWith('/leads')) {
+    } else if (path.startsWith('/leads') || path.startsWith('/recovery')) {
       setExpandedModules(prev => ({ ...prev, sales: true }));
     } else if (path.startsWith('/projects') || path.startsWith('/tasks') || path.startsWith('/project-management') || path.startsWith('/deadlines')) {
       setExpandedModules(prev => ({ ...prev, operations: true }));
-    } else if (path.startsWith('/invoices') || path.startsWith('/quotations') || path.startsWith('/expenses') || path.startsWith('/commissions') || path.startsWith('/payroll') || path.startsWith('/recovery')) {
+    } else if (path.startsWith('/invoices') || path.startsWith('/quotations') || path.startsWith('/expenses') || path.startsWith('/commissions') || path.startsWith('/payroll')) {
       setExpandedModules(prev => ({ ...prev, finance: true }));
     } else if (path.startsWith('/reports')) {
       setExpandedModules(prev => ({ ...prev, reports: true }));
@@ -178,7 +178,7 @@ function AppContent() {
 
   // Active module checks
   const isUsersActive = location.pathname.startsWith('/clients') || location.pathname.startsWith('/team');
-  const isSalesActive = location.pathname.startsWith('/leads');
+  const isSalesActive = location.pathname.startsWith('/leads') || location.pathname.startsWith('/recovery');
   const isOperationsActive = location.pathname.startsWith('/projects') || location.pathname.startsWith('/tasks') || location.pathname.startsWith('/project-management') || location.pathname.startsWith('/deadlines');
   const isFinanceActive = location.pathname.startsWith('/invoices') || location.pathname.startsWith('/quotations') || location.pathname.startsWith('/expenses') || location.pathname.startsWith('/commissions') || location.pathname.startsWith('/payroll') || location.pathname.startsWith('/recovery');
   const isReportsActive = location.pathname.startsWith('/reports');
@@ -288,7 +288,7 @@ function AppContent() {
             )}
 
             {/* Sales & Leads Module */}
-            {canAccessLeads && (
+            {(canAccessLeads || canAccessRecovery) && (
               <li className="module-group">
                 <button 
                   type="button"
@@ -315,6 +315,17 @@ function AppContent() {
                         <span>Leads Management</span>
                       </Link>
                     </li>
+                    {canAccessRecovery && (
+                      <li>
+                        <Link 
+                          to="/recovery" 
+                          className={`submodule-link ${location.pathname.startsWith('/recovery') ? 'active' : ''}`}
+                        >
+                          <div className="submodule-dot" />
+                          <span>ERP Recovery</span>
+                        </Link>
+                      </li>
+                    )}
                   </ul>
                 )}
               </li>
@@ -391,17 +402,6 @@ function AppContent() {
                         >
                           <div className="submodule-dot" />
                           <span>Tasks for Approval</span>
-                        </Link>
-                      </li>
-                    )}
-                    {canAccessRecovery && (
-                      <li>
-                        <Link 
-                          to="/recovery" 
-                          className={`submodule-link ${location.pathname.startsWith('/recovery') ? 'active' : ''}`}
-                        >
-                          <div className="submodule-dot" />
-                          <span>ERP Recovery Module</span>
                         </Link>
                       </li>
                     )}

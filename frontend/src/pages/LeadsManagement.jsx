@@ -217,11 +217,19 @@ export default function LeadsManagement() {
   const loadLeads = async () => {
     setLoading(true);
     try {
+      const userStr = localStorage.getItem('user');
+      const user = userStr ? JSON.parse(userStr) : null;
+
       const params = {};
       if (search.trim()) params.search = search.trim();
       if (statusFilter !== 'All') params.status = statusFilter;
       if (sourceFilter !== 'All') params.source = sourceFilter;
       if (assignedFilter !== 'All') params.assigned_to = assignedFilter;
+
+      if (user) {
+        params.user_id = user.id;
+        params.role = user.role;
+      }
 
       const res = await axios.get('/api/leads', { params });
       setLeads(res.data.leads || []);
@@ -272,6 +280,11 @@ export default function LeadsManagement() {
     setEditingLead(null);
     const defaultSrc = sources.length > 0 ? sources[0] : 'Website';
     const defaultStg = stages.length > 0 ? stages[0].id : 'New Lead';
+
+    const userStr = localStorage.getItem('user');
+    const user = userStr ? JSON.parse(userStr) : null;
+    const isAdmin = user?.role === 'Admin' || user?.role === 'Super Admin';
+
     setFormData({
       title: '',
       contact_name: '',
@@ -283,7 +296,7 @@ export default function LeadsManagement() {
       status: defaultStg,
       estimated_value: '',
       category_id: '',
-      assigned_to: '',
+      assigned_to: (!isAdmin && user?.id) ? String(user.id) : '',
       next_followup_date: '',
       notes: ''
     });
@@ -831,10 +844,28 @@ export default function LeadsManagement() {
 
           <div className="filter-item">
             <label>Sales Rep:</label>
-            <select value={assignedFilter} onChange={(e) => setAssignedFilter(e.target.value)}>
-              <option value="All">All Reps</option>
-              {users.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
-            </select>
+            {(() => {
+              const currentUserStr = localStorage.getItem('user');
+              const currentUserObj = currentUserStr ? JSON.parse(currentUserStr) : null;
+              const isUserAdminRole = currentUserObj?.role === 'Admin' || currentUserObj?.role === 'Super Admin';
+              
+              return (
+                <select 
+                  value={!isUserAdminRole ? String(currentUserObj?.id || '') : assignedFilter} 
+                  onChange={(e) => setAssignedFilter(e.target.value)}
+                  disabled={!isUserAdminRole}
+                >
+                  {!isUserAdminRole ? (
+                    <option value={currentUserObj?.id}>{currentUserObj?.name || 'My Assigned Leads'} (Assigned to Me)</option>
+                  ) : (
+                    <>
+                      <option value="All">All Reps</option>
+                      {users.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
+                    </>
+                  )}
+                </select>
+              );
+            })()}
           </div>
 
           <div className="view-toggle-box">

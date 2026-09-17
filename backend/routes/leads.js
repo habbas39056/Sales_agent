@@ -18,7 +18,11 @@ async function generateLeadNumber() {
 // 1. GET ALL LEADS & SUMMARY METRICS
 router.get('/', async (req, res) => {
   try {
-    const { search, status, priority, assigned_to, source } = req.query;
+    const { search, status, priority, assigned_to, source, user_id, role } = req.query;
+
+    const currentUserId = req.user?.id || user_id;
+    const currentUserRole = req.user?.role || role;
+    const isAdmin = currentUserRole === 'Admin' || currentUserRole === 'Super Admin';
 
     let sql = `
       SELECT 
@@ -38,6 +42,15 @@ router.get('/', async (req, res) => {
     `;
     const params = [];
 
+    // Role-based visibility scoping: non-Admins only see assigned or created leads
+    if (currentUserId && !isAdmin) {
+      sql += ` AND (l.assigned_to = ? OR l.created_by = ?)`;
+      params.push(currentUserId, currentUserId);
+    } else if (assigned_to && assigned_to !== 'All') {
+      sql += ` AND l.assigned_to = ?`;
+      params.push(assigned_to);
+    }
+
     if (search) {
       sql += ` AND (l.title LIKE ? OR l.contact_name LIKE ? OR l.company_name LIKE ? OR l.email LIKE ? OR l.phone LIKE ? OR l.lead_number LIKE ?)`;
       const term = `%${search.trim()}%`;
@@ -54,11 +67,6 @@ router.get('/', async (req, res) => {
       params.push(priority);
     }
 
-    if (assigned_to && assigned_to !== 'All') {
-      sql += ` AND l.assigned_to = ?`;
-      params.push(assigned_to);
-    }
-
     if (source && source !== 'All') {
       sql += ` AND l.source = ?`;
       params.push(source);
@@ -68,8 +76,8 @@ router.get('/', async (req, res) => {
 
     const [leads] = await db.query(sql, params);
 
-    // Compute Summary Stats
-    const [allLeadsStats] = await db.query(`
+    // Compute Summary Stats strictly scoped by role & user permission
+    let statsSql = `
       SELECT 
         COUNT(*) as total_leads,
         COALESCE(SUM(estimated_value), 0) as total_pipeline_value,
@@ -78,7 +86,19 @@ router.get('/', async (req, res) => {
         COALESCE(SUM(CASE WHEN status IN ('New Lead', 'Contacted', 'Qualified', 'Proposal Sent', 'Negotiation') THEN 1 ELSE 0 END), 0) as active_count,
         COALESCE(SUM(CASE WHEN next_followup_date IS NOT NULL AND DATE(next_followup_date) <= CURDATE() AND status NOT IN ('Won', 'Lost') THEN 1 ELSE 0 END), 0) as followups_due
       FROM leads
-    `);
+      WHERE 1=1
+    `;
+    const statsParams = [];
+
+    if (currentUserId && !isAdmin) {
+      statsSql += ` AND (assigned_to = ? OR created_by = ?)`;
+      statsParams.push(currentUserId, currentUserId);
+    } else if (assigned_to && assigned_to !== 'All') {
+      statsSql += ` AND assigned_to = ?`;
+      statsParams.push(assigned_to);
+    }
+
+    const [allLeadsStats] = await db.query(statsSql, statsParams);
 
     const stats = allLeadsStats[0] || {};
 
@@ -103,6 +123,10 @@ router.get('/', async (req, res) => {
 router.get('/:id', async (req, res) => {
   try {
     const { id } = req.params;
+    const currentUserId = req.user?.id || req.query.user_id;
+    const currentUserRole = req.user?.role || req.query.role;
+    const isAdmin = currentUserRole === 'Admin' || currentUserRole === 'Super Admin';
+
     const [rows] = await db.query(`
       SELECT 
         l.*,
@@ -123,6 +147,15 @@ router.get('/:id', async (req, res) => {
     }
 
     const lead = rows[0];
+
+    // Authorization check for non-admin user
+    if (currentUserId && !isAdmin) {
+      const isAssigned = Number(lead.assigned_to) === Number(currentUserId);
+      const isCreator = Number(lead.created_by) === Number(currentUserId);
+      if (!isAssigned && !isCreator) {
+        return res.status(403).json({ error: 'Access denied. You can only view your own assigned leads.' });
+      }
+    }
 
     // Fetch activities
     const [activities] = await db.query(`
@@ -160,7 +193,9 @@ router.post('/', async (req, res) => {
       category_id,
       assigned_to,
       next_followup_date,
-      notes
+      notes,
+      user_id,
+      role
     } = req.body;
 
     if (!title || !contact_name) {
@@ -168,7 +203,14 @@ router.post('/', async (req, res) => {
     }
 
     const lead_number = await generateLeadNumber();
-    const currentUserId = req.user?.id || null;
+    const currentUserId = req.user?.id || user_id || req.query.user_id || null;
+    const currentUserRole = req.user?.role || role || req.query.role || null;
+    const isAdmin = currentUserRole === 'Admin' || currentUserRole === 'Super Admin';
+
+    let targetAssignedTo = assigned_to ? parseInt(assigned_to) : null;
+    if (!isAdmin && currentUserId && !targetAssignedTo) {
+      targetAssignedTo = parseInt(currentUserId);
+    }
 
     const [result] = await db.query(`
       INSERT INTO leads (
@@ -189,7 +231,7 @@ router.post('/', async (req, res) => {
       priority || 'Medium',
       estimated_value ? parseFloat(estimated_value) : 0.00,
       category_id ? parseInt(category_id) : null,
-      assigned_to ? parseInt(assigned_to) : null,
+      targetAssignedTo,
       next_followup_date || null,
       notes ? notes.trim() : null,
       currentUserId
@@ -236,7 +278,17 @@ router.put('/:id', async (req, res) => {
       return res.status(404).json({ error: 'Lead not found' });
     }
     const oldLead = existingRows[0];
-    const currentUserId = req.user?.id || null;
+    const currentUserId = req.user?.id || req.body.user_id || req.query.user_id || null;
+    const currentUserRole = req.user?.role || req.body.role || req.query.role || null;
+    const isAdmin = currentUserRole === 'Admin' || currentUserRole === 'Super Admin';
+
+    if (currentUserId && !isAdmin) {
+      const isAssigned = Number(oldLead.assigned_to) === Number(currentUserId);
+      const isCreator = Number(oldLead.created_by) === Number(currentUserId);
+      if (!isAssigned && !isCreator) {
+        return res.status(403).json({ error: 'Access denied. You can only update your own assigned leads.' });
+      }
+    }
 
     await db.query(`
       UPDATE leads SET
@@ -327,13 +379,23 @@ router.post('/:id/activities', async (req, res) => {
 router.post('/:id/convert', async (req, res) => {
   try {
     const { id } = req.params;
-    const currentUserId = req.user?.id || null;
+    const currentUserId = req.user?.id || req.body.user_id || req.query.user_id || null;
+    const currentUserRole = req.user?.role || req.body.role || req.query.role || null;
+    const isAdmin = currentUserRole === 'Admin' || currentUserRole === 'Super Admin';
 
     const [leadRows] = await db.query('SELECT * FROM leads WHERE id = ?', [id]);
     if (leadRows.length === 0) {
       return res.status(404).json({ error: 'Lead not found' });
     }
     const lead = leadRows[0];
+
+    if (currentUserId && !isAdmin) {
+      const isAssigned = Number(lead.assigned_to) === Number(currentUserId);
+      const isCreator = Number(lead.created_by) === Number(currentUserId);
+      if (!isAssigned && !isCreator) {
+        return res.status(403).json({ error: 'Access denied. You can only convert your own assigned leads.' });
+      }
+    }
 
     if (lead.client_id) {
       const [clientCheck] = await db.query('SELECT id FROM clients WHERE id = ?', [lead.client_id]);
@@ -422,6 +484,24 @@ router.post('/:id/convert', async (req, res) => {
 router.delete('/:id', async (req, res) => {
   try {
     const { id } = req.params;
+    const currentUserId = req.user?.id || req.query.user_id;
+    const currentUserRole = req.user?.role || req.query.role;
+    const isAdmin = currentUserRole === 'Admin' || currentUserRole === 'Super Admin';
+
+    const [leadRows] = await db.query('SELECT * FROM leads WHERE id = ?', [id]);
+    if (leadRows.length === 0) {
+      return res.status(404).json({ error: 'Lead not found' });
+    }
+    const lead = leadRows[0];
+
+    if (currentUserId && !isAdmin) {
+      const isAssigned = Number(lead.assigned_to) === Number(currentUserId);
+      const isCreator = Number(lead.created_by) === Number(currentUserId);
+      if (!isAssigned && !isCreator) {
+        return res.status(403).json({ error: 'Access denied. You can only delete your own assigned leads.' });
+      }
+    }
+
     await db.query('DELETE FROM leads WHERE id = ?', [id]);
     res.json({ message: 'Lead deleted successfully!' });
   } catch (err) {

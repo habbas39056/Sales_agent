@@ -3274,7 +3274,16 @@ router.get('/income-vs-expense', handleIncomeVsExpense);
 // Detailed sales performance & lead analytics per salesperson
 router.get('/salesperson-leads', async (req, res) => {
     try {
-        const { start_date, end_date, agent_id, quick_preset } = req.query;
+        const { start_date, end_date, agent_id, quick_preset, user_id, role } = req.query;
+
+        const currentUserId = req.user?.id || user_id;
+        const currentUserRole = req.user?.role || role;
+        const isAdmin = currentUserRole === 'Admin' || currentUserRole === 'Super Admin';
+
+        let effectiveAgentId = agent_id;
+        if (currentUserId && !isAdmin) {
+            effectiveAgentId = String(currentUserId);
+        }
 
         let startDate = start_date || '';
         let endDate = end_date || '';
@@ -3313,18 +3322,23 @@ router.get('/salesperson-leads', async (req, res) => {
             }
         }
 
-        // 1. Fetch All Salespeople for Dropdown (exclude Client role)
+        // 1. Fetch Salespeople for Dropdown (only Sales roles)
         const [allUsers] = await db.query(`
             SELECT id, name, email, role, profile_image_url 
             FROM users 
-            WHERE (role IS NULL OR role = '' OR LOWER(role) != 'client')
+            WHERE (LOWER(role) LIKE '%sales%' OR role IN ('Sales', 'Sales Rep', 'Salesperson', 'Sales Representative', 'Sales Executive', 'Sales Manager'))
             ORDER BY name ASC
         `);
 
+        // If non-admin sales member, only show themselves in the dropdown list
+        const dropdownUsers = (currentUserId && !isAdmin)
+            ? allUsers.filter(u => String(u.id) === String(currentUserId))
+            : allUsers;
+
         // Filtered salespeople list for reports
         let users = [...allUsers];
-        if (agent_id && agent_id !== 'all') {
-            users = allUsers.filter(u => String(u.id) === String(agent_id));
+        if (effectiveAgentId && effectiveAgentId !== 'all') {
+            users = allUsers.filter(u => String(u.id) === String(effectiveAgentId));
         }
 
         // 2. Fetch Leads
@@ -3337,9 +3351,9 @@ router.get('/salesperson-leads', async (req, res) => {
             WHERE 1=1
         `;
         const leadsParams = [];
-        if (agent_id && agent_id !== 'all') {
+        if (effectiveAgentId && effectiveAgentId !== 'all') {
             leadsQuery += ` AND (l.assigned_to = ? OR l.created_by = ?)`;
-            leadsParams.push(agent_id, agent_id);
+            leadsParams.push(effectiveAgentId, effectiveAgentId);
         }
         if (startDate) {
             leadsQuery += ` AND DATE(l.created_at) >= ?`;
@@ -3361,9 +3375,9 @@ router.get('/salesperson-leads', async (req, res) => {
                 WHERE 1=1
             `;
             const actParams = [];
-            if (agent_id && agent_id !== 'all') {
+            if (effectiveAgentId && effectiveAgentId !== 'all') {
                 actQuery += ` AND user_id = ?`;
-                actParams.push(agent_id);
+                actParams.push(effectiveAgentId);
             }
             if (startDate) {
                 actQuery += ` AND DATE(created_at) >= ?`;
@@ -3386,9 +3400,9 @@ router.get('/salesperson-leads', async (req, res) => {
             WHERE 1=1
         `;
         const quotParams = [];
-        if (agent_id && agent_id !== 'all') {
+        if (effectiveAgentId && effectiveAgentId !== 'all') {
             quotQuery += ` AND created_by = ?`;
-            quotParams.push(agent_id);
+            quotParams.push(effectiveAgentId);
         }
         if (startDate) {
             quotQuery += ` AND DATE(COALESCE(issue_date, created_at)) >= ?`;
@@ -3407,9 +3421,9 @@ router.get('/salesperson-leads', async (req, res) => {
             WHERE 1=1
         `;
         const invParams = [];
-        if (agent_id && agent_id !== 'all') {
+        if (effectiveAgentId && effectiveAgentId !== 'all') {
             invQuery += ` AND (agent_id = ? OR created_by = ?)`;
-            invParams.push(agent_id, agent_id);
+            invParams.push(effectiveAgentId, effectiveAgentId);
         }
         if (startDate) {
             invQuery += ` AND DATE(COALESCE(issue_date, created_at)) >= ?`;
@@ -3491,7 +3505,7 @@ router.get('/salesperson-leads', async (req, res) => {
         res.json({
             start_date: startDate,
             end_date: endDate,
-            all_salespeople_list: allUsers,
+            all_salespeople_list: dropdownUsers,
             summary: {
                 total_salespeople: users.length,
                 total_leads_added: totalLeadsAdded,

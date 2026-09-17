@@ -60,7 +60,7 @@ export default function CreateQuotation() {
         axios.get('/api/products'),
         axios.get('/api/users'),
         axios.get('/api/banks'),
-        axios.get('/api/leads')
+        axios.get(`/api/leads${queryParams}`)
       ]);
 
       const fetchedClients = Array.isArray(cliRes.data) ? cliRes.data : (cliRes.data?.clients || []);
