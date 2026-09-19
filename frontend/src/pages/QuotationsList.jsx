@@ -330,6 +330,156 @@ export default function QuotationsList() {
     }
   };
 
+  // Print Quotation using isolated iframe to prevent blank pages
+  const handlePrintQuotation = () => {
+    const printableElement = document.getElementById('printable-quotation');
+    if (!printableElement) {
+      window.print();
+      return;
+    }
+
+    // Remove existing print iframe if present
+    const existing = document.getElementById('quotation-print-frame');
+    if (existing) existing.remove();
+
+    const iframe = document.createElement('iframe');
+    iframe.id = 'quotation-print-frame';
+    // Must NOT be 0px x 0px (which causes Chrome to render blank white pages)
+    iframe.style.position = 'fixed';
+    iframe.style.left = '-9999px';
+    iframe.style.top = '0';
+    iframe.style.width = '794px'; // A4 standard width in px
+    iframe.style.height = '1123px'; // A4 standard height in px
+    iframe.style.border = 'none';
+
+    document.body.appendChild(iframe);
+
+    const printStyles = `
+      @page {
+        size: A4 portrait;
+        margin: 10mm 12mm;
+      }
+      * {
+        box-sizing: border-box !important;
+        -webkit-print-color-adjust: exact !important;
+        print-color-adjust: exact !important;
+      }
+      html, body {
+        margin: 0 !important;
+        padding: 0 !important;
+        background: #ffffff !important;
+        color: #000000 !important;
+        font-family: Arial, sans-serif !important;
+      }
+      .quotation-document {
+        position: relative !important;
+        width: 100% !important;
+        max-width: 100% !important;
+        padding: 1rem !important;
+        margin: 0 !important;
+        background: #ffffff !important;
+        display: block !important;
+        visibility: visible !important;
+        opacity: 1 !important;
+      }
+      .quotation-stamp {
+        position: absolute;
+        top: 35%;
+        left: 50%;
+        transform: translate(-50%, -50%) rotate(-30deg);
+        font-size: 6rem;
+        font-weight: 900;
+        letter-spacing: 0.2em;
+        pointer-events: none;
+        z-index: 0;
+      }
+      .quotation-document.is-paid .quotation-stamp {
+        color: #16a34a;
+        opacity: 0.15;
+      }
+      .quotation-document.is-unpaid .quotation-stamp {
+        color: #dc2626;
+        opacity: 0.15;
+      }
+      .quotation-table {
+        width: 100% !important;
+        border-collapse: collapse !important;
+        margin-bottom: 2rem !important;
+      }
+      .quotation-table th, .quotation-table td {
+        border: 1px solid #000000 !important;
+      }
+      .terms-page-break {
+        page-break-before: always !important;
+        break-before: page !important;
+        margin-top: 2rem !important;
+        padding-top: 1.5rem !important;
+      }
+      .print-hide {
+        display: none !important;
+      }
+    `;
+
+    const frameDoc = iframe.contentWindow.document;
+    frameDoc.open();
+    frameDoc.write(`
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <title>Quotation - ${previewQuotation?.quotation_number || 'QUO'}</title>
+          <style>${printStyles}</style>
+        </head>
+        <body>
+          ${printableElement.outerHTML}
+        </body>
+      </html>
+    `);
+    frameDoc.close();
+
+    const triggerPrint = () => {
+      try {
+        iframe.contentWindow.focus();
+        iframe.contentWindow.print();
+      } catch (err) {
+        console.error('Print failed:', err);
+      } finally {
+        setTimeout(() => {
+          if (document.body.contains(iframe)) {
+            document.body.removeChild(iframe);
+          }
+        }, 2000);
+      }
+    };
+
+    // Wait for images to load before printing
+    setTimeout(() => {
+      const images = iframe.contentWindow.document.images;
+      if (images.length > 0) {
+        let loadedCount = 0;
+        const totalImages = images.length;
+        const onImgDone = () => {
+          loadedCount++;
+          if (loadedCount >= totalImages) {
+            setTimeout(triggerPrint, 150);
+          }
+        };
+        for (let i = 0; i < totalImages; i++) {
+          if (images[i].complete) {
+            loadedCount++;
+          } else {
+            images[i].onload = onImgDone;
+            images[i].onerror = onImgDone;
+          }
+        }
+        if (loadedCount >= totalImages) {
+          setTimeout(triggerPrint, 250);
+        }
+      } else {
+        setTimeout(triggerPrint, 250);
+      }
+    }, 150);
+  };
+
   // Filter Quotations
   const filteredQuotations = useMemo(() => {
     const term = searchTerm.trim().toLowerCase();
@@ -1054,7 +1204,7 @@ export default function QuotationsList() {
                 <button 
                   className="btn" 
                   style={{backgroundColor: '#e11d48', color: '#ffffff', display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.5rem 1rem', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: '600'}} 
-                  onClick={() => window.print()}
+                  onClick={handlePrintQuotation}
                   title="Print or Save as PDF"
                 >
                   <Printer size={18} /> Print / PDF
