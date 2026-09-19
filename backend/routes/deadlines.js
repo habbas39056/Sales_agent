@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const db = require('../db');
+const { checkAndAutoAcceptDeadlines } = require('../utils/deadlineAutoAccept');
 const {
   sendWhatsAppMessage,
   broadcastDeliveryApprovedNotification,
@@ -14,6 +15,9 @@ router.get('/appeals', async (req, res) => {
   const isAdminOrPm = ['Admin', 'Product Manager', 'PM', 'Project Manager', 'Production Manager'].includes(role);
 
   try {
+    // Proactively auto-accept any steps where 2 hours have passed
+    await checkAndAutoAcceptDeadlines();
+
     let query = `
       SELECT 
         ps.id as step_id,
@@ -25,6 +29,7 @@ router.get('/appeals', async (req, res) => {
         ps.deadline_appeal_reason as appeal_reason,
         ps.appealed_at,
         ps.created_at,
+        ps.deadline_assigned_at,
         ps.reassign_todos,
         ps.reject_todos,
         COALESCE(ps.deadline_status, 'Pending Acceptance') as deadline_status,
@@ -104,6 +109,9 @@ router.get('/appeals/count', async (req, res) => {
   const isAdminOrPm = ['Admin', 'Product Manager', 'PM', 'Project Manager', 'Production Manager'].includes(role);
 
   try {
+    // Proactively auto-accept any steps where 2 hours have passed
+    await checkAndAutoAcceptDeadlines();
+
     let query = "SELECT COUNT(*) as pending_count FROM project_steps ps JOIN projects p ON ps.project_id = p.id WHERE (ps.deadline_status = 'Appealed' OR ps.deadline_status = 'Pending Acceptance' OR ps.deadline_status IS NULL)";
     const queryParams = [];
 
@@ -137,20 +145,8 @@ router.post('/accept/:step_id', async (req, res) => {
 // Trigger 2-hour auto-acceptance on demand
 router.post('/auto-accept-check', async (req, res) => {
   try {
-    const [steps] = await db.query(`
-      SELECT id, title, created_at FROM project_steps 
-      WHERE assignee_id IS NOT NULL 
-        AND deadline IS NOT NULL 
-        AND (deadline_status = 'Pending Acceptance' OR deadline_status IS NULL)
-        AND created_at < NOW() - INTERVAL 2 HOUR
-    `);
-
-    for (const step of steps) {
-      await db.query(`UPDATE project_steps SET deadline_status = 'Accepted' WHERE id = ?`, [step.id]);
-      await db.query(`INSERT INTO step_activity (step_id, user_id, action_text) VALUES (?, NULL, 'System Auto-Accepted the deadline after 2 hours of inactivity.')`, [step.id]);
-    }
-
-    res.json({ message: `Auto-accepted ${steps.length} pending deadlines.`, count: steps.length, steps });
+    const result = await checkAndAutoAcceptDeadlines();
+    res.json({ message: `Auto-accepted ${result.count || 0} pending deadlines.`, ...result });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }

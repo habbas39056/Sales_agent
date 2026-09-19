@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const db = require('../db');
+const { checkAndAutoAcceptDeadlines } = require('../utils/deadlineAutoAccept');
 const multer = require('multer');
 const path = require('path');
 const { 
@@ -350,6 +351,8 @@ router.get('/management/overview', async (req, res) => {
 // Get a single project
 router.get('/:id', async (req, res) => {
   try {
+    await checkAndAutoAcceptDeadlines();
+
     const [[project]] = await db.query(`
       SELECT projects.*, 
       clients.full_name as client_name,
@@ -618,7 +621,7 @@ router.post('/:id/steps', upload.array('attachments', 5), async (req, res) => {
     }
 
     const [result] = await db.query(
-      'INSERT INTO project_steps (project_id, title, description, assignee_id, deadline, requires_client_form, client_form_schema, requires_payment, allow_revision, attachments, invoice_item_ids) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+      'INSERT INTO project_steps (project_id, title, description, assignee_id, deadline, requires_client_form, client_form_schema, requires_payment, allow_revision, attachments, invoice_item_ids, deadline_status, deadline_assigned_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
       [
         req.params.id, 
         title, 
@@ -630,7 +633,9 @@ router.post('/:id/steps', upload.array('attachments', 5), async (req, res) => {
         req_payment,
         allow_rev,
         attachments,
-        parsed_invoice_items
+        parsed_invoice_items,
+        'Pending Acceptance',
+        deadline ? new Date() : null
       ]
     );
 
@@ -1193,46 +1198,71 @@ router.post('/:id/steps/:step_id/reassign', upload.array('attachments', 10), asy
     if (!step) throw new Error('Step not found');
     if (step.commission_released) throw new Error('Cannot reassign a step whose commission is already released.');
 
-    let finalTodosJSON = null;
-    if (todos) {
-      const parsedTodos = JSON.parse(todos);
-      let finalTodos = parsedTodos.map(todo => {
-        let fileUrl = null;
-        if (todo.hasFile && req.files && req.files[todo.fileIndex]) {
-          fileUrl = `/uploads/${req.files[todo.fileIndex].filename}`;
-        }
-        return { text: todo.text, file_url: fileUrl };
-      });
-      finalTodosJSON = JSON.stringify(finalTodos);
+    let finalTodos = [];
+    const noteText = (req.body.note || req.body.reassign_note || '').trim();
+    if (noteText) {
+      finalTodos.push({ text: noteText, is_note: true });
     }
 
+    if (todos) {
+      try {
+        const parsedTodos = typeof todos === 'string' ? JSON.parse(todos) : todos;
+        parsedTodos.forEach(todo => {
+          let fileUrl = null;
+          if (todo.hasFile && req.files && req.files[todo.fileIndex]) {
+            fileUrl = `/uploads/${req.files[todo.fileIndex].filename}`;
+          }
+          if (todo.text && todo.text.trim()) {
+            finalTodos.push({ text: todo.text.trim(), file_url: fileUrl, is_note: !!todo.is_note });
+          }
+        });
+      } catch (e) {
+        console.error('Error parsing reassignment todos:', e);
+      }
+    }
+
+    const finalTodosJSON = finalTodos.length > 0 ? JSON.stringify(finalTodos) : null;
     const targetAssigneeId = assignee_id ? parseInt(assignee_id) : step.assignee_id;
 
-    // Reset step to Pending, update assignee and deadline, reset acceptance
-    await connection.query(
-      `UPDATE project_steps 
-       SET status = 'Pending', 
-           assignee_id = ?,
-           deadline = ?, 
-           deadline_status = 'Pending Acceptance', 
-           completed_at = NULL,
-           proposed_deadline = NULL,
-           deadline_appeal_reason = NULL,
-           appealed_by = NULL,
-           appealed_at = NULL,
-           reassign_todos = ?
-       WHERE id = ?`,
-      [targetAssigneeId, new_deadline, finalTodosJSON, step.id]
-    );
+    // Reset step to Pending, update assignee and deadline, reset acceptance, clear old deliverable
+    let updateSql = `
+      UPDATE project_steps 
+      SET status = 'Pending', 
+          assignee_id = ?,
+          deadline = ?, 
+          deadline_status = 'Pending Acceptance', 
+          deadline_assigned_at = NOW(),
+          completed_at = NULL,
+          proposed_deadline = NULL,
+          deadline_appeal_reason = NULL,
+          appealed_by = NULL,
+          appealed_at = NULL,
+          deliverable_name = NULL,
+          deliverable_url = NULL,
+          reject_todos = NULL,
+          reassign_todos = ?
+    `;
+    const updateParams = [targetAssigneeId, new_deadline, finalTodosJSON];
+
+    if (req.body.description !== undefined && req.body.description !== null && req.body.description.trim()) {
+      updateSql += `, description = ?`;
+      updateParams.push(req.body.description.trim());
+    }
+
+    updateSql += ` WHERE id = ?`;
+    updateParams.push(step.id);
+
+    await connection.query(updateSql, updateParams);
 
     // Fetch project title for notifications
     const [[project]] = await connection.query('SELECT title FROM projects WHERE id = ?', [req.params.id]);
     const projectTitle = project?.title || 'Project';
 
     // Insert activity log
+    const activityNote = noteText ? ` Note: "${noteText.length > 60 ? noteText.substring(0, 60) + '...' : noteText}"` : '';
     await connection.query(
-      `INSERT INTO step_activity (step_id, user_id, action_text) VALUES (?, ?, 'Step reassigned with a new deadline by Project Manager.')`,
-      [step.id, user_id || null]
+      `INSERT INTO step_activity (step_id, user_id, action_text) VALUES (?, ?, ?)`,
+      [step.id, user_id || null, `Step reassigned with new deadline by Project Manager.${activityNote}`]
     );
 
     await connection.commit();
@@ -1305,6 +1335,7 @@ router.post('/:id/steps/:step_id/reject', upload.array('attachments', 10), async
            assignee_id = ?,
            deadline = ?, 
            deadline_status = 'Pending Acceptance', 
+           deadline_assigned_at = NOW(),
            completed_at = NULL,
            proposed_deadline = NULL,
            deliverable_name = NULL,

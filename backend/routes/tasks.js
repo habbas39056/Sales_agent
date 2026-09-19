@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const db = require('../db');
+const { checkAndAutoAcceptDeadlines } = require('../utils/deadlineAutoAccept');
 
 // Get all tasks (project steps) assigned to a user
 router.get('/', async (req, res) => {
@@ -10,6 +11,9 @@ router.get('/', async (req, res) => {
     if (!user_id) {
       return res.status(400).json({ error: 'user_id is required' });
     }
+
+    // Proactively auto-accept any steps where 2 hours have passed
+    await checkAndAutoAcceptDeadlines();
 
     // We fetch steps assigned to this user, along with project details
     // If Admin, they could potentially fetch all, but here we'll scope it to assignee unless 'all' is requested

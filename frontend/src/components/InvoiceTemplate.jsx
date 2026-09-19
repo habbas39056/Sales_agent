@@ -1,7 +1,7 @@
 import React from 'react';
 import './InvoiceTemplate.css';
 
-export default function InvoiceTemplate({ invoice = {}, companyDetails = {} }) {
+export default function InvoiceTemplate({ invoice = {}, companyDetails = {}, includeTerms = null }) {
   if (!invoice) return null;
 
   // Format currency helper matching exact screenshot style (Rs. 8,600.00)
@@ -64,13 +64,23 @@ export default function InvoiceTemplate({ invoice = {}, companyDetails = {} }) {
   const payments = invoice.payments || [];
 
   // Financial Calculations
-  const subtotal = invoice.subtotal !== undefined && invoice.subtotal !== null
-    ? parseFloat(invoice.subtotal)
-    : items.reduce((sum, item) => sum + (parseFloat(item.total || (parseFloat(item.quantity || 1) * parseFloat(item.unit_price || 0))) || 0), 0);
+  const calculatedItemsTotal = items.reduce((sum, item) => sum + (parseFloat(item.total !== undefined && item.total !== null ? item.total : (parseFloat(item.quantity || 1) * parseFloat(item.unit_price || 0))) || 0), 0);
 
   const totalAmount = invoice.amount !== undefined && invoice.amount !== null
     ? parseFloat(invoice.amount)
-    : (invoice.total !== undefined ? parseFloat(invoice.total) : subtotal);
+    : (invoice.total !== undefined ? parseFloat(invoice.total) : calculatedItemsTotal);
+
+  // Discount calculation (explicit discount or inferred from itemsTotal - totalAmount)
+  const rawDiscount = parseFloat(invoice.discount) || 0;
+  const inferredDiscount = (!rawDiscount && calculatedItemsTotal > (totalAmount + 0.01))
+    ? (calculatedItemsTotal - totalAmount)
+    : 0;
+  const discount = rawDiscount > 0 ? rawDiscount : inferredDiscount;
+
+  // Subtotal before discount
+  const subtotal = invoice.subtotal !== undefined && invoice.subtotal !== null && parseFloat(invoice.subtotal) > totalAmount
+    ? parseFloat(invoice.subtotal)
+    : (calculatedItemsTotal > 0 ? calculatedItemsTotal : (totalAmount + discount));
 
   let totalPaid = 0;
   if (payments && Array.isArray(payments) && payments.length > 0) {
@@ -88,10 +98,18 @@ export default function InvoiceTemplate({ invoice = {}, companyDetails = {} }) {
   const issueDate = formatDate(invoice.issue_date || invoice.created_at || new Date());
   const dueDate = formatDate(invoice.due_date || invoice.issue_date);
 
-  const termsContent = invoice.terms_and_conditions || invoice.terms || true;
+  // Terms and conditions handling: never force || true
+  const rawTerms = invoice.terms_and_conditions || invoice.terms;
+  const hasValidTerms = typeof rawTerms === 'string' && rawTerms.trim().length > 0;
+  const termsContent = hasValidTerms ? rawTerms.trim() : null;
+
+  // If includeTerms is specified as boolean, strictly obey it; otherwise only show if terms exist
+  const showTermsPage = includeTerms !== null 
+    ? (includeTerms === true && (termsContent !== null || invoice.show_default_terms === true))
+    : !!termsContent;
 
   return (
-    <div className="inv-tpl-container" id="printable-invoice">
+    <div className={`inv-tpl-container ${showTermsPage ? 'has-terms' : 'no-terms'}`} id="printable-invoice">
       {/* PAGE 1: INVOICE MAIN BODY */}
       <div className="inv-tpl-page-1">
         {/* HEADER ROW */}
@@ -231,6 +249,12 @@ export default function InvoiceTemplate({ invoice = {}, companyDetails = {} }) {
                   <td className="label">Subtotal:</td>
                   <td className="value">{formatMoney(subtotal)}</td>
                 </tr>
+                {discount > 0 && (
+                  <tr className="discount-row">
+                    <td className="label">Discount:</td>
+                    <td className="value discount-value">- {formatMoney(discount)}</td>
+                  </tr>
+                )}
                 <tr className="total-row">
                   <td className="label">Invoice Total:</td>
                   <td className="value">{formatMoney(totalAmount)}</td>
@@ -289,7 +313,7 @@ export default function InvoiceTemplate({ invoice = {}, companyDetails = {} }) {
       </div>
 
       {/* TERMS & CONDITIONS (PAGE 2 - FORCED SEPARATE PAGE) */}
-      {termsContent && (
+      {showTermsPage && (
         <div className="inv-tpl-terms-page terms-page-break">
           {/* TERMS TOP HEADER BAR */}
           <div className="inv-tpl-terms-top-bar">
@@ -319,7 +343,9 @@ export default function InvoiceTemplate({ invoice = {}, companyDetails = {} }) {
 
           {/* TERMS CONTENT */}
           <div className="inv-tpl-terms-body">
-            {typeof termsContent === 'string' ? termsContent : (
+            {termsContent ? (
+              <div style={{ whiteSpace: 'pre-wrap', lineHeight: '1.75' }}>{termsContent}</div>
+            ) : (
               <div style={{ lineHeight: '1.75' }}>
                 <p style={{ margin: '0 0 0.85rem 0' }}>1. <strong>PAYMENT TERMS:</strong> Payment is strictly due according to the agreed payment terms specified on Page 1. Late payments may be subject to a finance charge of 1.5% per month on overdue balances.</p>
                 <p style={{ margin: '0 0 0.85rem 0' }}>2. <strong>REMITTANCE:</strong> All wire and bank remittances must be directed to the official company bank account listed on Page 1. Please include the Invoice Number as the transaction reference.</p>
@@ -349,7 +375,7 @@ export default function InvoiceTemplate({ invoice = {}, companyDetails = {} }) {
           {/* PAGE 2 FOOTER */}
           <div className="inv-tpl-terms-footer">
             <hr className="inv-tpl-divider" style={{ margin: '1.5rem 0 0.85rem 0' }} />
-            <div>Page 2 of 2 • {invoiceNumber}</div>
+            <div>{invoiceNumber}</div>
             <div className="inv-tpl-credits-author" style={{ marginTop: '0.2rem' }}>
               Software Powered by Adwise Labs
             </div>

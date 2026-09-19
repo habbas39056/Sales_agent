@@ -57,6 +57,8 @@ export default function ProjectDetails() {
   const [stepToReassign, setStepToReassign] = useState(null);
   const [newDeadline, setNewDeadline] = useState('');
   const [reassignAssigneeId, setReassignAssigneeId] = useState('');
+  const [reassignNote, setReassignNote] = useState('');
+  const [reassignDescription, setReassignDescription] = useState('');
   const [reassignTodos, setReassignTodos] = useState([{ id: Date.now(), text: '', file: null }]);
   const [specialists, setSpecialists] = useState([]);
 
@@ -333,11 +335,13 @@ export default function ProjectDetails() {
     formData.append('new_deadline', newDeadline);
     formData.append('user_id', currentUser ? currentUser.id : '');
     formData.append('assignee_id', reassignAssigneeId || '');
+    formData.append('note', reassignNote.trim());
+    formData.append('description', reassignDescription.trim());
 
     let fileIndex = 0;
     reassignTodos.forEach(todo => {
       if (todo.text.trim()) {
-        const todoItem = { text: todo.text, hasFile: false };
+        const todoItem = { text: todo.text.trim(), hasFile: false };
         if (todo.file) {
           formData.append('attachments', todo.file);
           todoItem.hasFile = true;
@@ -348,8 +352,8 @@ export default function ProjectDetails() {
       }
     });
 
-    if (todosData.length === 0) {
-      alert('Please provide at least one feedback/to-do item.');
+    if (!reassignNote.trim() && todosData.length === 0 && !reassignDescription.trim()) {
+      alert('Please provide a reassignment note, updated requirements/details, or at least one feedback point.');
       return;
     }
 
@@ -362,6 +366,8 @@ export default function ProjectDetails() {
       setIsReassignModalOpen(false);
       setStepToReassign(null);
       setNewDeadline('');
+      setReassignNote('');
+      setReassignDescription('');
       setReassignTodos([{ id: Date.now(), text: '', file: null }]);
       alert('Step successfully reassigned!');
       fetchProjectDetails();
@@ -807,40 +813,55 @@ export default function ProjectDetails() {
                           let parsedTodos = [];
                           try {
                             parsedTodos = typeof todosList === 'string' ? JSON.parse(todosList) : todosList;
-                          } catch (e) {}
+                          } catch (e) {
+                            if (typeof todosList === 'string') parsedTodos = [{ text: todosList }];
+                          }
+                          if (!Array.isArray(parsedTodos) && parsedTodos && parsedTodos.text) {
+                            parsedTodos = [parsedTodos];
+                          }
                           
                           if (Array.isArray(parsedTodos) && parsedTodos.length > 0) {
+                            const isReassigned = !!(step.reassign_todos && step.reassign_todos !== '0' && step.reassign_todos !== 0);
                             return (
-                              <div style={{ marginTop: '0.8rem', padding: '1rem', background: '#fff1f2', border: '1px solid #fecaca', borderRadius: '8px', display: 'flex', flexDirection: 'column', gap: '0.5rem', width: '100%' }}>
+                              <div style={{ marginTop: '0.8rem', padding: '0.85rem', background: isReassigned ? '#fffbeb' : '#fff1f2', border: `1px solid ${isReassigned ? '#fde68a' : '#fecaca'}`, borderRadius: '8px', display: 'flex', flexDirection: 'column', gap: '0.5rem', width: '100%' }}>
                                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '0.5rem' }}>
-                                  <strong style={{ fontSize: '0.85rem', color: '#e11d48', display: 'flex', alignItems: 'center', gap: '0.4rem', textTransform: 'uppercase' }}>
-                                    ⚠️ FEEDBACK TO-DOS
+                                  <strong style={{ fontSize: '0.85rem', color: isReassigned ? '#b45309' : '#e11d48', display: 'flex', alignItems: 'center', gap: '0.4rem', textTransform: 'uppercase' }}>
+                                    {isReassigned ? '🔁 REASSIGNMENT NOTES & FEEDBACK' : '⚠️ REVISION FEEDBACK'}
                                   </strong>
                                   <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
-                                    <span style={{ background: '#e11d48', color: 'white', fontSize: '0.7rem', padding: '2px 6px', borderRadius: '4px', fontWeight: 'bold' }}>
-                                      REASSIGNED
+                                    <span style={{ background: isReassigned ? '#f59e0b' : '#e11d48', color: 'white', fontSize: '0.7rem', padding: '2px 6px', borderRadius: '4px', fontWeight: 'bold' }}>
+                                      {isReassigned ? 'REASSIGNED' : 'REVISION'}
                                     </span>
                                     {step.deadline && (
-                                      <span style={{ background: '#fef2f2', color: '#e11d48', fontSize: '0.7rem', padding: '2px 6px', borderRadius: '4px', border: '1px solid #fecaca', fontWeight: 'bold' }}>
+                                      <span style={{ background: isReassigned ? '#fef3c7' : '#fef2f2', color: isReassigned ? '#b45309' : '#e11d48', fontSize: '0.7rem', padding: '2px 6px', borderRadius: '4px', border: `1px solid ${isReassigned ? '#fde68a' : '#fecaca'}`, fontWeight: 'bold' }}>
                                         Deadline: {new Date(step.deadline).toLocaleDateString()}
                                       </span>
                                     )}
                                   </div>
                                 </div>
-                                <ul style={{ margin: 0, paddingLeft: '1.5rem', display: 'flex', flexDirection: 'column', gap: '0.5rem', color: '#4c1d95', fontSize: '0.9rem' }}>
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
                                   {parsedTodos.map((todo, idx) => (
-                                    <li key={idx} style={{ lineHeight: '1.4' }}>
-                                      {todo.text}
-                                      {todo.file_url && (
-                                        <div style={{ marginTop: '0.2rem' }}>
-                                          <a href={`http://localhost:5000${todo.file_url}`} target="_blank" rel="noopener noreferrer" style={{ display: 'inline-flex', alignItems: 'center', gap: '0.2rem', fontSize: '0.8rem', color: '#2563eb', textDecoration: 'none', background: '#eff6ff', padding: '0.2rem 0.5rem', borderRadius: '4px', border: '1px solid #bfdbfe' }}>
-                                            <ExternalLink size={12} /> View Attached File
-                                          </a>
+                                    todo.is_note ? (
+                                      <div key={idx} style={{ background: '#ffffff', border: '1px solid #fde68a', borderRadius: '6px', padding: '0.5rem 0.75rem', color: '#92400e', fontSize: '0.88rem' }}>
+                                        <strong>📝 Note / Instructions:</strong> {todo.text}
+                                      </div>
+                                    ) : (
+                                      <div key={idx} style={{ display: 'flex', alignItems: 'flex-start', gap: '0.4rem', color: '#334155', fontSize: '0.88rem', paddingLeft: '0.25rem' }}>
+                                        <span style={{ color: isReassigned ? '#d97706' : '#e11d48', fontWeight: 'bold' }}>•</span>
+                                        <div style={{ flex: 1 }}>
+                                          <span>{todo.text || todo}</span>
+                                          {todo.file_url && (
+                                            <div style={{ marginTop: '0.2rem' }}>
+                                              <a href={`http://localhost:5000${todo.file_url}`} target="_blank" rel="noopener noreferrer" style={{ display: 'inline-flex', alignItems: 'center', gap: '0.2rem', fontSize: '0.8rem', color: '#2563eb', textDecoration: 'none', background: '#eff6ff', padding: '0.2rem 0.5rem', borderRadius: '4px', border: '1px solid #bfdbfe' }}>
+                                                <ExternalLink size={12} /> View Attached File
+                                              </a>
+                                            </div>
+                                          )}
                                         </div>
-                                      )}
-                                    </li>
+                                      </div>
+                                    )
                                   ))}
-                                </ul>
+                                </div>
                               </div>
                             );
                           }
@@ -1017,6 +1038,9 @@ export default function ProjectDetails() {
                                 setStepToReassign(step);
                                 setReassignAssigneeId(step.assignee_id ? String(step.assignee_id) : '');
                                 setNewDeadline(step.deadline ? step.deadline.split('T')[0] : '');
+                                setReassignNote('');
+                                setReassignDescription(step.description || '');
+                                setReassignTodos([{ id: Date.now(), text: '', file: null }]);
                                 setIsReassignModalOpen(true);
                               }}
                               style={{
@@ -1752,8 +1776,37 @@ export default function ProjectDetails() {
                 </small>
               </div>
               <div className="form-group" style={{ marginBottom: '1rem' }}>
+                <label style={{ display: 'block', marginBottom: '0.4rem', fontWeight: '700', fontSize: '0.85rem', color: '#334155' }}>
+                  📝 Reassignment Note & Instructions
+                </label>
+                <textarea
+                  rows={2}
+                  value={reassignNote}
+                  onChange={(e) => setReassignNote(e.target.value)}
+                  placeholder="Explain why this step is reassigned or add guidance for the assignee..."
+                  style={{ width: '100%', padding: '0.6rem', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '0.88rem', resize: 'vertical' }}
+                />
+              </div>
+
+              <div className="form-group" style={{ marginBottom: '1rem' }}>
+                <label style={{ display: 'block', marginBottom: '0.4rem', fontWeight: '700', fontSize: '0.85rem', color: '#334155' }}>
+                  📄 Step Details / Requirements (Scope)
+                </label>
+                <textarea
+                  rows={2}
+                  value={reassignDescription}
+                  onChange={(e) => setReassignDescription(e.target.value)}
+                  placeholder="Update step specifications or requirements if needed..."
+                  style={{ width: '100%', padding: '0.6rem', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '0.88rem', resize: 'vertical' }}
+                />
+                <small style={{ display: 'block', marginTop: '0.25rem', color: '#64748b', fontSize: '0.75rem' }}>
+                  This updates the step scope description visible on the assigned specialist's task page.
+                </small>
+              </div>
+
+              <div className="form-group" style={{ marginBottom: '1rem' }}>
                 <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: '800', fontSize: '0.8rem', color: '#475569', textTransform: 'uppercase' }}>
-                  FEEDBACK TO-DOS
+                  ACTIONABLE FEEDBACK / TO-DOS (OPTIONAL)
                 </label>
                 
                 {reassignTodos.map((todo, index) => (

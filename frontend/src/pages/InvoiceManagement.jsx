@@ -29,6 +29,7 @@ export default function InvoiceManagement() {
   const [fromDate, setFromDate] = useState('');
   const [toDate, setToDate] = useState('');
   const [datePreset, setDatePreset] = useState('All Dates');
+  const [includeTermsInPdf, setIncludeTermsInPdf] = useState(false);
 
   // View Mode: 'table' or 'cards'
   const [viewMode, setViewMode] = useState(() => {
@@ -186,6 +187,8 @@ export default function InvoiceManagement() {
     try {
       const res = await axios.get(`/api/invoices/${id}`);
       setPreviewInvoice(res.data);
+      const hasTerms = !!(res.data?.terms_and_conditions && String(res.data.terms_and_conditions).trim().length > 0);
+      setIncludeTermsInPdf(hasTerms);
     } catch (error) {
       console.error('Failed to load invoice preview:', error);
       alert('Failed to load invoice preview details');
@@ -601,10 +604,16 @@ export default function InvoiceManagement() {
               margin: 0 !important;
               box-shadow: none !important;
             }
-            .inv-tpl-page-1 {
+            .has-terms .inv-tpl-page-1 {
               display: block !important;
               page-break-after: always !important;
               break-after: page !important;
+              margin-bottom: 0 !important;
+            }
+            .no-terms .inv-tpl-page-1 {
+              display: block !important;
+              page-break-after: auto !important;
+              break-after: auto !important;
               margin-bottom: 0 !important;
             }
             .terms-page-break, .inv-tpl-terms-page {
@@ -1352,6 +1361,33 @@ export default function InvoiceManagement() {
             <div className="modal-header print-hide" style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid var(--border-color)', paddingBottom: '1rem', marginBottom: '1.5rem'}}>
               <h2 style={{margin: 0}}>Invoice Preview</h2>
               <div style={{display: 'flex', alignItems: 'center', gap: '0.75rem'}}>
+                {/* Interactive Toggle for Terms & Conditions Page (Page 2) */}
+                <label 
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '0.45rem',
+                    fontSize: '0.82rem',
+                    fontWeight: 600,
+                    color: includeTermsInPdf ? '#0f172a' : '#64748b',
+                    background: includeTermsInPdf ? '#eff6ff' : '#f8fafc',
+                    padding: '0.45rem 0.8rem',
+                    borderRadius: '6px',
+                    border: `1px solid ${includeTermsInPdf ? '#93c5fd' : '#cbd5e1'}`,
+                    cursor: 'pointer',
+                    userSelect: 'none'
+                  }}
+                  title="Toggle whether to include Terms & Conditions as Page 2 in PDF/Print"
+                >
+                  <input 
+                    type="checkbox" 
+                    checked={includeTermsInPdf} 
+                    onChange={(e) => setIncludeTermsInPdf(e.target.checked)} 
+                    style={{ width: '15px', height: '15px', accentColor: '#2563eb', cursor: 'pointer' }}
+                  />
+                  <span>Terms Page (Page 2)</span>
+                </label>
+
                 {previewInvoice.status !== 'Paid' && (
                   <button className="btn-success" onClick={() => openPaymentModal(previewInvoice)}>
                     <Banknote size={18} style={{marginRight:'0.5rem', verticalAlign:'middle'}}/> Record Payment
@@ -1370,7 +1406,7 @@ export default function InvoiceManagement() {
             </div>
             
             {/* NEW MODERN INVOICE TEMPLATE */}
-            <InvoiceTemplate invoice={previewInvoice} />
+            <InvoiceTemplate invoice={previewInvoice} includeTerms={includeTermsInPdf} />
           </div>
         </div>
       )}

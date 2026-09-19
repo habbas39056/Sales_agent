@@ -1423,3 +1423,324 @@
     grid-template-columns: 1fr;
   }
 }
+
+/* ==========================================================================
+   Reassignment & Revision Feedback Cards & Badges
+   ========================================================================== */
+.reassignment-feedback-card {
+  background: #fffbeb;
+  border: 1px solid #fde68a;
+  border-radius: 10px;
+  padding: 0.85rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  box-shadow: 0 1px 3px rgba(245, 158, 11, 0.08);
+}
+
+.reassignment-feedback-card.modal-highlight {
+  background: #fffbeb;
+  border-color: #fcd34d;
+  padding: 1rem;
+}
+
+.revision-feedback-card {
+  background: #fff1f2;
+  border: 1px solid #fecaca;
+  border-radius: 10px;
+  padding: 0.85rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  box-shadow: 0 1px 3px rgba(225, 29, 72, 0.06);
+}
+
+.revision-feedback-card.modal-highlight {
+  background: #fff1f2;
+  border-color: #fda4af;
+  padding: 1rem;
+}
+
+.feedback-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.feedback-header-title {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.82rem;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  text-transform: uppercase;
+}
+
+.feedback-header.reassign .feedback-header-title {
+  color: #b45309;
+}
+
+.feedback-header.reject .feedback-header-title {
+  color: #e11d48;
+}
+
+.icon-reassign {
+  color: #d97706;
+}
+
+.icon-reject {
+  color: #e11d48;
+}
+
+.feedback-mini-badge {
+  font-size: 0.68rem;
+  font-weight: 800;
+  padding: 0.15rem 0.45rem;
+  border-radius: 4px;
+  letter-spacing: 0.03em;
+}
+
+.feedback-mini-badge.reassign {
+  background: #f59e0b;
+  color: #ffffff;
+}
+
+.feedback-mini-badge.reject {
+  background: #e11d48;
+  color: #ffffff;
+}
+
+.feedback-items-container {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+}
+
+/* PM Note Banner */
+.reassign-note-banner {
+  background: #ffffff;
+  border: 1px solid #fde68a;
+  border-left: 3px solid #f59e0b;
+  border-radius: 6px;
+  padding: 0.55rem 0.75rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.note-badge-row {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.74rem;
+  font-weight: 700;
+  color: #b45309;
+  text-transform: uppercase;
+}
+
+.note-text-content {
+  margin: 0;
+  font-size: 0.86rem;
+  color: #78350f;
+  line-height: 1.45;
+  white-space: pre-wrap;
+}
+
+/* Feedback To-Do Item */
+.feedback-item-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.45rem;
+  font-size: 0.85rem;
+  line-height: 1.45;
+}
+
+.item-bullet {
+  font-weight: 800;
+  color: #d97706;
+  font-size: 1rem;
+  line-height: 1.2;
+}
+
+.item-bullet.reject {
+  color: #e11d48;
+}
+
+.item-main-wrap {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.item-text {
+  color: #334155;
+  font-size: 0.85rem;
+}
+
+.feedback-file-attachment {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  font-size: 0.76rem;
+  font-weight: 600;
+  color: #2563eb;
+  background: #eff6ff;
+  border: 1px solid #bfdbfe;
+  padding: 0.2rem 0.5rem;
+  border-radius: 4px;
+  text-decoration: none;
+  width: fit-content;
+  transition: all 0.15s ease;
+}
+
+.feedback-file-attachment:hover {
+  background: #dbeafe;
+  color: #1d4ed8;
+}
+
+/* Acceptance Pills & Micro Badges */
+.acceptance-pill.reassign-pill {
+  background: #fef3c7;
+  color: #92400e;
+  border: 1px solid #fde68a;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.acceptance-pill.reassign-pill:hover {
+  background: #fde68a;
+}
+
+.acceptance-pill.reject-pill {
+  background: #ffe4e6;
+  color: #9f1239;
+  border: 1px solid #fecaca;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.acceptance-pill.reject-pill:hover {
+  background: #fecaca;
+}
+
+.reassigned-micro-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  font-size: 0.7rem;
+  font-weight: 700;
+  padding: 0.1rem 0.4rem;
+  border-radius: 4px;
+  background: #fef3c7;
+  color: #b45309;
+  border: 1px solid #fde68a;
+  transition: all 0.15s ease;
+}
+
+.reassigned-micro-badge:hover {
+  background: #fde68a;
+}
+
+.revision-micro-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  font-size: 0.7rem;
+  font-weight: 700;
+  padding: 0.1rem 0.4rem;
+  border-radius: 4px;
+  background: #ffe4e6;
+  color: #e11d48;
+  border: 1px solid #fecaca;
+  transition: all 0.15s ease;
+}
+
+.revision-micro-badge:hover {
+  background: #fecaca;
+}
+
+/* ==========================================================================
+   Full Task Details Modal
+   ========================================================================== */
+.task-full-details-modal {
+  max-width: 680px;
+  width: 92%;
+  max-height: 88vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.details-modal-body {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+  padding: 1.25rem;
+  overflow-y: auto;
+  max-height: calc(88vh - 140px);
+}
+
+.details-meta-strip {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 0.75rem;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 0.75rem 1rem;
+}
+
+.meta-strip-item {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+
+.strip-label {
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: #64748b;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+}
+
+.strip-val {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.88rem;
+  font-weight: 700;
+  color: #0f172a;
+}
+
+.details-section {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+}
+
+.section-title {
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: #475569;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+}
+
+.details-scope-box {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 0.85rem 1rem;
+  font-size: 0.88rem;
+  line-height: 1.55;
+  color: #334155;
+  max-height: 220px;
+  overflow-y: auto;
+}
+

@@ -61,9 +61,27 @@ const getChecklistStats = (text) => {
   return { total, completed };
 };
 
+// Helper to safely parse reassignment / rejection todos and notes
+const parseFeedbackTodos = (raw) => {
+  if (!raw || raw === '0' || raw === 0) return null;
+  if (Array.isArray(raw)) return raw;
+  try {
+    const parsed = JSON.parse(raw);
+    if (Array.isArray(parsed)) return parsed;
+    if (parsed && typeof parsed === 'object' && parsed.text) return [parsed];
+    if (typeof parsed === 'string') return [{ text: parsed }];
+  } catch (e) {
+    if (typeof raw === 'string' && raw.trim()) {
+      return [{ text: raw.trim() }];
+    }
+  }
+  return null;
+};
+
 export default function Tasks() {
   const [tasks, setTasks] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [selectedTaskDetails, setSelectedTaskDetails] = useState(null);
 
   // Filter States
   const [searchTerm, setSearchTerm] = useState('');
@@ -823,6 +841,8 @@ export default function Tasks() {
             const checklist = getChecklistStats(task.description);
             const isAccepted = task.deadline_status === 'Accepted';
             const isAppealed = task.deadline_status === 'Appealed';
+            const reassignTodosList = parseFeedbackTodos(task.reassign_todos);
+            const rejectTodosList = parseFeedbackTodos(task.reject_todos);
 
             return (
               <div 
@@ -842,6 +862,30 @@ export default function Tasks() {
                       {task.status === 'Pending' && 'Pending'}
                       {!['Completed', 'Pending Approval', 'In Progress', 'Pending'].includes(task.status) && task.status}
                     </span>
+
+                    {/* Reassigned Tag */}
+                    {reassignTodosList && reassignTodosList.length > 0 && task.status !== 'Completed' && (
+                      <span 
+                        className="acceptance-pill reassign-pill" 
+                        title="Task reassigned with instructions & required changes"
+                        onClick={() => setSelectedTaskDetails(task)}
+                        style={{ cursor: 'pointer' }}
+                      >
+                        <RotateCcw size={11} /> Reassigned
+                      </span>
+                    )}
+
+                    {/* Revision Tag */}
+                    {rejectTodosList && rejectTodosList.length > 0 && task.status !== 'Completed' && (
+                      <span 
+                        className="acceptance-pill reject-pill" 
+                        title="Milestone revision requested"
+                        onClick={() => setSelectedTaskDetails(task)}
+                        style={{ cursor: 'pointer' }}
+                      >
+                        <AlertTriangle size={11} /> Revision
+                      </span>
+                    )}
 
                     {/* Deadline Acceptance Badge */}
                     {isAccepted ? (
@@ -942,14 +986,85 @@ export default function Tasks() {
                   </div>
                 )}
 
-                {/* Rejection / Revision feedback notice */}
-                {task.reject_todos && task.status !== 'Completed' && (
-                  <div className="revision-feedback-card">
-                    <div className="feedback-header">
-                      <AlertCircle size={14} />
-                      <span>Revision Requested:</span>
+                {/* Reassignment Notes, Details & Checklist */}
+                {reassignTodosList && reassignTodosList.length > 0 && task.status !== 'Completed' && (
+                  <div className="reassignment-feedback-card">
+                    <div className="feedback-header reassign">
+                      <div className="feedback-header-title">
+                        <RotateCcw size={14} className="icon-reassign" />
+                        <span>Reassignment Notes & Instructions:</span>
+                      </div>
+                      <span className="feedback-mini-badge reassign">REASSIGNED</span>
                     </div>
-                    <p className="feedback-body">{task.reject_todos}</p>
+                    
+                    <div className="feedback-items-container">
+                      {reassignTodosList.map((item, idx) => (
+                        item.is_note ? (
+                          <div key={idx} className="reassign-note-banner">
+                            <div className="note-badge-row">
+                              <FileText size={12} />
+                              <span>PM Instructions</span>
+                            </div>
+                            <p className="note-text-content">{item.text}</p>
+                          </div>
+                        ) : (
+                          <div key={idx} className="feedback-item-row">
+                            <span className="item-bullet">•</span>
+                            <div className="item-main-wrap">
+                              <span className="item-text">{item.text || item}</span>
+                              {item.file_url && (
+                                <a 
+                                  href={item.file_url.startsWith('http') ? item.file_url : `${item.file_url}`}
+                                  target="_blank" 
+                                  rel="noreferrer" 
+                                  className="feedback-file-attachment"
+                                >
+                                  <Paperclip size={11} />
+                                  <span>Reference Attachment</span>
+                                  <ExternalLink size={10} />
+                                </a>
+                              )}
+                            </div>
+                          </div>
+                        )
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Rejection / Revision feedback notice */}
+                {rejectTodosList && rejectTodosList.length > 0 && task.status !== 'Completed' && (
+                  <div className="revision-feedback-card">
+                    <div className="feedback-header reject">
+                      <div className="feedback-header-title">
+                        <AlertCircle size={14} className="icon-reject" />
+                        <span>Revision Requested Feedback:</span>
+                      </div>
+                      <span className="feedback-mini-badge reject">NEEDS REVISION</span>
+                    </div>
+
+                    <div className="feedback-items-container">
+                      {rejectTodosList.map((item, idx) => (
+                        <div key={idx} className="feedback-item-row">
+                          <span className="item-bullet reject">•</span>
+                          <div className="item-main-wrap">
+                            <span className="item-text">{item.text || item}</span>
+                            {item.file_url && (
+                              <a 
+                                href={item.file_url.startsWith('http') ? item.file_url : `${item.file_url}`}
+                                target="_blank" 
+                                rel="noreferrer" 
+                                className="feedback-file-attachment"
+                              >
+                                <Paperclip size={11} />
+                                <span>Reference Attachment</span>
+                                <ExternalLink size={10} />
+                              </a>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
                   </div>
                 )}
 
@@ -975,16 +1090,27 @@ export default function Tasks() {
 
                 {/* Card Action Buttons */}
                 <div className="task-card-footer-actions">
-                  {/* Left: View Project */}
-                  <button 
-                    type="button" 
-                    className="action-btn secondary-btn small"
-                    onClick={() => navigate(`/projects/${task.project_id}`)}
-                    title="Open project details workspace"
-                  >
-                    <ExternalLink size={14} />
-                    <span>Workspace</span>
-                  </button>
+                  {/* Left: View Details & Project */}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                    <button 
+                      type="button" 
+                      className="action-btn secondary-btn small"
+                      onClick={() => setSelectedTaskDetails(task)}
+                      title="View full task specifications, notes & details"
+                    >
+                      <FileText size={14} />
+                      <span>Details</span>
+                    </button>
+                    <button 
+                      type="button" 
+                      className="action-btn secondary-btn small"
+                      onClick={() => navigate(`/projects/${task.project_id}`)}
+                      title="Open project details workspace"
+                    >
+                      <ExternalLink size={14} />
+                      <span>Workspace</span>
+                    </button>
+                  </div>
 
                   <div className="footer-right-buttons">
                     {/* If Deadline not accepted yet, show Accept & Appeal buttons */}
@@ -1078,15 +1204,44 @@ export default function Tasks() {
                   const dueStatus = getProjectDueDateStatus(task.deadline, task.status);
                   const isAccepted = task.deadline_status === 'Accepted';
                   const checklist = getChecklistStats(task.description);
+                  const reassignTodosList = parseFeedbackTodos(task.reassign_todos);
+                  const rejectTodosList = parseFeedbackTodos(task.reject_todos);
 
                   return (
                     <tr key={task.id} className="task-table-row">
                       {/* Task Title & Scope */}
                       <td style={{ paddingLeft: '1.25rem' }}>
                         <div className="table-task-info">
-                          <span className="table-task-title">{task.title}</span>
+                          <span 
+                            className="table-task-title"
+                            style={{ cursor: 'pointer' }}
+                            onClick={() => setSelectedTaskDetails(task)}
+                            title="Click to view details and notes"
+                          >
+                            {task.title}
+                          </span>
                           <div className="table-submeta-row">
                             <span className="table-task-id">#{task.id}</span>
+                            {reassignTodosList && reassignTodosList.length > 0 && task.status !== 'Completed' && (
+                              <span 
+                                className="reassigned-micro-badge" 
+                                onClick={() => setSelectedTaskDetails(task)}
+                                style={{ cursor: 'pointer' }}
+                                title="Click to view reassignment notes & instructions"
+                              >
+                                <RotateCcw size={10} /> Reassigned ({reassignTodosList.length})
+                              </span>
+                            )}
+                            {rejectTodosList && rejectTodosList.length > 0 && task.status !== 'Completed' && (
+                              <span 
+                                className="revision-micro-badge" 
+                                onClick={() => setSelectedTaskDetails(task)}
+                                style={{ cursor: 'pointer' }}
+                                title="Click to view revision feedback"
+                              >
+                                <AlertTriangle size={10} /> Revision ({rejectTodosList.length})
+                              </span>
+                            )}
                             {checklist.total > 0 && (
                               <span className="checklist-micro-badge">
                                 ✓ {checklist.completed}/{checklist.total} Checklist
@@ -1157,6 +1312,15 @@ export default function Tasks() {
                       {/* Actions */}
                       <td style={{ textAlign: 'right', paddingRight: '1.25rem' }}>
                         <div className="table-action-row">
+                          <button 
+                            type="button" 
+                            className="row-btn view" 
+                            onClick={() => setSelectedTaskDetails(task)}
+                            title="View Full Task Details & Notes"
+                          >
+                            <FileText size={13} />
+                          </button>
+
                           <button 
                             type="button" 
                             className="row-btn view" 
@@ -1364,6 +1528,208 @@ export default function Tasks() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+      {/* 7. Comprehensive Task Details & Notes Modal */}
+      {selectedTaskDetails && (
+        <div className="modal-overlay" onClick={() => setSelectedTaskDetails(null)}>
+          <div className="modal-content task-full-details-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <div className="modal-header-text">
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap', marginBottom: '0.35rem' }}>
+                  <span className="task-id-badge">#{selectedTaskDetails.id}</span>
+                  <span className={`status-pill ${selectedTaskDetails.status ? selectedTaskDetails.status.toLowerCase().replace(/\s+/g, '-') : 'pending'}`}>
+                    {selectedTaskDetails.status || 'Pending'}
+                  </span>
+                  {selectedTaskDetails.deadline_status === 'Accepted' ? (
+                    <span className="acceptance-pill accepted">✓ Accepted</span>
+                  ) : selectedTaskDetails.deadline_status === 'Appealed' ? (
+                    <span className="acceptance-pill appealed">Appealed</span>
+                  ) : (
+                    <span className="acceptance-pill unconfirmed">⚠️ Unconfirmed</span>
+                  )}
+                </div>
+                <h2>{selectedTaskDetails.title}</h2>
+                <p>Project: <strong>{selectedTaskDetails.project_title || 'Project Workspace'}</strong> {selectedTaskDetails.client_name ? `• Client: ${selectedTaskDetails.client_name}` : ''}</p>
+              </div>
+              <button 
+                type="button" 
+                className="btn-close" 
+                onClick={() => setSelectedTaskDetails(null)}
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            <div className="details-modal-body">
+              {/* Meta strip */}
+              <div className="details-meta-strip">
+                <div className="meta-strip-item">
+                  <span className="strip-label">Target Deadline</span>
+                  <span className="strip-val">
+                    <Clock size={13} /> {selectedTaskDetails.deadline ? new Date(selectedTaskDetails.deadline).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : 'No target date'}
+                  </span>
+                </div>
+                {selectedTaskDetails.pm_name && (
+                  <div className="meta-strip-item">
+                    <span className="strip-label">Lead PM</span>
+                    <span className="strip-val">
+                      <User size={13} /> {selectedTaskDetails.pm_name}
+                    </span>
+                  </div>
+                )}
+                <div className="meta-strip-item">
+                  <span className="strip-label">Acceptance</span>
+                  <span className="strip-val">
+                    {selectedTaskDetails.deadline_status || 'Pending Acceptance'}
+                  </span>
+                </div>
+              </div>
+
+              {/* Reassignment Notes & Instructions if present */}
+              {(() => {
+                const rTodos = parseFeedbackTodos(selectedTaskDetails.reassign_todos);
+                if (!rTodos || rTodos.length === 0) return null;
+                return (
+                  <div className="reassignment-feedback-card modal-highlight">
+                    <div className="feedback-header reassign">
+                      <div className="feedback-header-title">
+                        <RotateCcw size={14} className="icon-reassign" />
+                        <span>Reassignment Notes & Special Instructions:</span>
+                      </div>
+                      <span className="feedback-mini-badge reassign">REASSIGNED</span>
+                    </div>
+                    <div className="feedback-items-container">
+                      {rTodos.map((item, idx) => (
+                        item.is_note ? (
+                          <div key={idx} className="reassign-note-banner">
+                            <div className="note-badge-row">
+                              <FileText size={12} />
+                              <span>PM Note / Instructions</span>
+                            </div>
+                            <p className="note-text-content">{item.text}</p>
+                          </div>
+                        ) : (
+                          <div key={idx} className="feedback-item-row">
+                            <span className="item-bullet">•</span>
+                            <div className="item-main-wrap">
+                              <span className="item-text">{item.text || item}</span>
+                              {item.file_url && (
+                                <a 
+                                  href={item.file_url.startsWith('http') ? item.file_url : `${item.file_url}`}
+                                  target="_blank" 
+                                  rel="noreferrer" 
+                                  className="feedback-file-attachment"
+                                >
+                                  <Paperclip size={11} />
+                                  <span>Reference Attachment</span>
+                                  <ExternalLink size={10} />
+                                </a>
+                              )}
+                            </div>
+                          </div>
+                        )
+                      ))}
+                    </div>
+                  </div>
+                );
+              })()}
+
+              {/* Revision Feedback if present */}
+              {(() => {
+                const rejTodos = parseFeedbackTodos(selectedTaskDetails.reject_todos);
+                if (!rejTodos || rejTodos.length === 0) return null;
+                return (
+                  <div className="revision-feedback-card modal-highlight">
+                    <div className="feedback-header reject">
+                      <div className="feedback-header-title">
+                        <AlertCircle size={14} className="icon-reject" />
+                        <span>Revision Requested Feedback:</span>
+                      </div>
+                      <span className="feedback-mini-badge reject">NEEDS REVISION</span>
+                    </div>
+                    <div className="feedback-items-container">
+                      {rejTodos.map((item, idx) => (
+                        <div key={idx} className="feedback-item-row">
+                          <span className="item-bullet reject">•</span>
+                          <div className="item-main-wrap">
+                            <span className="item-text">{item.text || item}</span>
+                            {item.file_url && (
+                              <a 
+                                href={item.file_url.startsWith('http') ? item.file_url : `${item.file_url}`}
+                                target="_blank" 
+                                rel="noreferrer" 
+                                className="feedback-file-attachment"
+                              >
+                                <Paperclip size={11} />
+                                <span>Reference Attachment</span>
+                                <ExternalLink size={10} />
+                              </a>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })()}
+
+              {/* Full Scope Specifications */}
+              <div className="details-section">
+                <span className="section-title">Milestone Scope & Requirements</span>
+                <div className="details-scope-box">
+                  {selectedTaskDetails.description ? (
+                    renderDescriptionWithCheckboxes(selectedTaskDetails.description)
+                  ) : (
+                    <span className="no-desc-text">No detailed requirements or checklist specified for this milestone.</span>
+                  )}
+                </div>
+              </div>
+
+              {/* Attachments */}
+              {renderAttachments(selectedTaskDetails.attachments)}
+
+              {/* Deliverable info if submitted */}
+              {selectedTaskDetails.deliverable_url && (
+                <div className="submitted-deliverable-banner">
+                  <div className="deliverable-text-group">
+                    <span className="banner-title">Submitted Package:</span>
+                    <span className="banner-file">{selectedTaskDetails.deliverable_name || 'Project Deliverable'}</span>
+                  </div>
+                  <a 
+                    href={selectedTaskDetails.deliverable_url} 
+                    target="_blank" 
+                    rel="noreferrer" 
+                    className="view-deliverable-btn"
+                  >
+                    <span>Open Link</span>
+                    <ExternalLink size={12} />
+                  </a>
+                </div>
+              )}
+            </div>
+
+            <div className="modal-footer-actions">
+              <button 
+                type="button" 
+                className="action-btn secondary-btn"
+                onClick={() => {
+                  navigate(`/projects/${selectedTaskDetails.project_id}`);
+                  setSelectedTaskDetails(null);
+                }}
+              >
+                <ExternalLink size={14} />
+                <span>Open Project Workspace</span>
+              </button>
+              <button 
+                type="button" 
+                className="action-btn primary-add-btn"
+                onClick={() => setSelectedTaskDetails(null)}
+              >
+                Done
+              </button>
+            </div>
           </div>
         </div>
       )}

@@ -38,11 +38,13 @@ export default function CreateInvoice() {
     discount: 0,
     issue_date: new Date().toISOString().split('T')[0],
     due_date: '',
-    terms_and_conditions: '1. Payment is due within the specified due date.\n2. Late payments may incur an additional 10% fee.\n3. Revisions are subject to the agreed terms.',
+    terms_and_conditions: '',
     bill_from_name: 'Adwise Labs',
     bill_from_address: 'A-205 / II Saba Ave, DHA Karachi Phase VIII Zone A Phase VIII\nDefence Housing Authority\nKarachi Sindh\n76500',
     items: []
   });
+  
+  const [includeTermsInPdf, setIncludeTermsInPdf] = useState(false);
 
   useEffect(() => {
     fetchDropdowns();
@@ -82,7 +84,7 @@ export default function CreateInvoice() {
           discount: inv.discount || 0,
           issue_date: inv.issue_date ? new Date(inv.issue_date).toISOString().split('T')[0] : '',
           due_date: inv.due_date ? new Date(inv.due_date).toISOString().split('T')[0] : '',
-          terms_and_conditions: inv.terms_and_conditions,
+          terms_and_conditions: inv.terms_and_conditions || '',
           bill_from_name: inv.bill_from_name || 'Adwise Labs',
           bill_from_address: inv.bill_from_address || 'A-205 / II Saba Ave, DHA Karachi Phase VIII Zone A Phase VIII\nDefence Housing Authority\nKarachi Sindh\n76500',
           items: inv.items.map(item => ({
@@ -274,8 +276,33 @@ export default function CreateInvoice() {
             ) : (
               <span className="invoice-badge-unpaid">UNPAID</span>
             )}
-            <div className="invoice-editor-actions print-hide">
-              <button type="button" className="btn-icon-outline" onClick={() => window.print()}>
+            <div className="invoice-editor-actions print-hide" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+              <label 
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '0.35rem',
+                  fontSize: '0.78rem',
+                  fontWeight: 600,
+                  color: includeTermsInPdf ? '#0f172a' : '#64748b',
+                  background: includeTermsInPdf ? '#eff6ff' : '#f8fafc',
+                  padding: '0.35rem 0.65rem',
+                  borderRadius: '6px',
+                  border: `1px solid ${includeTermsInPdf ? '#93c5fd' : '#cbd5e1'}`,
+                  cursor: 'pointer',
+                  userSelect: 'none'
+                }}
+                title="Toggle whether to include Terms & Conditions as Page 2 in PDF/Print"
+              >
+                <input 
+                  type="checkbox" 
+                  checked={includeTermsInPdf} 
+                  onChange={(e) => setIncludeTermsInPdf(e.target.checked)} 
+                  style={{ width: '14px', height: '14px', accentColor: '#2563eb', cursor: 'pointer' }}
+                />
+                <span>Terms Page (Page 2)</span>
+              </label>
+              <button type="button" className="btn-icon-outline" onClick={() => window.print()} title="Print / PDF">
                 <Printer size={16} />
               </button>
               <button type="button" className="btn-purple" style={{ padding: '0.5rem' }} onClick={() => setIsEditingInvNum(!isEditingInvNum)} title="Edit Invoice Number">
@@ -906,13 +933,14 @@ export default function CreateInvoice() {
             client_phone: selectedClient.whatsapp_number,
             items: formData.items,
             amount: invoiceTotal,
-            subtotal: calculateTotal(),
+            subtotal: calculateSubTotal(),
+            discount: parseFloat(formData.discount) || 0,
             totalPaid: totalPaid,
             balance: remainingBalance,
             terms_and_conditions: formData.terms_and_conditions
           };
 
-          return <InvoiceTemplate invoice={invData} />;
+          return <InvoiceTemplate invoice={invData} includeTerms={includeTermsInPdf} />;
         })()}
       </div>
     </div>

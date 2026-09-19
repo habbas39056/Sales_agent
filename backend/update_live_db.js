@@ -149,6 +149,7 @@ async function updateLiveDb() {
         \`deliverable_url\` VARCHAR(1000) DEFAULT NULL,
         \`reassign_todos\` LONGTEXT DEFAULT NULL,
         \`reject_todos\` LONGTEXT DEFAULT NULL,
+        \`deadline_assigned_at\` DATETIME NULL,
         \`created_at\` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         KEY \`project_id\` (\`project_id\`),
         KEY \`assignee_id\` (\`assignee_id\`),
@@ -175,6 +176,7 @@ async function updateLiveDb() {
         \`created_by\` INT NULL,
         \`agent_id\` INT NULL,
         \`commission_amount\` DECIMAL(10,2) DEFAULT 0.00,
+        \`discount\` DECIMAL(10,2) DEFAULT 0.00,
         \`created_at\` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         KEY \`client_id\` (\`client_id\`),
         KEY \`project_id\` (\`project_id\`),
@@ -826,6 +828,8 @@ async function updateLiveDb() {
     await addColumnIfNotExists('project_steps', 'submitted_for_review_at', 'DATETIME NULL');
     await addColumnIfNotExists('project_steps', 'is_terms_accepted', 'TINYINT(1) DEFAULT 0');
     await addColumnIfNotExists('project_steps', 'terms_accepted_at', 'DATETIME NULL');
+    await addColumnIfNotExists('project_steps', 'deadline_assigned_at', 'DATETIME NULL');
+    await safeExec("UPDATE `project_steps` SET `deadline_assigned_at` = `created_at` WHERE `deadline_assigned_at` IS NULL");
     await safeExec("ALTER TABLE `project_steps` MODIFY COLUMN `status` ENUM('Pending', 'In Progress', 'Completed', 'Pending Approval', 'Overdue', 'Submitted for Review') DEFAULT 'Pending'", 'Updated project_steps.status ENUM');
     await safeExec("ALTER TABLE `project_steps` MODIFY COLUMN `deadline_status` ENUM('Accepted', 'Pending Acceptance', 'Appealed', 'Rejected') DEFAULT 'Pending Acceptance'", 'Updated project_steps.deadline_status ENUM');
     await safeExec("UPDATE `project_steps` SET `reassign_todos` = NULL WHERE `reassign_todos` = '0' OR `reassign_todos` = 0");
@@ -835,6 +839,7 @@ async function updateLiveDb() {
     await addColumnIfNotExists('invoices', 'created_by', 'INT NULL');
     await addColumnIfNotExists('invoices', 'agent_id', 'INT NULL');
     await addColumnIfNotExists('invoices', 'commission_amount', 'DECIMAL(10,2) DEFAULT 0.00');
+    await addColumnIfNotExists('invoices', 'discount', 'DECIMAL(10,2) DEFAULT 0.00');
     await addColumnIfNotExists('invoices', 'project_id', 'INT NULL');
     await addColumnIfNotExists('invoices', 'terms_and_conditions', 'TEXT NULL');
 

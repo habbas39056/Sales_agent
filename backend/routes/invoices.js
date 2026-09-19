@@ -96,8 +96,8 @@ router.post('/', async (req, res) => {
 
     // Create Invoice
     const [invoiceResult] = await connection.query(
-      'INSERT INTO invoices (invoice_number, amount, balance, client_id, project_id, agent_id, commission_amount, issue_date, due_date, terms_and_conditions, bill_from_name, bill_from_address, created_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-      [finalInvoiceNumber, totalAmount, totalAmount, client_id, cleanProjectId, cleanAgentId, commission_amount || 0, issue_date, due_date, terms_and_conditions, bill_from_name || 'Adwise Labs', bill_from_address || '', cleanCreatedBy]
+      'INSERT INTO invoices (invoice_number, amount, balance, client_id, project_id, agent_id, commission_amount, issue_date, due_date, terms_and_conditions, bill_from_name, bill_from_address, created_by, discount) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+      [finalInvoiceNumber, totalAmount, totalAmount, client_id, cleanProjectId, cleanAgentId, commission_amount || 0, issue_date, due_date, terms_and_conditions, bill_from_name || 'Adwise Labs', bill_from_address || '', cleanCreatedBy, finalDiscount]
     );
     const invoiceId = invoiceResult.insertId;
 
@@ -480,8 +480,8 @@ router.put('/:id', async (req, res) => {
     }
 
     await connection.query(
-      'UPDATE invoices SET amount = ?, balance = ?, client_id = ?, project_id = ?, agent_id = ?, commission_amount = ?, issue_date = ?, due_date = ?, terms_and_conditions = ?, bill_from_name = ?, bill_from_address = ?, status = ? WHERE id = ?',
-      [totalAmount, newBalance, targetClientId, targetProjectId, targetAgentId, targetCommissionAmount, targetIssueDate, targetDueDate, targetTerms, targetBillName, targetBillAddress, status, invoiceId]
+      'UPDATE invoices SET amount = ?, balance = ?, client_id = ?, project_id = ?, agent_id = ?, commission_amount = ?, issue_date = ?, due_date = ?, terms_and_conditions = ?, bill_from_name = ?, bill_from_address = ?, status = ?, discount = ? WHERE id = ?',
+      [totalAmount, newBalance, targetClientId, targetProjectId, targetAgentId, targetCommissionAmount, targetIssueDate, targetDueDate, targetTerms, targetBillName, targetBillAddress, status, finalDiscount, invoiceId]
     );
 
     await connection.query('DELETE FROM invoice_items WHERE invoice_id = ?', [invoiceId]);

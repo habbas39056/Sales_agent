@@ -304,6 +304,21 @@
   border-bottom: 1px solid #e2e8f0;
 }
 
+.inv-tpl-summary-table tr.discount-row td {
+  padding: 0.35rem 0;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.inv-tpl-summary-table tr.discount-row td.label {
+  color: #16a34a;
+  font-weight: 600;
+}
+
+.inv-tpl-summary-table tr.discount-row td.value.discount-value {
+  color: #16a34a;
+  font-weight: 700;
+}
+
 .inv-tpl-summary-table tr.total-row td {
   padding-top: 0.35rem;
   font-size: 0.9rem;
@@ -518,7 +533,7 @@
     overflow: visible !important;
   }
 
-  .inv-tpl-page-1 {
+  .has-terms .inv-tpl-page-1 {
     display: block !important;
     min-height: 185mm !important;
     box-sizing: border-box !important;
@@ -531,10 +546,21 @@
     clear: both !important;
   }
 
+  .no-terms .inv-tpl-page-1 {
+    display: block !important;
+    min-height: auto !important;
+    box-sizing: border-box !important;
+    page-break-after: auto !important;
+    break-after: auto !important;
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+    margin-bottom: 0 !important;
+    padding-bottom: 0 !important;
+    clear: both !important;
+  }
+
   .inv-tpl-credits-box {
     margin-top: 1rem !important;
-    page-break-after: always !important;
-    break-after: page !important;
     margin-bottom: 0 !important;
     clear: both !important;
   }

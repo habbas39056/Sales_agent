@@ -57,6 +57,7 @@ export default function ClientPortal() {
   const [expandedRevisions, setExpandedRevisions] = useState({});
   const [expandedComments, setExpandedComments] = useState({});
   const [termsAndConditions, setTermsAndConditions] = useState('');
+  const [includeTermsInPdf, setIncludeTermsInPdf] = useState(false);
   
   // File Upload State
   const [isFileUploadModalOpen, setIsFileUploadModalOpen] = useState(false);
@@ -747,10 +748,10 @@ export default function ClientPortal() {
                               </span>
                             </td>
                             <td style={{ padding: '1.25rem 1.5rem', textAlign: 'right', display: 'flex', gap: '0.5rem', justifyContent: 'flex-end' }}>
-                              <button className="btn-icon view-btn" style={{background:'none', border:'none', cursor:'pointer', color: '#94a3b8'}} onClick={() => setPreviewInvoice(inv)} title="View Invoice">
+                              <button className="btn-icon view-btn" style={{background:'none', border:'none', cursor:'pointer', color: '#94a3b8'}} onClick={() => { setPreviewInvoice(inv); setIncludeTermsInPdf(!!(inv.terms_and_conditions && inv.terms_and_conditions.trim())); }} title="View Invoice">
                                 <Eye size={18} />
                               </button>
-                              <button className="btn-icon" style={{background:'none', border:'none', cursor:'pointer', color: '#3b82f6'}} onClick={() => { setPreviewInvoice(inv); setTimeout(() => window.print(), 100); }} title="Download PDF">
+                              <button className="btn-icon" style={{background:'none', border:'none', cursor:'pointer', color: '#3b82f6'}} onClick={() => { setPreviewInvoice(inv); setIncludeTermsInPdf(!!(inv.terms_and_conditions && inv.terms_and_conditions.trim())); setTimeout(() => window.print(), 100); }} title="Download PDF">
                                 <Download size={18} />
                               </button>
                             </td>
@@ -1371,14 +1372,40 @@ export default function ClientPortal() {
           <div className="modal-content preview-modal">
             <div className="modal-header print-hide" style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid var(--border-color)', paddingBottom: '1rem', marginBottom: '1.5rem'}}>
               <h2 style={{margin: 0}}>Invoice Preview</h2>
-              <div style={{display: 'flex', gap: '1rem'}}>
+              <div style={{display: 'flex', alignItems: 'center', gap: '0.75rem'}}>
+                <label 
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '0.45rem',
+                    fontSize: '0.82rem',
+                    fontWeight: 600,
+                    color: includeTermsInPdf ? '#0f172a' : '#64748b',
+                    background: includeTermsInPdf ? '#eff6ff' : '#f8fafc',
+                    padding: '0.45rem 0.8rem',
+                    borderRadius: '6px',
+                    border: `1px solid ${includeTermsInPdf ? '#93c5fd' : '#cbd5e1'}`,
+                    cursor: 'pointer',
+                    userSelect: 'none'
+                  }}
+                  title="Toggle whether to include Terms & Conditions as Page 2"
+                >
+                  <input 
+                    type="checkbox" 
+                    checked={includeTermsInPdf} 
+                    onChange={(e) => setIncludeTermsInPdf(e.target.checked)} 
+                    style={{ width: '15px', height: '15px', accentColor: '#2563eb', cursor: 'pointer' }}
+                  />
+                  <span>Terms Page (Page 2)</span>
+                </label>
+
                 <button className="btn" style={{backgroundColor: '#e2e8f0', color: '#1e293b', display: 'flex', alignItems: 'center', gap: '0.5rem'}} onClick={() => window.print()}><Printer size={18} /> Print</button>
                 <button className="btn" style={{backgroundColor: '#e2e8f0', color: '#1e293b', padding: '0.5rem'}} onClick={() => setPreviewInvoice(null)}><X size={20} /></button>
               </div>
             </div>
             
             {/* NEW MODERN INVOICE TEMPLATE */}
-            <InvoiceTemplate invoice={{ ...previewInvoice, terms_and_conditions: termsAndConditions }} />
+            <InvoiceTemplate invoice={previewInvoice} includeTerms={includeTermsInPdf} />
           </div>
         </div>
       )}

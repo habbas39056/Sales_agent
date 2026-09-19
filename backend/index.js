@@ -54,10 +54,12 @@ app.use((req, res) => {
 });
 
 const updateLiveDb = require('./update_live_db');
+const { checkAndAutoAcceptDeadlines } = require('./utils/deadlineAutoAccept');
 
 const startDeadlineAutoAccepter = () => {
   const checkAndAutoAccept = async () => {
     try {
+      // 1. Deliverables client review acceptance after 2 hours
       const [steps] = await db.query(`
         SELECT ps.*, p.title AS project_title, p.pm_id, p.production_id, p.client_id
         FROM project_steps ps
@@ -75,13 +77,16 @@ const startDeadlineAutoAccepter = () => {
           WHERE id = ?
         `, [step.id]);
       }
+
+      // 2. Project milestone step deadline auto-acceptance after 2 hours
+      await checkAndAutoAcceptDeadlines();
     } catch (err) {
       console.error('Error in deadline auto accepter:', err);
     }
   };
 
-  setTimeout(checkAndAutoAccept, 5000);
-  setInterval(checkAndAutoAccept, 5 * 60 * 1000);
+  setTimeout(checkAndAutoAccept, 3000);
+  setInterval(checkAndAutoAccept, 60 * 1000); // Check every 60 seconds
 };
 
 const startFuturePayablesNotifier = () => {
