@@ -149,11 +149,78 @@ router.put('/:id', authMiddleware, async (req, res) => {
 // Delete a team member
 router.delete('/:id', authMiddleware, async (req, res) => {
   const userId = req.params.id;
+
+  // Prevent self-deletion of currently logged in user
+  if (req.user && String(req.user.id) === String(userId)) {
+    return res.status(400).json({ error: 'You cannot delete your own logged-in account.' });
+  }
+
+  const connection = await db.getConnection();
   try {
-    await db.query('DELETE FROM users WHERE id = ?', [userId]);
+    await connection.beginTransaction();
+
+    // Check if user exists
+    const [userRows] = await connection.query('SELECT id, role, name FROM users WHERE id = ?', [userId]);
+    if (userRows.length === 0) {
+      await connection.rollback();
+      connection.release();
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    // 1. Unassign user from projects
+    await connection.query('UPDATE projects SET pm_id = NULL WHERE pm_id = ?', [userId]);
+    await connection.query('UPDATE projects SET production_id = NULL WHERE production_id = ?', [userId]);
+    await connection.query('UPDATE projects SET created_by = NULL WHERE created_by = ?', [userId]);
+
+    // 2. Unassign user from project steps
+    await connection.query('UPDATE project_steps SET assignee_id = NULL WHERE assignee_id = ?', [userId]);
+    await connection.query('UPDATE project_steps SET appealed_by = NULL WHERE appealed_by = ?', [userId]);
+
+    // 3. Delete user commissions
+    await connection.query('DELETE FROM commissions WHERE user_id = ?', [userId]);
+
+    // 4. Update deliverables (nullify submitted_by)
+    await connection.query('UPDATE deliverables SET submitted_by = NULL WHERE submitted_by = ?', [userId]);
+
+    // 5. Unassign user from leads & lead activities
+    await connection.query('UPDATE leads SET assigned_to = NULL WHERE assigned_to = ?', [userId]);
+    await connection.query('UPDATE leads SET created_by = NULL WHERE created_by = ?', [userId]);
+    await connection.query('UPDATE lead_activities SET user_id = NULL WHERE user_id = ?', [userId]);
+
+    // 6. Nullify in clients, invoices, quotations, client_notes, expenses, future_payables, recovery_timeline, step_activity
+    await connection.query('UPDATE clients SET user_id = NULL WHERE user_id = ?', [userId]);
+    await connection.query('UPDATE clients SET created_by = NULL WHERE created_by = ?', [userId]);
+    await connection.query('UPDATE invoices SET agent_id = NULL WHERE agent_id = ?', [userId]);
+    await connection.query('UPDATE invoices SET created_by = NULL WHERE created_by = ?', [userId]);
+    await connection.query('UPDATE quotations SET created_by = NULL WHERE created_by = ?', [userId]);
+    await connection.query('UPDATE client_notes SET created_by = NULL WHERE created_by = ?', [userId]);
+    await connection.query('UPDATE expenses SET created_by = NULL WHERE created_by = ?', [userId]);
+    await connection.query('UPDATE future_payables SET created_by = NULL WHERE created_by = ?', [userId]);
+    await connection.query('UPDATE recovery_timeline SET user_id = NULL WHERE user_id = ?', [userId]);
+    await connection.query('UPDATE step_activity SET user_id = NULL WHERE user_id = ?', [userId]);
+
+    // 7. Delete records strictly belonging to this user
+    await connection.query('DELETE FROM project_members WHERE user_id = ?', [userId]);
+    await connection.query('DELETE FROM notifications WHERE user_id = ?', [userId]);
+    await connection.query('DELETE FROM payrolls WHERE user_id = ?', [userId]);
+    await connection.query('DELETE FROM salary_advances WHERE user_id = ?', [userId]);
+    await connection.query('DELETE FROM salary_penalties WHERE user_id = ?', [userId]);
+    await connection.query('DELETE FROM step_comments WHERE user_id = ?', [userId]);
+    await connection.query('DELETE FROM step_inhouse_chats WHERE user_id = ?', [userId]);
+    await connection.query('DELETE FROM notes WHERE created_by = ?', [userId]);
+    await connection.query('DELETE FROM recovery_followups WHERE user_id = ?', [userId]);
+
+    // 8. Finally delete the user record
+    await connection.query('DELETE FROM users WHERE id = ?', [userId]);
+
+    await connection.commit();
     res.json({ message: 'User deleted successfully' });
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    await connection.rollback();
+    console.error('Failed to delete user:', error);
+    res.status(500).json({ error: error.message || 'Failed to delete user' });
+  } finally {
+    connection.release();
   }
 });
 
