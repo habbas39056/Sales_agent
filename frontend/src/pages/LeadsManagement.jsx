@@ -22,8 +22,6 @@ import {
   Edit3, 
   Trash2, 
   UserPlus, 
-  Columns, 
-  List, 
   ArrowRight,
   ChevronRight,
   Send,
@@ -88,7 +86,6 @@ export default function LeadsManagement() {
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [viewMode, setViewMode] = useState('board'); // 'board' (Kanban) or 'table'
 
   // Filters & Pagination State
   const [search, setSearch] = useState('');
@@ -459,8 +456,73 @@ export default function LeadsManagement() {
     }
   };
 
-  const startCallingSession = () => {
-    if (!leads || leads.length === 0) {
+  const isLostOrConverted = (lead) => {
+    if (!lead) return true;
+
+    // 1. Linked to a client (already converted to active Client)
+    if (lead.client_id !== null && lead.client_id !== undefined && lead.client_id !== '' && lead.client_id !== 0) {
+      return true;
+    }
+    if (lead.client_name || lead.client_business) {
+      return true;
+    }
+
+    const st = String(lead.status || '').trim().toLowerCase();
+
+    // 2. Won / Converted stages
+    if (
+      st === 'won' ||
+      st === 'converted' ||
+      st === 'client' ||
+      st.includes('won') ||
+      st.includes('convert') ||
+      st.includes('client')
+    ) {
+      return true;
+    }
+
+    // 3. Lost / Inactive / Dead stages
+    if (
+      st === 'lost' ||
+      st === 'not interested' ||
+      st === 'dead' ||
+      st === 'declined' ||
+      st === 'cancelled' ||
+      st === 'canceled' ||
+      st === 'disqualified' ||
+      st.includes('lost') ||
+      st.includes('dead') ||
+      st.includes('not interest') ||
+      st.includes('declined') ||
+      st.includes('cancel') ||
+      st.includes('disqualif')
+    ) {
+      return true;
+    }
+
+    return false;
+  };
+
+  const startCallingSession = async () => {
+    let sourceLeads = leads;
+    try {
+      const userStr = localStorage.getItem('user');
+      const user = userStr ? JSON.parse(userStr) : null;
+      const params = {};
+      if (user) {
+        params.user_id = user.id;
+        params.role = user.role;
+      }
+      // Fetch latest leads without filters so all actionable leads are evaluated
+      const res = await axios.get('/api/leads', { params });
+      if (res.data?.leads) {
+        sourceLeads = res.data.leads;
+      }
+    } catch (fetchErr) {
+      console.warn('Could not refresh leads for session, falling back to local state:', fetchErr);
+    }
+
+    if (!sourceLeads || sourceLeads.length === 0) {
       return showAlert('error', 'No leads available for calling session.');
     }
 
@@ -471,16 +533,16 @@ export default function LeadsManagement() {
     const todayStr = `${year}-${month}-${day}`;
 
     // Filter strictly for active leads due today, overdue (next_followup <= today), or unscheduled leads.
-    // Future follow-up dates (next_followup > today) are strictly EXCLUDED!
-    const queue = leads.filter(l => {
-      if (l.status === 'Won' || l.status === 'Lost') return false;
+    // Lost & Converted leads and future follow-ups (next_followup > today) are STRICTLY EXCLUDED!
+    const queue = sourceLeads.filter(l => {
+      if (isLostOrConverted(l)) return false;
       if (!l.next_followup_date) return true; // Unscheduled lead
       const fDate = l.next_followup_date.slice(0, 10);
       return fDate <= todayStr; // Due today or overdue
     });
 
     if (queue.length === 0) {
-      return showAlert('error', 'No due or overdue leads found for today! Future follow-ups are excluded.');
+      return showAlert('error', 'No due or overdue leads found for today! Converted and Lost leads are excluded.');
     }
 
     setSessionQueue(queue);
@@ -493,10 +555,11 @@ export default function LeadsManagement() {
     loadSessionLeadDetails(first.id);
   };
 
-  const goToSessionIndex = (newIdx) => {
-    if (newIdx < 0 || newIdx >= sessionQueue.length) return;
+  const goToSessionIndex = (newIdx, queue = sessionQueue) => {
+    if (!queue || queue.length === 0) return;
+    if (newIdx < 0 || newIdx >= queue.length) return;
     setSessionIndex(newIdx);
-    const lead = sessionQueue[newIdx];
+    const lead = queue[newIdx];
     setSessionStatus(lead.status || (stages[0]?.id || 'New Lead'));
     setSessionNextFollowup(lead.next_followup_date ? lead.next_followup_date.substring(0, 16) : '');
     setSessionRemarks('');
@@ -531,17 +594,74 @@ export default function LeadsManagement() {
 
       showAlert('success', `Logged call for ${currentLead.contact_name}!`);
 
-      if (sessionIndex < sessionQueue.length - 1) {
-        goToSessionIndex(sessionIndex + 1);
+      // 3. If lead was updated to Lost or Won/Converted, immediately remove it from queue
+      const isNowLostOrConverted = isLostOrConverted({
+        ...currentLead,
+        status: sessionStatus
+      });
+
+      if (isNowLostOrConverted) {
+        const remainingQueue = sessionQueue.filter(l => l.id !== currentLead.id);
+        if (remainingQueue.length === 0) {
+          showAlert('success', `🎉 Session Complete! All active leads processed!`);
+          setIsSessionModalOpen(false);
+          loadLeads();
+        } else {
+          const nextIdx = sessionIndex >= remainingQueue.length ? remainingQueue.length - 1 : sessionIndex;
+          setSessionQueue(remainingQueue);
+          goToSessionIndex(nextIdx, remainingQueue);
+        }
       } else {
-        showAlert('success', `🎉 Session Complete! Worked through all ${sessionQueue.length} leads in today's queue!`);
-        setIsSessionModalOpen(false);
-        loadLeads();
+        currentLead.status = sessionStatus;
+        currentLead.next_followup_date = sessionNextFollowup || null;
+        currentLead.notes = sessionRemarks.trim();
+
+        if (sessionIndex < sessionQueue.length - 1) {
+          goToSessionIndex(sessionIndex + 1, sessionQueue);
+        } else {
+          showAlert('success', `🎉 Session Complete! Worked through all ${sessionQueue.length} leads in today's queue!`);
+          setIsSessionModalOpen(false);
+          loadLeads();
+        }
       }
     } catch (err) {
       showAlert('error', 'Failed to save interaction. Please try again.');
     } finally {
       setSessionSaving(false);
+    }
+  };
+
+  const handleConvertLeadInSession = async (leadId) => {
+    const currentLead = sessionQueue.find(l => l.id === leadId) || sessionQueue[sessionIndex];
+    if (!currentLead) return;
+    
+    const existingEmail = currentLead.email || '';
+    const userEmail = window.prompt(
+      `Convert lead "${currentLead.contact_name || ''}" to Client?\n\nEnter/confirm Client Email Address:`,
+      existingEmail
+    );
+
+    if (userEmail === null) return; // User cancelled
+
+    try {
+      const res = await axios.post(`/api/leads/${leadId}/convert`, {
+        email: userEmail.trim()
+      });
+      showAlert('success', res.data.message || 'Lead converted to Client!');
+      loadLeads();
+
+      // Immediately remove the converted lead from the calling session queue
+      const remainingQueue = sessionQueue.filter(l => l.id !== leadId);
+      if (remainingQueue.length === 0) {
+        showAlert('success', '🎉 Session Complete! All active leads processed!');
+        setIsSessionModalOpen(false);
+      } else {
+        const nextIdx = sessionIndex >= remainingQueue.length ? remainingQueue.length - 1 : sessionIndex;
+        setSessionQueue(remainingQueue);
+        goToSessionIndex(nextIdx, remainingQueue);
+      }
+    } catch (err) {
+      showAlert('error', err.response?.data?.error || 'Failed to convert lead');
     }
   };
 
@@ -867,23 +987,6 @@ export default function LeadsManagement() {
               );
             })()}
           </div>
-
-          <div className="view-toggle-box">
-            <button 
-              className={`toggle-btn ${viewMode === 'board' ? 'active' : ''}`} 
-              onClick={() => setViewMode('board')}
-              title="Pipeline Board View"
-            >
-              <Columns size={16} /> Board
-            </button>
-            <button 
-              className={`toggle-btn ${viewMode === 'table' ? 'active' : ''}`} 
-              onClick={() => setViewMode('table')}
-              title="Data Table View"
-            >
-              <List size={16} /> List
-            </button>
-          </div>
         </div>
       </div>
 
@@ -901,106 +1004,6 @@ export default function LeadsManagement() {
           <button className="btn-primary" onClick={openCreateModal} style={{ marginTop: '1rem' }}>
             <Plus size={16} /> Create Lead
           </button>
-        </div>
-      ) : viewMode === 'board' ? (
-        /* KANBAN BOARD VIEW */
-        <div className="kanban-pipeline-grid">
-          {stages.map(stage => {
-            const stageLeads = leads.filter(l => l.status === stage.id);
-            const totalStageValue = stageLeads.reduce((acc, curr) => acc + Number(curr.estimated_value || 0), 0);
-
-            return (
-              <div key={stage.id} className="kanban-column" style={{ borderColor: stage.color }}>
-                <div className="kanban-column-header" style={{ backgroundColor: stage.bg || '#f8fafc' }}>
-                  <div className="header-left">
-                    <span className="stage-dot" style={{ backgroundColor: stage.color }} />
-                    <span className="stage-title">{stage.name}</span>
-                    <span className="stage-count">{stageLeads.length}</span>
-                  </div>
-                  <span className="stage-value">{formatCurrency(totalStageValue)}</span>
-                </div>
-
-                <div className="kanban-cards-container">
-                  {stageLeads.length === 0 ? (
-                    <div className="empty-column-placeholder">
-                      <span>No leads</span>
-                    </div>
-                  ) : (
-                    stageLeads.map(lead => (
-                      <div key={lead.id} className="lead-card" onClick={() => openLeadActivities(lead.id)}>
-                        <div className="lead-card-top">
-                          <span className="lead-number">{lead.lead_number || `#${lead.id}`}</span>
-                          <span className="lead-source-tag"><Tag size={12} /> {lead.source}</span>
-                        </div>
-
-                        <h4 className="lead-title">{lead.title}</h4>
-
-                        <div className="lead-contact-info">
-                          <span className="contact-name"><User size={13} /> {lead.contact_name}</span>
-                          {lead.company_name && (
-                            <span className="company-name"><Building size={13} /> {lead.company_name}</span>
-                          )}
-                          {(lead.phone || lead.whatsapp_number) && (
-                            <span className="company-name"><Phone size={13} /> {lead.phone || lead.whatsapp_number}</span>
-                          )}
-                        </div>
-
-                        <div className="lead-card-meta">
-                          <span className="deal-value">{formatCurrency(lead.estimated_value)}</span>
-                        </div>
-
-                        {lead.next_followup_date && (
-                          <div className="followup-alert-row">
-                            <Clock size={12} />
-                            <span>Follow up: {new Date(lead.next_followup_date).toLocaleDateString()}</span>
-                          </div>
-                        )}
-
-                        <div className="lead-card-footer" onClick={(e) => e.stopPropagation()}>
-                          <div className="assigned-user">
-                            {lead.assigned_avatar ? (
-                              <img src={lead.assigned_avatar} alt={lead.assigned_name} className="user-avatar" />
-                            ) : (
-                              <div className="user-initials">
-                                {lead.assigned_name ? lead.assigned_name.charAt(0).toUpperCase() : '?'}
-                              </div>
-                            )}
-                            <span className="user-name">{lead.assigned_name || 'Unassigned'}</span>
-                          </div>
-
-                          <div className="card-actions">
-                            <button 
-                              className="action-btn text-blue" 
-                              title="View Full Lead Details"
-                              onClick={() => openFullLeadDetails(lead.id)}
-                            >
-                              <Eye size={14} />
-                            </button>
-                            {lead.status !== 'Won' && (
-                              <button 
-                                className="action-btn text-emerald" 
-                                title="Convert to Client"
-                                onClick={() => handleConvertLeadToClient(lead.id)}
-                              >
-                                <UserPlus size={14} />
-                              </button>
-                            )}
-                            <button 
-                              className="action-btn" 
-                              title="Edit Lead" 
-                              onClick={() => openEditModal(lead)}
-                            >
-                              <Edit3 size={14} />
-                            </button>
-                          </div>
-                        </div>
-                      </div>
-                    ))
-                  )}
-                </div>
-              </div>
-            );
-          })}
         </div>
       ) : (
         /* TABLE LIST VIEW WITH CUSTOM COLUMNS */
@@ -1122,8 +1125,8 @@ export default function LeadsManagement() {
         </div>
       )}
 
-      {/* PAGINATION BAR FOR LIST VIEW */}
-      {viewMode === 'table' && leads.length > 0 && (
+      {/* PAGINATION BAR */}
+      {leads.length > 0 && (
         <div style={{ marginTop: '1.25rem' }}>
           <Pagination 
             currentPage={currentPage}
@@ -1418,7 +1421,7 @@ export default function LeadsManagement() {
             <div className="pipeline-settings-body">
               {settingsActiveTab === 'stages' ? (
                 <div>
-                  <p className="settings-hint">Add, rename, or remove pipeline stages for your lead Kanban board.</p>
+                  <p className="settings-hint">Add, rename, or remove pipeline stages for your sales leads.</p>
                   
                   {/* Add Stage Form */}
                   <div className="add-item-bar">
@@ -1641,6 +1644,7 @@ export default function LeadsManagement() {
       {/* START CALLING SESSION MODAL (DESIGN MATCHING REFERENCE SPEC) */}
       {isSessionModalOpen && sessionQueue.length > 0 && (() => {
         const currentLead = sessionQueue[sessionIndex];
+        if (!currentLead) return null;
         const matchedStage = stages.find(s => s.id === currentLead.status) || { color: '#3b82f6', bg: '#eff6ff' };
         const rawPhone = currentLead.phone || currentLead.whatsapp_number || '';
         const phoneClean = rawPhone.replace(/[^0-9]/g, '');
@@ -1660,6 +1664,17 @@ export default function LeadsManagement() {
                   <span className="session-status-badge" style={{ backgroundColor: matchedStage.bg || '#eff6ff', color: matchedStage.color || '#2563eb', border: `1px solid ${matchedStage.color || '#2563eb'}`, padding: '0.35rem 0.85rem', borderRadius: '20px', fontWeight: 700, fontSize: '0.82rem' }}>
                     {currentLead.status}
                   </span>
+                  {!currentLead.client_id && (
+                    <button 
+                      type="button" 
+                      className="btn-primary" 
+                      style={{ backgroundColor: '#059669', padding: '0.35rem 0.75rem', fontSize: '0.8rem', borderRadius: '8px', display: 'inline-flex', alignItems: 'center', gap: '4px' }}
+                      onClick={() => handleConvertLeadInSession(currentLead.id)}
+                      title="Convert this lead to an active Client"
+                    >
+                      <UserPlus size={14} /> Convert
+                    </button>
+                  )}
                   <button className="close-btn" onClick={() => { setIsSessionModalOpen(false); loadLeads(); }}>&times;</button>
                 </div>
               </div>

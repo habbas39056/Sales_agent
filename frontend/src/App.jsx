@@ -423,7 +423,7 @@ function AppContent() {
                         </Link>
                       </li>
                     )}
-                    {canAccessDeadlinesApproval && (user?.role === 'Admin' || user?.role === 'Product Manager' || user?.role === 'PM' || user?.role === 'Project Manager') && (
+                    {canAccessDeadlinesApproval && (user?.role === 'Admin' || user?.role === 'Product Manager' || user?.role === 'PM' || user?.role === 'Project Manager' || user?.role === 'Production' || user?.role === 'Production Manager') && (
                       <li>
                         <Link 
                           to="/deadlines?tab=approval" 

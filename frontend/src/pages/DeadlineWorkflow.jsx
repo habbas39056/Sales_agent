@@ -32,7 +32,7 @@ export default function DeadlineWorkflow() {
   const navigate = useNavigate();
   const location = useLocation();
   const currentUser = JSON.parse(localStorage.getItem('user') || '{}');
-  const isManagerRole = ['Admin', 'Product Manager', 'PM', 'Project Manager', 'Production Manager'].includes(currentUser.role);
+  const isManagerRole = ['Admin', 'Product Manager', 'PM', 'Project Manager', 'Production', 'Production Manager'].includes(currentUser.role);
 
   // Sync tab with URL search parameter
   useEffect(() => {

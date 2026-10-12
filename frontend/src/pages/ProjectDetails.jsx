@@ -323,6 +323,16 @@ export default function ProjectDetails() {
     }
   };
 
+  const handleUpdateProjectStatus = async (newStatus) => {
+    try {
+      await axios.patch(`/api/projects/${id}/status`, { status: newStatus });
+      fetchProjectDetails();
+    } catch (err) {
+      console.error('Failed to update project status', err);
+      alert('Failed to update project status: ' + (err.response?.data?.error || err.message));
+    }
+  };
+
   const handleReassignSubmit = async (e) => {
     e.preventDefault();
     if (!newDeadline) {
@@ -515,35 +525,67 @@ export default function ProjectDetails() {
               <div className="progress-bar-fill-clean" style={{ width: `${percent}%` }}></div>
             </div>
             
-            {project.status !== 'Completed' && project.status !== 'Commission Released' && currentUser && (currentUser.role === 'Admin' || currentUser.role === 'Project Manager' || currentUser.role === 'PM' || currentUser.role === 'Product Manager') && (
-              <button 
-                onClick={handleApproveProject}
-                disabled={percent !== 100}
-                title={percent !== 100 ? "All steps must be completed before marking project complete." : "Mark Project Complete"}
-                style={{
-                  marginTop: '1rem',
-                  width: '100%',
-                  padding: '0.6rem 1rem',
-                  backgroundColor: percent === 100 ? '#10b981' : '#94a3b8',
-                  color: 'white',
-                  border: 'none',
-                  borderRadius: '8px',
-                  fontWeight: '700',
-                  cursor: percent === 100 ? 'pointer' : 'not-allowed',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  gap: '0.5rem',
-                  boxShadow: percent === 100 ? '0 4px 6px -1px rgba(16, 185, 129, 0.2)' : 'none',
-                  opacity: percent === 100 ? 1 : 0.7
-                }}
-              >
-                <CheckCircle size={16} /> Mark Project Complete
-              </button>
-            )}
-            {(project.status === 'Completed' || project.status === 'Commission Released') && (
-              <div style={{ marginTop: '1rem', textAlign: 'center', color: '#10b981', fontWeight: '700', fontSize: '0.85rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.35rem' }}>
-                <CheckCircle size={15} /> Project Completed
+            {currentUser && (currentUser.role === 'Admin' || currentUser.role === 'Project Manager' || currentUser.role === 'PM' || currentUser.role === 'Product Manager') ? (
+              <div style={{ marginTop: '1rem', display: 'flex', flexDirection: 'column', gap: '0.5rem', width: '100%' }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: '0.82rem', fontWeight: 700, color: '#475569' }}>
+                  <span>Manual Status:</span>
+                  <select
+                    value={project.status || 'Assigned'}
+                    onChange={(e) => handleUpdateProjectStatus(e.target.value)}
+                    style={{
+                      padding: '0.4rem 0.65rem',
+                      borderRadius: '8px',
+                      border: '1px solid #cbd5e1',
+                      fontWeight: 700,
+                      fontSize: '0.82rem',
+                      backgroundColor: project.status === 'Completed' ? '#dcfce7' : project.status === 'In Progress' ? '#eff6ff' : '#f8fafc',
+                      color: project.status === 'Completed' ? '#16a34a' : project.status === 'In Progress' ? '#2563eb' : '#334155',
+                      cursor: 'pointer',
+                      outline: 'none'
+                    }}
+                  >
+                    <option value="Assigned">Assigned</option>
+                    <option value="In Progress">In Progress</option>
+                    <option value="Completed">Completed</option>
+                    <option value="On Hold">On Hold</option>
+                    <option value="Pending">Pending</option>
+                    <option value="Submitted for Review">Submitted for Review</option>
+                    <option value="Revision Requested">Revision Requested</option>
+                    <option value="Deadline Confirmed">Deadline Confirmed</option>
+                  </select>
+                </div>
+                {project.status !== 'Completed' ? (
+                  <button 
+                    type="button"
+                    onClick={() => handleUpdateProjectStatus('Completed')}
+                    style={{
+                      width: '100%',
+                      padding: '0.55rem 1rem',
+                      backgroundColor: '#10b981',
+                      color: 'white',
+                      border: 'none',
+                      borderRadius: '8px',
+                      fontWeight: '700',
+                      fontSize: '0.82rem',
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: '0.4rem',
+                      boxShadow: '0 4px 6px -1px rgba(16, 185, 129, 0.2)'
+                    }}
+                  >
+                    <CheckCircle size={15} /> Set as Completed
+                  </button>
+                ) : (
+                  <div style={{ textAlign: 'center', color: '#10b981', fontWeight: '700', fontSize: '0.82rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.35rem' }}>
+                    <CheckCircle size={15} /> Project Marked as Completed
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div style={{ marginTop: '1rem', textAlign: 'center', fontWeight: '700', fontSize: '0.85rem', color: project.status === 'Completed' ? '#10b981' : '#2563eb' }}>
+                Status: {project.status || 'Assigned'}
               </div>
             )}
 

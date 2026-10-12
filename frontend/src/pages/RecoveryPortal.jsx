@@ -588,7 +588,19 @@ export default function RecoveryPortal() {
                 {currentCases.map(c => {
                   const isHighVal = Number(c.outstanding_amount) >= 100000;
                   return (
-                    <tr key={c.id} className="rec-table-row" onClick={() => navigate(c.client_id ? `/clients/${c.client_id}` : `/recovery/${c.id}`)}>
+                    <tr 
+                      key={c.id} 
+                      className="rec-table-row clickable-recovery-row" 
+                      title="Click to view Complete Recovery Dashboard"
+                      style={{ cursor: 'pointer' }}
+                      onClick={(e) => {
+                        if (e.ctrlKey || e.metaKey) {
+                          window.open(`/recovery/${c.id}`, '_blank');
+                        } else {
+                          navigate(`/recovery/${c.id}`);
+                        }
+                      }}
+                    >
                       {/* Case & Invoice */}
                       <td>
                         <div className="case-id-block">
@@ -668,6 +680,17 @@ export default function RecoveryPortal() {
                       {/* Actions */}
                       <td style={{ textAlign: 'center' }} onClick={(e) => e.stopPropagation()}>
                         <div className="row-actions">
+                          <button 
+                            className="btn-action view-dashboard" 
+                            title="Open Client Recovery Dashboard"
+                            style={{ background: '#eff6ff', color: '#2563eb', border: 'none', padding: '5px 8px', borderRadius: '6px', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              navigate(`/recovery/${c.id}`);
+                            }}
+                          >
+                            <ExternalLink size={14} />
+                          </button>
                           {c.last_followup_date ? (
                             <button 
                               className="btn-action view-details" 

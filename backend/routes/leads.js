@@ -81,10 +81,10 @@ router.get('/', async (req, res) => {
       SELECT 
         COUNT(*) as total_leads,
         COALESCE(SUM(estimated_value), 0) as total_pipeline_value,
-        COALESCE(SUM(CASE WHEN status = 'Won' THEN 1 ELSE 0 END), 0) as won_count,
-        COALESCE(SUM(CASE WHEN status = 'Won' THEN estimated_value ELSE 0 END), 0) as won_value,
-        COALESCE(SUM(CASE WHEN status IN ('New Lead', 'Contacted', 'Qualified', 'Proposal Sent', 'Negotiation') THEN 1 ELSE 0 END), 0) as active_count,
-        COALESCE(SUM(CASE WHEN next_followup_date IS NOT NULL AND DATE(next_followup_date) <= CURDATE() AND status NOT IN ('Won', 'Lost') THEN 1 ELSE 0 END), 0) as followups_due
+        COALESCE(SUM(CASE WHEN (status = 'Won' OR status = 'Converted' OR client_id IS NOT NULL OR LOWER(status) LIKE '%won%' OR LOWER(status) LIKE '%convert%') THEN 1 ELSE 0 END), 0) as won_count,
+        COALESCE(SUM(CASE WHEN (status = 'Won' OR status = 'Converted' OR client_id IS NOT NULL OR LOWER(status) LIKE '%won%' OR LOWER(status) LIKE '%convert%') THEN estimated_value ELSE 0 END), 0) as won_value,
+        COALESCE(SUM(CASE WHEN status NOT IN ('Won', 'Lost', 'Converted') AND client_id IS NULL AND LOWER(status) NOT LIKE '%won%' AND LOWER(status) NOT LIKE '%lost%' AND LOWER(status) NOT LIKE '%convert%' THEN 1 ELSE 0 END), 0) as active_count,
+        COALESCE(SUM(CASE WHEN next_followup_date IS NOT NULL AND DATE(next_followup_date) <= CURDATE() AND status NOT IN ('Won', 'Lost', 'Converted') AND client_id IS NULL AND LOWER(status) NOT LIKE '%won%' AND LOWER(status) NOT LIKE '%lost%' AND LOWER(status) NOT LIKE '%convert%' THEN 1 ELSE 0 END), 0) as followups_due
       FROM leads
       WHERE 1=1
     `;

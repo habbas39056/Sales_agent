@@ -176,6 +176,7 @@ export default function InvoiceTemplate({ invoice = {}, companyDetails = {}, inc
             <tr>
               <th className="col-desc">ITEM / DESCRIPTION</th>
               <th className="col-qty">QTY</th>
+              <th className="col-unit">UNIT</th>
               <th className="col-price">UNIT PRICE</th>
               <th className="col-total">TOTAL</th>
             </tr>
@@ -187,6 +188,7 @@ export default function InvoiceTemplate({ invoice = {}, companyDetails = {}, inc
                 const unitPrice = parseFloat(item.unit_price || item.rate) || 0;
                 const lineTotal = item.total !== undefined && item.total !== null ? parseFloat(item.total) : (qty * unitPrice);
                 const formattedLineTotal = lineTotal.toLocaleString('en-PK', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+                const unit = item.unit || item.unit_name || item.uom || '';
 
                 return (
                   <tr key={idx}>
@@ -199,6 +201,9 @@ export default function InvoiceTemplate({ invoice = {}, companyDetails = {}, inc
                       )}
                     </td>
                     <td style={{ textAlign: 'center' }}>{qty.toFixed(2)}</td>
+                    <td style={{ textAlign: 'center' }}>
+                      <span className="inv-tpl-unit-text">{unit || '—'}</span>
+                    </td>
                     <td style={{ textAlign: 'right' }}>{formatMoney(unitPrice)}</td>
                     <td style={{ textAlign: 'right' }}>
                       <div className="inv-tpl-currency-tag">Rs.</div>
@@ -209,7 +214,7 @@ export default function InvoiceTemplate({ invoice = {}, companyDetails = {}, inc
               })
             ) : (
               <tr>
-                <td colSpan="4" style={{ textAlign: 'center', color: '#94a3b8', padding: '1.5rem' }}>
+                <td colSpan="5" style={{ textAlign: 'center', color: '#94a3b8', padding: '1.5rem' }}>
                   No line items available
                 </td>
               </tr>

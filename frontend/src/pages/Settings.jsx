@@ -152,7 +152,8 @@ export default function Settings() {
     try {
       await axios.delete(`/api/project-categories/${id}`);
       showAlert('success', `Category "${name}" deleted!`);
-      setCategories(prev => prev.filter(c => c.id !== id));
+      const categoriesRes = await axios.get('/api/project-categories');
+      setCategories(categoriesRes.data || []);
     } catch (err) {
       showAlert('error', err.response?.data?.error || 'Failed to delete category');
     }

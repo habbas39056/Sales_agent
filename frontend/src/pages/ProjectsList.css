@@ -356,11 +356,12 @@
 
 .table-responsive {
   width: 100%;
-  overflow-x: auto;
+  overflow-x: hidden;
 }
 
 .enterprise-projects-table {
   width: 100%;
+  table-layout: fixed;
   border-collapse: collapse;
   text-align: left;
 }
@@ -371,13 +372,15 @@
 }
 
 .enterprise-projects-table th {
-  padding: 0.85rem 1rem;
-  font-size: 0.74rem;
+  padding: 0.7rem 0.5rem;
+  font-size: 0.72rem;
   font-weight: 700;
   color: #64748b;
   text-transform: uppercase;
   letter-spacing: 0.03em;
   white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .enterprise-projects-table tbody tr {
@@ -391,22 +394,24 @@
 }
 
 .enterprise-projects-table td {
-  padding: 0.75rem 1rem;
+  padding: 0.6rem 0.5rem;
   vertical-align: middle;
-  font-size: 0.85rem;
+  font-size: 0.83rem;
+  overflow: hidden;
 }
 
 /* Project Title Cell */
 .project-title-wrapper {
   display: flex;
   align-items: center;
-  gap: 0.75rem;
+  gap: 0.5rem;
+  min-width: 0;
 }
 
 .project-folder-icon {
-  width: 36px;
-  height: 36px;
-  border-radius: 8px;
+  width: 30px;
+  height: 30px;
+  border-radius: 6px;
   background: #fff1f2;
   color: #e11d48;
   display: flex;
@@ -419,27 +424,32 @@
 .project-name-group {
   display: flex;
   flex-direction: column;
-  gap: 0.2rem;
+  gap: 0.15rem;
+  min-width: 0;
+  overflow: hidden;
 }
 
 .project-name-row {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
-  flex-wrap: wrap;
+  gap: 0.35rem;
+  min-width: 0;
 }
 
 .project-name-text {
   font-weight: 600;
   color: #0f172a;
-  font-size: 0.88rem;
+  font-size: 0.85rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .project-sub-meta {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
-  font-size: 0.75rem;
+  gap: 0.35rem;
+  font-size: 0.74rem;
 }
 
 .project-id-tag {
@@ -449,7 +459,7 @@
 
 .project-desc-snippet {
   color: #64748b;
-  max-width: 260px;
+  max-width: 100%;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -489,12 +499,13 @@
 .client-cell {
   display: flex;
   align-items: center;
-  gap: 0.55rem;
+  gap: 0.45rem;
+  min-width: 0;
 }
 
 .client-avatar-sm {
-  width: 26px;
-  height: 26px;
+  width: 24px;
+  height: 24px;
   border-radius: 50%;
   background: #f1f5f9;
   color: #475569;
@@ -508,17 +519,25 @@
   display: flex;
   flex-direction: column;
   gap: 0.1rem;
+  min-width: 0;
+  overflow: hidden;
 }
 
 .client-name {
   font-weight: 600;
   color: #1e293b;
-  font-size: 0.83rem;
+  font-size: 0.82rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .client-business {
-  font-size: 0.73rem;
+  font-size: 0.72rem;
   color: #64748b;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 /* Team Cell */
@@ -622,8 +641,8 @@
 .progress-cell {
   display: flex;
   flex-direction: column;
-  gap: 0.35rem;
-  min-width: 110px;
+  gap: 0.25rem;
+  width: 100%;
 }
 
 .progress-track {
@@ -676,21 +695,23 @@
   display: flex;
   align-items: center;
   justify-content: flex-end;
-  gap: 0.35rem;
+  gap: 0.2rem;
 }
 
 .row-btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 0.25rem;
-  padding: 0.35rem 0.55rem;
+  width: 26px;
+  height: 26px;
+  padding: 0;
   border-radius: 6px;
-  font-size: 0.78rem;
+  font-size: 0.76rem;
   font-weight: 600;
   cursor: pointer;
   transition: all 0.15s ease;
   border: 1px solid transparent;
+  flex-shrink: 0;
 }
 
 .row-btn.view {

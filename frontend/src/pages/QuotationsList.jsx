@@ -11,6 +11,7 @@ import * as XLSX from 'xlsx';
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import Pagination from '../components/Pagination';
+import QuotationTemplate from '../components/QuotationTemplate';
 import './QuotationsList.css';
 
 export default function QuotationsList() {
@@ -44,6 +45,7 @@ export default function QuotationsList() {
 
   // Preview Modal
   const [previewQuotation, setPreviewQuotation] = useState(null);
+  const [includeTermsInPdf, setIncludeTermsInPdf] = useState(false);
 
   // Store View Mode preference
   const handleViewModeChange = (mode) => {
@@ -122,6 +124,8 @@ export default function QuotationsList() {
     try {
       const res = await axios.get(`/api/quotations/${id}`);
       setPreviewQuotation(res.data);
+      const hasTerms = !!(res.data?.terms_and_conditions && res.data.terms_and_conditions.trim().length > 0);
+      setIncludeTermsInPdf(hasTerms);
     } catch (error) {
       console.error('Failed to load quotation preview:', error);
       alert('Failed to load quotation preview details');
@@ -330,7 +334,7 @@ export default function QuotationsList() {
     }
   };
 
-  // Print Quotation using isolated iframe to prevent blank pages
+  // Print Quotation using isolated iframe matching Invoice print layout
   const handlePrintQuotation = () => {
     const printableElement = document.getElementById('printable-quotation');
     if (!printableElement) {
@@ -338,87 +342,20 @@ export default function QuotationsList() {
       return;
     }
 
-    // Remove existing print iframe if present
-    const existing = document.getElementById('quotation-print-frame');
-    if (existing) existing.remove();
+    const styleTags = Array.from(document.querySelectorAll('style, link[rel="stylesheet"]'))
+      .map(el => el.outerHTML)
+      .join('\n');
 
     const iframe = document.createElement('iframe');
-    iframe.id = 'quotation-print-frame';
-    // Must NOT be 0px x 0px (which causes Chrome to render blank white pages)
     iframe.style.position = 'fixed';
-    iframe.style.left = '-9999px';
-    iframe.style.top = '0';
-    iframe.style.width = '794px'; // A4 standard width in px
-    iframe.style.height = '1123px'; // A4 standard height in px
-    iframe.style.border = 'none';
+    iframe.style.right = '0';
+    iframe.style.bottom = '0';
+    iframe.style.width = '0px';
+    iframe.style.height = '0px';
+    iframe.style.border = '0';
+    iframe.id = 'quotation-print-frame';
 
     document.body.appendChild(iframe);
-
-    const printStyles = `
-      @page {
-        size: A4 portrait;
-        margin: 10mm 12mm;
-      }
-      * {
-        box-sizing: border-box !important;
-        -webkit-print-color-adjust: exact !important;
-        print-color-adjust: exact !important;
-      }
-      html, body {
-        margin: 0 !important;
-        padding: 0 !important;
-        background: #ffffff !important;
-        color: #000000 !important;
-        font-family: Arial, sans-serif !important;
-      }
-      .quotation-document {
-        position: relative !important;
-        width: 100% !important;
-        max-width: 100% !important;
-        padding: 1rem !important;
-        margin: 0 !important;
-        background: #ffffff !important;
-        display: block !important;
-        visibility: visible !important;
-        opacity: 1 !important;
-      }
-      .quotation-stamp {
-        position: absolute;
-        top: 35%;
-        left: 50%;
-        transform: translate(-50%, -50%) rotate(-30deg);
-        font-size: 6rem;
-        font-weight: 900;
-        letter-spacing: 0.2em;
-        pointer-events: none;
-        z-index: 0;
-      }
-      .quotation-document.is-paid .quotation-stamp {
-        color: #16a34a;
-        opacity: 0.15;
-      }
-      .quotation-document.is-unpaid .quotation-stamp {
-        color: #dc2626;
-        opacity: 0.15;
-      }
-      .quotation-table {
-        width: 100% !important;
-        border-collapse: collapse !important;
-        margin-bottom: 2rem !important;
-      }
-      .quotation-table th, .quotation-table td {
-        border: 1px solid #000000 !important;
-      }
-      .terms-page-break {
-        page-break-before: always !important;
-        break-before: page !important;
-        margin-top: 2rem !important;
-        padding-top: 1.5rem !important;
-      }
-      .print-hide {
-        display: none !important;
-      }
-    `;
 
     const frameDoc = iframe.contentWindow.document;
     frameDoc.open();
@@ -427,7 +364,54 @@ export default function QuotationsList() {
       <html>
         <head>
           <title>Quotation - ${previewQuotation?.quotation_number || 'QUO'}</title>
-          <style>${printStyles}</style>
+          ${styleTags}
+          <style>
+            @page {
+              size: A4 portrait;
+              margin: 10mm 12mm;
+            }
+            * {
+              box-sizing: border-box !important;
+              -webkit-print-color-adjust: exact !important;
+              print-color-adjust: exact !important;
+            }
+            html, body {
+              margin: 0 !important;
+              padding: 0 !important;
+              background: #ffffff !important;
+              width: 100% !important;
+              height: auto !important;
+            }
+            .inv-tpl-container {
+              max-width: 100% !important;
+              width: 100% !important;
+              padding: 0 !important;
+              margin: 0 !important;
+              box-shadow: none !important;
+            }
+            .has-terms .inv-tpl-page-1 {
+              display: block !important;
+              page-break-after: always !important;
+              break-after: page !important;
+              margin-bottom: 0 !important;
+            }
+            .no-terms .inv-tpl-page-1 {
+              display: block !important;
+              page-break-after: auto !important;
+              break-after: auto !important;
+              margin-bottom: 0 !important;
+            }
+            .terms-page-break, .inv-tpl-terms-page {
+              display: block !important;
+              page-break-before: always !important;
+              break-before: page !important;
+              margin-top: 0 !important;
+              padding-top: 5mm !important;
+            }
+            .print-hide {
+              display: none !important;
+            }
+          </style>
         </head>
         <body>
           ${printableElement.outerHTML}
@@ -436,48 +420,21 @@ export default function QuotationsList() {
     `);
     frameDoc.close();
 
-    const triggerPrint = () => {
+    setTimeout(() => {
       try {
         iframe.contentWindow.focus();
         iframe.contentWindow.print();
       } catch (err) {
-        console.error('Print failed:', err);
+        console.error('Iframe print fallback:', err);
+        window.print();
       } finally {
         setTimeout(() => {
           if (document.body.contains(iframe)) {
             document.body.removeChild(iframe);
           }
-        }, 2000);
+        }, 1500);
       }
-    };
-
-    // Wait for images to load before printing
-    setTimeout(() => {
-      const images = iframe.contentWindow.document.images;
-      if (images.length > 0) {
-        let loadedCount = 0;
-        const totalImages = images.length;
-        const onImgDone = () => {
-          loadedCount++;
-          if (loadedCount >= totalImages) {
-            setTimeout(triggerPrint, 150);
-          }
-        };
-        for (let i = 0; i < totalImages; i++) {
-          if (images[i].complete) {
-            loadedCount++;
-          } else {
-            images[i].onload = onImgDone;
-            images[i].onerror = onImgDone;
-          }
-        }
-        if (loadedCount >= totalImages) {
-          setTimeout(triggerPrint, 250);
-        }
-      } else {
-        setTimeout(triggerPrint, 250);
-      }
-    }, 150);
+    }, 300);
   };
 
   // Filter Quotations
@@ -1194,13 +1151,38 @@ export default function QuotationsList() {
         )}
       </div>
 
-      {/* 5. PREVIEW MODAL WITH STRICTLY PRESERVED PRINTABLE QUOTATION LAYOUT */}
+      {/* 5. PREVIEW MODAL WITH EXACT INVOICE DESIGN SYSTEM */}
       {previewQuotation && (
         <div className="modal-overlay">
-          <div className="modal-content preview-modal">
+          <div className="modal-content preview-modal" style={{ maxWidth: '900px', width: '95%', padding: '1.5rem', maxHeight: '90vh', overflowY: 'auto' }}>
             <div className="modal-header print-hide" style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid var(--border-color)', paddingBottom: '1rem', marginBottom: '1.5rem'}}>
-              <h2 style={{margin: 0}}>Quotation Preview</h2>
+              <h2 style={{margin: 0, fontSize: '1.25rem', fontWeight: '700', color: '#0f172a'}}>Quotation Preview</h2>
               <div style={{display: 'flex', alignItems: 'center', gap: '0.75rem'}}>
+                <label 
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '0.35rem',
+                    fontSize: '0.78rem',
+                    fontWeight: 600,
+                    color: includeTermsInPdf ? '#0f172a' : '#64748b',
+                    background: includeTermsInPdf ? '#eff6ff' : '#f8fafc',
+                    padding: '0.35rem 0.65rem',
+                    borderRadius: '6px',
+                    border: `1px solid ${includeTermsInPdf ? '#93c5fd' : '#cbd5e1'}`,
+                    cursor: 'pointer',
+                    userSelect: 'none'
+                  }}
+                  title="Toggle whether to include Terms & Conditions as Page 2 in PDF/Print"
+                >
+                  <input 
+                    type="checkbox" 
+                    checked={includeTermsInPdf} 
+                    onChange={(e) => setIncludeTermsInPdf(e.target.checked)} 
+                    style={{ width: '14px', height: '14px', accentColor: '#2563eb', cursor: 'pointer' }}
+                  />
+                  <span>Terms Page (Page 2)</span>
+                </label>
                 <button 
                   className="btn" 
                   style={{backgroundColor: '#e11d48', color: '#ffffff', display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.5rem 1rem', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: '600'}} 
@@ -1213,93 +1195,7 @@ export default function QuotationsList() {
               </div>
             </div>
             
-            {/* EXACT UNTOUCHED PRINTABLE QUOTATION ELEMENT */}
-            <div className={`quotation-document ${previewQuotation.status === 'Accepted' || previewQuotation.status === 'Paid' ? 'is-paid' : 'is-unpaid'}`} id="printable-quotation" style={{ padding: '2rem', fontFamily: 'Arial, sans-serif' }}>
-              
-              {/* STAMP */}
-              <div className="quotation-stamp">
-                {previewQuotation.status === 'Accepted' ? 'ACCEPTED' : (previewQuotation.status === 'Paid' ? 'PAID' : (previewQuotation.status === 'Overdue' ? 'OVERDUE' : 'UNPAID'))}
-              </div>
-              
-              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '2rem' }}>
-                <div style={{ flex: 1 }}>
-                  <div style={{ marginBottom: '1.5rem' }}>
-                    <img src="/logo.webp" alt="Adwise Labs Logo" style={{ maxWidth: '220px', height: 'auto', display: 'block' }} />
-                  </div>
-                  <h2 style={{ fontSize: '1.2rem', marginBottom: '1.5rem' }}>Quotation {previewQuotation.quotation_number}</h2>
-                  
-                  <div style={{ fontSize: '0.9rem', lineHeight: '1.5' }}>
-                    <div style={{ fontWeight: 'bold', marginBottom: '0.25rem' }}>Quotation To,</div>
-                    <div>{previewQuotation.client_name}</div>
-                    {previewQuotation.business_name && <div>{previewQuotation.business_name}</div>}
-                    {previewQuotation.physical_address && <div style={{ maxWidth: '250px' }}>{previewQuotation.physical_address}</div>}
-                    <div>{previewQuotation.client_email}</div>
-                  </div>
-                </div>
-                
-                <div style={{ flex: 1, textAlign: 'right', fontSize: '0.9rem', lineHeight: '1.5' }}>
-                  <div style={{ fontWeight: 'bold', marginBottom: '1rem' }}>Date: {new Date(previewQuotation.issue_date).toLocaleDateString()}</div>
-                  <div style={{ letterSpacing: '2px', marginBottom: '1rem' }}>******************************</div>
-                  
-                  <div style={{ fontWeight: 'bold' }}>Account Title: Adwise labs</div>
-                  <div style={{ fontWeight: 'bold' }}>Bank Al Falah</div>
-                  <div style={{ fontWeight: 'bold' }}>Account Number: 56395002519988</div>
-                  <div style={{ fontWeight: 'bold' }}>info@adwiselabs.com</div>
-                  <div style={{ fontWeight: 'bold' }}>www.adwiselabs.com</div>
-                </div>
-              </div>
-
-              <table className="quotation-table" style={{ border: '1px solid #000', marginBottom: '2rem' }}>
-                <thead>
-                  <tr>
-                    <th style={{ border: '1px solid #000', textAlign: 'left', backgroundColor: 'transparent', color: '#000', fontWeight: 'bold' }}>Description</th>
-                    <th style={{ border: '1px solid #000', textAlign: 'center', backgroundColor: 'transparent', color: '#000', fontWeight: 'bold' }}>Qty</th>
-                    <th style={{ border: '1px solid #000', textAlign: 'center', backgroundColor: 'transparent', color: '#000', fontWeight: 'bold' }}>Rate</th>
-                    <th style={{ border: '1px solid #000', textAlign: 'right', backgroundColor: 'transparent', color: '#000', fontWeight: 'bold' }}>Amount</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {previewQuotation.items?.map(item => (
-                    <tr key={item.id}>
-                      <td style={{ border: '1px solid #000', padding: '0.75rem 1rem' }}>
-                        <div>{item.description}</div>
-                        {item.details && <div style={{ fontSize: '0.85rem', color: '#475569', marginTop: '0.25rem', whiteSpace: 'pre-wrap' }}>{item.details}</div>}
-                      </td>
-                      <td style={{ border: '1px solid #000', padding: '0.75rem 1rem', textAlign: 'center' }}>{item.quantity} {item.unit}</td>
-                      <td style={{ border: '1px solid #000', padding: '0.75rem 1rem', textAlign: 'center' }}>PKR {Number(item.unit_price).toFixed(2)}</td>
-                      <td style={{ border: '1px solid #000', padding: '0.75rem 1rem', textAlign: 'right' }}>PKR {Number(item.total).toFixed(2)}</td>
-                    </tr>
-                  ))}
-                  <tr>
-                    <td colSpan="3" style={{ border: '1px solid #000', padding: '0.75rem 1rem', textAlign: 'right', fontWeight: 'bold' }}>Sub Total</td>
-                    <td style={{ border: '1px solid #000', padding: '0.75rem 1rem', textAlign: 'right', fontWeight: 'bold' }}>PKR {Number(previewQuotation.amount).toFixed(2)}</td>
-                  </tr>
-
-                </tbody>
-              </table>
-
-              <div style={{ textAlign: 'center', color: '#0369a1', fontSize: '0.9rem', fontWeight: 'bold', lineHeight: '1.6', marginTop: '3rem' }}>
-                <div style={{ marginBottom: '0.5rem' }}>Prompt Payments are Appreciated!</div>
-                <div style={{ marginBottom: '0.5rem' }}>Thank You</div>
-                <div style={{ marginBottom: '0.5rem' }}>Accounts Department – Adwise Labs</div>
-                <div style={{ color: '#000', fontSize: '0.8rem' }}>ADWISE LABS | A-205/II Saba Ave, DHA Karachi Phase VIII Zone A, 76500</div>
-                <div style={{ color: '#000', fontSize: '0.8rem', fontWeight: 'normal' }}>Contact No. +1 (774) 674-1872 | +92 329 2371279 | Email: info@adwiselabs.com</div>
-              </div>
-
-              {/* SEPARATE PAGE: TERMS & CONDITIONS */}
-              {previewQuotation?.terms_and_conditions && (
-                <div className="terms-page-break">
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem', borderBottom: '2px solid #0f172a', paddingBottom: '1rem' }}>
-                    <img src="/logo.webp" alt="Adwise Labs Logo" style={{ maxWidth: '180px', height: 'auto' }} />
-                    <h2 style={{ fontSize: '1.3rem', color: '#0f172a', margin: 0, textTransform: 'uppercase', letterSpacing: '1px' }}>Terms & Conditions</h2>
-                  </div>
-                  
-                  <div style={{ fontSize: '0.92rem', color: '#334155', lineHeight: '1.8', whiteSpace: 'pre-wrap' }}>
-                    {previewQuotation.terms_and_conditions}
-                  </div>
-                </div>
-              )}
-            </div>
+            <QuotationTemplate quotation={previewQuotation} includeTerms={includeTermsInPdf} />
           </div>
         </div>
       )}

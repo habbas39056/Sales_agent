@@ -5,8 +5,18 @@ const db = require('../db');
 // Get all expenses with full balances and summaries
 router.get('/', async (req, res) => {
   try {
-    const [expenses] = await db.query('SELECT * FROM expenses ORDER BY date ASC, id ASC');
+    const [rawExpenses] = await db.query('SELECT * FROM expenses ORDER BY date ASC, id ASC');
     const [banks] = await db.query('SELECT * FROM banks ORDER BY id ASC');
+
+    const validBankNames = new Set(banks.map(b => b.name.trim().toLowerCase()));
+
+    // Exclude any orphan records belonging to banks that were deleted
+    const expenses = rawExpenses.filter(exp => {
+      if (!exp.bank || !exp.bank.trim()) return true;
+      const bLower = exp.bank.trim().toLowerCase();
+      if (bLower === 'cash') return true;
+      return validBankNames.has(bLower);
+    });
 
     // 1. Initialize bank balances
     const bankTotals = {};
@@ -94,18 +104,30 @@ router.get('/', async (req, res) => {
   }
 });
 
-// Check for orphan receipts from deleted invoices
+// Check for orphan receipts (deleted invoices or deleted banks)
 router.get('/orphan-check', async (req, res) => {
   try {
     const [invoices] = await db.query('SELECT invoice_number FROM invoices');
     const validInvNumbers = new Set(invoices.map(i => i.invoice_number));
 
-    const [invExpenses] = await db.query("SELECT * FROM expenses WHERE description LIKE 'Payment for Invoice #%'");
-    const orphans = invExpenses.filter(exp => {
-      const match = exp.description.match(/Payment for Invoice #([^\s-]+(?:-[^\s-]+)*)/);
-      if (match) {
-        const invNum = match[1];
-        return !validInvNumbers.has(invNum);
+    const [banks] = await db.query('SELECT name FROM banks');
+    const validBankNames = new Set(banks.map(b => b.name.trim().toLowerCase()));
+
+    const [allExpenses] = await db.query("SELECT * FROM expenses");
+    const orphans = allExpenses.filter(exp => {
+      // 1. Deleted invoice receipt
+      if (exp.description && exp.description.startsWith('Payment for Invoice #')) {
+        const match = exp.description.match(/Payment for Invoice #([^\s-]+(?:-[^\s-]+)*)/);
+        if (match && !validInvNumbers.has(match[1])) {
+          return true;
+        }
+      }
+      // 2. Deleted bank transaction
+      if (exp.bank && exp.bank.trim()) {
+        const bName = exp.bank.trim().toLowerCase();
+        if (bName !== 'cash' && !validBankNames.has(bName)) {
+          return true;
+        }
       }
       return false;
     });
@@ -116,19 +138,30 @@ router.get('/orphan-check', async (req, res) => {
   }
 });
 
-// Clean up orphan receipts from deleted invoices
+// Clean up orphan receipts from deleted invoices or deleted banks
 router.post('/cleanup-orphans', async (req, res) => {
   try {
     const [invoices] = await db.query('SELECT invoice_number FROM invoices');
     const validInvNumbers = new Set(invoices.map(i => i.invoice_number));
 
-    const [invExpenses] = await db.query("SELECT id, description, receipt_amount FROM expenses WHERE description LIKE 'Payment for Invoice #%'");
+    const [banks] = await db.query('SELECT name FROM banks');
+    const validBankNames = new Set(banks.map(b => b.name.trim().toLowerCase()));
+
+    const [allExpenses] = await db.query("SELECT id, description, bank, receipt_amount, payment_amount FROM expenses");
     const orphanIds = [];
-    invExpenses.forEach(exp => {
-      const match = exp.description.match(/Payment for Invoice #([^\s-]+(?:-[^\s-]+)*)/);
-      if (match) {
-        const invNum = match[1];
-        if (!validInvNumbers.has(invNum)) {
+    allExpenses.forEach(exp => {
+      // 1. Invoice orphan
+      if (exp.description && exp.description.startsWith('Payment for Invoice #')) {
+        const match = exp.description.match(/Payment for Invoice #([^\s-]+(?:-[^\s-]+)*)/);
+        if (match && !validInvNumbers.has(match[1])) {
+          orphanIds.push(exp.id);
+          return;
+        }
+      }
+      // 2. Deleted bank orphan
+      if (exp.bank && exp.bank.trim()) {
+        const bName = exp.bank.trim().toLowerCase();
+        if (bName !== 'cash' && !validBankNames.has(bName)) {
           orphanIds.push(exp.id);
         }
       }

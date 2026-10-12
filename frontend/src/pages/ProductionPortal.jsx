@@ -69,7 +69,8 @@ export default function ProductionPortal() {
     return JSON.parse(localStorage.getItem('user') || '{}');
   }, []);
 
-  const isAdminOrPM = currentUser.role === 'Admin' || currentUser.role === 'Project Manager';
+  const isAdminOrPM = ['Admin', 'Project Manager', 'Product Manager', 'PM', 'Production', 'Production Manager'].includes(currentUser.role);
+  const isManagementOversight = ['Admin', 'Project Manager', 'Product Manager', 'PM'].includes(currentUser.role);
 
   useEffect(() => {
     fetchProjects();
@@ -371,7 +372,7 @@ export default function ProductionPortal() {
   const relevantProjects = useMemo(() => {
     if (isAdminOrPM) return projects;
     return projects.filter(p => {
-      const hasSteps = (p.user_assigned_steps && p.user_assigned_steps.length > 0);
+      const hasSteps = (p.user_assigned_steps && p.user_assigned_steps.length > 0) || (p.steps && p.steps.length > 0);
       const isLead = (p.production_id === currentUser.id);
       return hasSteps || isLead;
     });
@@ -380,7 +381,10 @@ export default function ProductionPortal() {
   // Flattened steps list for the Enterprise Task Matrix Table
   const allProductionSteps = useMemo(() => {
     return relevantProjects.flatMap(project => {
-      const stepsList = isAdminOrPM ? (project.steps || []) : (project.user_assigned_steps || []);
+      const isLeadOrManager = isAdminOrPM || (project.production_id === currentUser.id);
+      const stepsList = isLeadOrManager 
+        ? (project.steps || []) 
+        : ((project.user_assigned_steps && project.user_assigned_steps.length > 0) ? project.user_assigned_steps : (project.steps || []));
       return stepsList.map(step => {
         const hasRevision = Boolean(
           (step.reject_todos && step.reject_todos !== '0' && step.reject_todos !== 0) ||
@@ -402,7 +406,7 @@ export default function ProductionPortal() {
         };
       });
     });
-  }, [relevantProjects, isAdminOrPM]);
+  }, [relevantProjects, isAdminOrPM, currentUser]);
 
   // Metric Calculations
   const metrics = useMemo(() => {
@@ -513,7 +517,10 @@ export default function ProductionPortal() {
       if (statusFilter === 'Active' && isComp) return false;
       if (statusFilter === 'Completed' && !isComp) return false;
 
-      const projectSteps = isAdminOrPM ? (p.steps || []) : (p.user_assigned_steps || []);
+      const isLeadOrManager = isAdminOrPM || (p.production_id === currentUser.id);
+      const projectSteps = isLeadOrManager 
+        ? (p.steps || []) 
+        : ((p.user_assigned_steps && p.user_assigned_steps.length > 0) ? p.user_assigned_steps : (p.steps || []));
 
       if (statusFilter === 'Pending Acceptance') {
         const hasPending = projectSteps.some(s => !s.deadline_status || s.deadline_status === 'Pending Acceptance');
@@ -590,7 +597,7 @@ export default function ProductionPortal() {
                   </>
                 ) : metrics.appealedSteps > 0 ? (
                   <>
-                    {isAdminOrPM 
+                    {isManagementOversight 
                       ? <><strong>{metrics.appealedSteps} deadline extension appeal(s)</strong> require your administrative review and approval.</>
                       : <><strong>{metrics.appealedSteps} milestone extension appeal(s)</strong> have been submitted and are currently under PM review.</>
                     }
@@ -618,7 +625,7 @@ export default function ProductionPortal() {
               </button>
             )}
 
-            {metrics.pendingAcceptance > 0 && !isAdminOrPM && (
+            {metrics.pendingAcceptance > 0 && !isManagementOversight && (
               <button 
                 className="ribbon-btn success"
                 onClick={handleQuickAcceptAllPending}
@@ -657,7 +664,7 @@ export default function ProductionPortal() {
             <h1 className="prod-main-heading">Production Command Center</h1>
             <span className="prod-role-badge">
               <Briefcase size={13} />
-              {isAdminOrPM ? 'Admin / PM Oversight' : 'Production Specialist'}
+              {isManagementOversight ? 'Admin / PM Oversight' : 'Production Specialist'}
             </span>
             <span className="prod-count-badge">
               {metrics.activeSteps} Active Task{metrics.activeSteps !== 1 ? 's' : ''}
@@ -1235,7 +1242,10 @@ export default function ProductionPortal() {
                 </div>
               ) : (
                 filteredProjects.map(project => {
-                  const pSteps = isAdminOrPM ? (project.steps || []) : (project.user_assigned_steps || []);
+                  const isLeadOrManager = isAdminOrPM || (project.production_id === currentUser.id);
+                  const pSteps = isLeadOrManager 
+                    ? (project.steps || []) 
+                    : ((project.user_assigned_steps && project.user_assigned_steps.length > 0) ? project.user_assigned_steps : (project.steps || []));
                   const totalSteps = pSteps.length;
                   const completedSteps = pSteps.filter(s => s.status === 'Completed').length;
                   const progressPct = totalSteps > 0 ? Math.round((completedSteps / totalSteps) * 100) : 0;

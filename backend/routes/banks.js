@@ -55,6 +55,12 @@ router.post('/', async (req, res) => {
   try {
     await connection.beginTransaction();
 
+    // Clean up any stale/orphan transactions that might have remained from a previously deleted bank with this name
+    await connection.query(`
+      DELETE FROM expenses 
+      WHERE LOWER(TRIM(bank)) = LOWER(TRIM(?))
+    `, [bankName]);
+
     const [bankResult] = await connection.query(
       'INSERT INTO banks (name, opening_balance) VALUES (?, ?)',
       [bankName, opening]
@@ -172,7 +178,7 @@ router.put('/:id', async (req, res) => {
   }
 });
 
-// Delete a bank
+// Delete a bank and cascade delete all its transactions and ledger entries
 router.delete('/:id', async (req, res) => {
   const bankId = req.params.id;
   const connection = await db.getConnection();
@@ -180,14 +186,28 @@ router.delete('/:id', async (req, res) => {
     await connection.beginTransaction();
     const [[bank]] = await connection.query('SELECT * FROM banks WHERE id = ?', [bankId]);
     if (bank) {
-      await connection.query(
-        "DELETE FROM expenses WHERE reference = ? OR (category = 'Opening Balance' AND bank = ?)",
-        [`OPENING-BANK-${bankId}`, bank.name]
-      );
+      const bankName = bank.name;
+
+      // 1. Permanently delete all expenses, receipts, payments, and ledger entries associated with this bank
+      await connection.query(`
+        DELETE FROM expenses 
+        WHERE LOWER(TRIM(bank)) = LOWER(TRIM(?))
+           OR bank = ?
+           OR reference = ?
+           OR (category = 'Opening Balance' AND LOWER(TRIM(bank)) = LOWER(TRIM(?)))
+      `, [bankName, bankName, `OPENING-BANK-${bankId}`, bankName]);
+
+      // 2. Clear any bank references in secondary tables
+      await connection.query('UPDATE future_payables SET preferred_bank = NULL WHERE LOWER(TRIM(preferred_bank)) = LOWER(TRIM(?))', [bankName]);
+      await connection.query('UPDATE invoice_payments SET bank = NULL WHERE LOWER(TRIM(bank)) = LOWER(TRIM(?))', [bankName]);
+      await connection.query('UPDATE payrolls SET bank_name = NULL WHERE LOWER(TRIM(bank_name)) = LOWER(TRIM(?))', [bankName]);
+      await connection.query('UPDATE salary_advances SET bank_name = NULL WHERE LOWER(TRIM(bank_name)) = LOWER(TRIM(?))', [bankName]);
+
+      // 3. Delete the bank itself
       await connection.query('DELETE FROM banks WHERE id = ?', [bankId]);
     }
     await connection.commit();
-    res.json({ message: 'Bank deleted successfully' });
+    res.json({ message: 'Bank and all associated transactions deleted successfully' });
   } catch (err) {
     await connection.rollback();
     res.status(500).json({ error: err.message });

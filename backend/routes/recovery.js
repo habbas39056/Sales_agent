@@ -623,6 +623,10 @@ router.post('/:id/followups', async (req, res) => {
     }
     const currentCase = caseRows[0];
 
+    const cleanNextFollowup = next_followup_date 
+      ? (String(next_followup_date).includes('T') ? String(next_followup_date).replace('T', ' ') : String(next_followup_date))
+      : null;
+
     // Insert Followup
     await db.query(`
       INSERT INTO recovery_followups (
@@ -631,7 +635,7 @@ router.post('/:id/followups', async (req, res) => {
     `, [
       caseId, user_id || currentCase.assigned_salesperson_id, method || 'Call',
       outcome || 'Other', remark.trim(), promised_amount || null,
-      promised_date || null, next_followup_date || null, attachment_url || null
+      promised_date || null, cleanNextFollowup, attachment_url || null
     ]);
 
     // Update Case state counters
@@ -671,7 +675,7 @@ router.post('/:id/followups', async (req, res) => {
         is_high_value = ?,
         promised_amount = COALESCE(?, promised_amount),
         promised_date = COALESCE(?, promised_date),
-        next_followup_date = ?,
+        next_followup_date = COALESCE(?, next_followup_date),
         last_followup_date = CURRENT_TIMESTAMP,
         last_followup_remark = ?,
         missed_promises_count = ?,
@@ -679,7 +683,7 @@ router.post('/:id/followups', async (req, res) => {
       WHERE id = ?
     `, [
       newStatus, evalRes.category, evalRes.tone, evalRes.priorityScore, evalRes.isHighValue,
-      promised_amount || null, promised_date || null, next_followup_date || null,
+      promised_amount || null, promised_date || null, cleanNextFollowup,
       remark.trim(), missedPromises, unsuccessfulAttempts, caseId
     ]);
 
@@ -693,6 +697,42 @@ router.post('/:id/followups', async (req, res) => {
   } catch (error) {
     console.error('Error recording recovery follow-up:', error);
     res.status(500).json({ error: 'Failed to record follow-up' });
+  }
+});
+
+/**
+ * PUT /api/recovery/:id/schedule - Direct Update / Reschedule Next Follow-up
+ */
+router.put('/:id/schedule', async (req, res) => {
+  try {
+    const caseId = req.params.id;
+    const { next_followup_date, notes, user_id } = req.body;
+
+    const [caseRows] = await db.query('SELECT * FROM recovery_cases WHERE id = ?', [caseId]);
+    if (caseRows.length === 0) {
+      return res.status(404).json({ error: 'Case not found' });
+    }
+
+    const cleanDate = next_followup_date 
+      ? (String(next_followup_date).includes('T') ? String(next_followup_date).replace('T', ' ') : String(next_followup_date))
+      : null;
+
+    await db.query(`
+      UPDATE recovery_cases 
+      SET next_followup_date = ?
+      WHERE id = ?
+    `, [cleanDate, caseId]);
+
+    const formattedDateStr = cleanDate ? new Date(cleanDate).toLocaleString() : 'Cleared';
+    await db.query(`
+      INSERT INTO recovery_timeline (recovery_case_id, event_type, user_id, title, description)
+      VALUES (?, 'Follow-up Scheduled', ?, 'Next Follow-up Updated', ?)
+    `, [caseId, user_id || null, `Next follow-up set to ${formattedDateStr}. ${notes ? `Note: ${notes}` : ''}`]);
+
+    res.json({ message: 'Next follow-up date updated successfully', next_followup_date: cleanDate });
+  } catch (error) {
+    console.error('Error scheduling follow-up:', error);
+    res.status(500).json({ error: 'Failed to update next follow-up date' });
   }
 });
 

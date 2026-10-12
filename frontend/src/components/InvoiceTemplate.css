@@ -79,17 +79,26 @@
   text-transform: uppercase;
 }
 
-.inv-tpl-status.paid {
+.inv-tpl-status.paid,
+.inv-tpl-status.accepted {
   color: #16a34a;
 }
 
 .inv-tpl-status.unpaid,
-.inv-tpl-status.overdue {
+.inv-tpl-status.overdue,
+.inv-tpl-status.rejected,
+.inv-tpl-status.expired {
   color: #dc2626;
 }
 
-.inv-tpl-status.partial {
+.inv-tpl-status.partial,
+.inv-tpl-status.sent,
+.inv-tpl-status.pending {
   color: #d97706;
+}
+
+.inv-tpl-status.draft {
+  color: #64748b;
 }
 
 .inv-tpl-company-info {
@@ -229,10 +238,18 @@
   background-color: #ffffff; /* Clean white like Image 2 */
 }
 
-.inv-tpl-table th.col-desc { text-align: left; width: 48%; }
-.inv-tpl-table th.col-qty { text-align: center; width: 14%; }
+.inv-tpl-table th.col-desc { text-align: left; width: 44%; }
+.inv-tpl-table th.col-qty { text-align: center; width: 10%; }
+.inv-tpl-table th.col-unit { text-align: center; width: 10%; }
 .inv-tpl-table th.col-price { text-align: right; width: 18%; }
-.inv-tpl-table th.col-total { text-align: right; width: 20%; }
+.inv-tpl-table th.col-total { text-align: right; width: 18%; }
+
+.inv-tpl-unit-text {
+  font-size: 0.82rem;
+  color: #475569;
+  font-weight: 600;
+  text-transform: capitalize;
+}
 
 .inv-tpl-table td {
   padding: 0.65rem 0.35rem;

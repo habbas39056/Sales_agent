@@ -310,8 +310,8 @@ export default function Expenses() {
     }
   };
 
-  const handleDeleteBank = async (id) => {
-    if (window.confirm("Are you sure you want to delete this bank?")) {
+  const handleDeleteBank = async (id, bankName) => {
+    if (window.confirm(`Are you sure you want to delete "${bankName || 'this bank'}"?\n\nAll transactions, listings, and ledger records associated with this bank will be permanently deleted.`)) {
       try {
         await axios.delete(`/api/banks/${id}`);
         fetchBanks();
@@ -326,11 +326,11 @@ export default function Expenses() {
     try {
       const checkRes = await axios.get('/api/expenses/orphan-check');
       if (checkRes.data.count === 0) {
-        alert('All ledger entries are healthy! No phantom receipts from deleted invoices were found.');
+        alert('All ledger entries are healthy! No phantom receipts from deleted invoices or deleted banks were found.');
         return;
       }
-      const totalAmount = checkRes.data.orphans.reduce((s, o) => s + parseFloat(o.receipt_amount || 0), 0);
-      if (window.confirm(`Found ${checkRes.data.count} phantom receipts in ledger from deleted invoices (Total: PKR ${totalAmount.toFixed(2)}).\n\nDo you want to clean them up now to reconcile your ledger balances?`)) {
+      const totalAmount = checkRes.data.orphans.reduce((s, o) => s + parseFloat(o.receipt_amount || o.payment_amount || 0), 0);
+      if (window.confirm(`Found ${checkRes.data.count} orphan records in ledger (from deleted invoices or deleted banks, Total: PKR ${totalAmount.toFixed(2)}).\n\nDo you want to clean them up now to reconcile your ledger balances?`)) {
         const res = await axios.post('/api/expenses/cleanup-orphans');
         alert(res.data.message);
         fetchExpenses();
@@ -1587,7 +1587,7 @@ export default function Expenses() {
                           <button className="btn-icon edit-btn" onClick={() => handleStartEditBank(bank)} title="Edit Bank">
                             <Edit2 size={14} />
                           </button>
-                          <button className="btn-icon delete-btn" onClick={() => handleDeleteBank(bank.id)} title="Delete Bank">
+                          <button className="btn-icon delete-btn" onClick={() => handleDeleteBank(bank.id, bank.name)} title="Delete Bank">
                             <Trash2 size={14} />
                           </button>
                         </div>

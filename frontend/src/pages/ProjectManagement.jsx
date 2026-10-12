@@ -59,7 +59,9 @@ export default function ProjectManagement() {
       setLoading(true);
       const queryParams = user ? `?user_id=${user.id}&role=${encodeURIComponent(user.role)}` : '';
       const res = await axios.get(`/api/projects/management/overview${queryParams}`);
-      setProjects(res.data || []);
+      // Exclude Completed projects from Project Management
+      const nonCompleted = (res.data || []).filter(p => p.status !== 'Completed');
+      setProjects(nonCompleted);
     } catch (err) {
       console.error('Failed to fetch project management data:', err);
     } finally {
@@ -89,6 +91,21 @@ export default function ProjectManagement() {
   const cancelEditRemarks = () => {
     setEditingRemarksId(null);
     setTempRemarks('');
+  };
+
+  const handleProjectStatusChange = async (projectId, newStatus) => {
+    try {
+      await axios.patch(`/api/projects/${projectId}/status`, { status: newStatus });
+      if (newStatus === 'Completed') {
+        // Once marked completed, remove immediately from Project Management
+        setProjects(prev => prev.filter(p => p.id !== projectId));
+      } else {
+        setProjects(prev => prev.map(p => p.id === projectId ? { ...p, status: newStatus } : p));
+      }
+    } catch (err) {
+      console.error('Failed to update project status:', err);
+      alert('Failed to update project status: ' + (err.response?.data?.error || err.message));
+    }
   };
 
   const openInvoicePreview = async (invoiceId) => {
@@ -146,13 +163,15 @@ export default function ProjectManagement() {
   };
 
   // KPI calculations
-  const totalProjects = projects.length;
+  const totalProjects = projects.filter(p => p.status !== 'Completed').length;
   const activeProjects = projects.filter(p => p.status === 'Active' || p.status === 'In Progress' || p.status === 'Assigned' || p.status === 'Deadline Confirmed' || p.status === 'Submitted for Review' || p.status === 'Revision Required').length;
-  const completedProjects = projects.filter(p => p.status === 'Completed').length;
-  const totalOutstandingBalance = projects.reduce((acc, p) => acc + (parseFloat(p.balance) || 0), 0);
+  const assignedProjects = projects.filter(p => !p.status || p.status === 'Assigned').length;
+  const totalOutstandingBalance = projects.filter(p => p.status !== 'Completed').reduce((acc, p) => acc + (parseFloat(p.balance) || 0), 0);
 
   // Filter & Search Logic
   const filteredProjects = projects.filter(p => {
+    if (p.status === 'Completed') return false;
+
     const matchesSearch = 
       (p.title && p.title.toLowerCase().includes(searchTerm.toLowerCase())) ||
       (p.business_name && p.business_name.toLowerCase().includes(searchTerm.toLowerCase())) ||
@@ -239,7 +258,7 @@ export default function ProjectManagement() {
             <FolderKanban size={20} />
           </div>
           <div className="pm-stat-info">
-            <h4>Total Projects</h4>
+            <h4>Total Active</h4>
             <p>{totalProjects}</p>
           </div>
         </div>
@@ -255,12 +274,12 @@ export default function ProjectManagement() {
         </div>
 
         <div className="pm-stat-card">
-          <div className="pm-stat-icon" style={{ background: '#dcfce7', color: '#16a34a' }}>
-            <CheckCircle2 size={20} />
+          <div className="pm-stat-icon" style={{ background: '#ede9fe', color: '#7c3aed' }}>
+            <AlertCircle size={20} />
           </div>
           <div className="pm-stat-info">
-            <h4>Completed</h4>
-            <p>{completedProjects}</p>
+            <h4>Assigned / New</h4>
+            <p>{assignedProjects}</p>
           </div>
         </div>
 
@@ -307,8 +326,11 @@ export default function ProjectManagement() {
               <option value="All">All Statuses</option>
               <option value="Assigned">Assigned</option>
               <option value="In Progress">In Progress</option>
-              <option value="Completed">Completed</option>
               <option value="On Hold">On Hold</option>
+              <option value="Pending">Pending</option>
+              <option value="Submitted for Review">Submitted for Review</option>
+              <option value="Revision Requested">Revision Requested</option>
+              <option value="Deadline Confirmed">Deadline Confirmed</option>
             </select>
           </div>
 
@@ -462,11 +484,36 @@ export default function ProjectManagement() {
                       )}
                     </td>
 
-                    {/* 7. STATUS (AUTO PICKED) */}
+                    {/* 7. STATUS (MANUAL) */}
                     <td style={{ textAlign: 'center' }}>
-                      <span className={`pm-status-pill ${p.status ? p.status.replace(/\s+/g, '-') : 'Assigned'}`}>
-                        {p.status || 'Assigned'}
-                      </span>
+                      {isPMorAdmin ? (
+                        <select
+                          className={`pm-status-pill ${p.status ? p.status.replace(/\s+/g, '-') : 'Assigned'}`}
+                          value={p.status || 'Assigned'}
+                          onChange={(e) => handleProjectStatusChange(p.id, e.target.value)}
+                          style={{
+                            cursor: 'pointer',
+                            outline: 'none',
+                            border: '1px solid #cbd5e1',
+                            fontWeight: 700,
+                            padding: '4px 8px',
+                            borderRadius: '20px'
+                          }}
+                        >
+                          <option value="Assigned">Assigned</option>
+                          <option value="In Progress">In Progress</option>
+                          <option value="Completed">Completed</option>
+                          <option value="On Hold">On Hold</option>
+                          <option value="Pending">Pending</option>
+                          <option value="Submitted for Review">Submitted for Review</option>
+                          <option value="Revision Requested">Revision Requested</option>
+                          <option value="Deadline Confirmed">Deadline Confirmed</option>
+                        </select>
+                      ) : (
+                        <span className={`pm-status-pill ${p.status ? p.status.replace(/\s+/g, '-') : 'Assigned'}`}>
+                          {p.status || 'Assigned'}
+                        </span>
+                      )}
                     </td>
 
                     {/* 8. REMARKS (PM EDITABLE) */}

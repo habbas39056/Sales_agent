@@ -33,11 +33,24 @@ router.post('/', async (req, res) => {
 
 // Delete a project category
 router.delete('/:id', async (req, res) => {
+  const catId = req.params.id;
+  const connection = await db.getConnection();
   try {
-    await db.query('DELETE FROM project_categories WHERE id = ?', [req.params.id]);
-    res.json({ message: 'Project category deleted successfully' });
+    await connection.beginTransaction();
+
+    // 1. Unlink any leads that used this category
+    await connection.query('UPDATE leads SET category_id = NULL WHERE category_id = ?', [catId]);
+
+    // 2. Delete the category
+    const [result] = await connection.query('DELETE FROM project_categories WHERE id = ?', [catId]);
+
+    await connection.commit();
+    res.json({ message: 'Project category deleted successfully', affectedRows: result.affectedRows });
   } catch (err) {
+    await connection.rollback();
     res.status(500).json({ error: err.message });
+  } finally {
+    connection.release();
   }
 });
 

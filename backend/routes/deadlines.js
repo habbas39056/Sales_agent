@@ -12,7 +12,7 @@ const { getCrmBaseUrl } = require('../utils/whatsappTemplates');
 // Get pending deadline appeals & step deadlines with role-based scoping
 router.get('/appeals', async (req, res) => {
   const { user_id, role } = req.query;
-  const isAdminOrPm = ['Admin', 'Product Manager', 'PM', 'Project Manager', 'Production Manager'].includes(role);
+  const isAdminOrPm = ['Admin', 'Product Manager', 'PM', 'Project Manager', 'Production', 'Production Manager'].includes(role);
 
   try {
     // Proactively auto-accept any steps where 2 hours have passed
@@ -53,8 +53,8 @@ router.get('/appeals', async (req, res) => {
     const queryParams = [];
 
     if (!isAdminOrPm && user_id) {
-      query += ` WHERE (ps.assignee_id = ? OR ps.appealed_by = ? OR p.pm_id = ?)`;
-      queryParams.push(user_id, user_id, user_id);
+      query += ` WHERE (ps.assignee_id = ? OR ps.appealed_by = ? OR p.pm_id = ? OR p.production_id = ? OR p.id IN (SELECT project_id FROM project_members WHERE user_id = ?))`;
+      queryParams.push(user_id, user_id, user_id, user_id, user_id);
     }
 
     query += `
@@ -106,7 +106,7 @@ router.get('/appeals', async (req, res) => {
 // Get pending deadline appeals & pending acceptance count with role-based scoping
 router.get('/appeals/count', async (req, res) => {
   const { user_id, role } = req.query;
-  const isAdminOrPm = ['Admin', 'Product Manager', 'PM', 'Project Manager', 'Production Manager'].includes(role);
+  const isAdminOrPm = ['Admin', 'Product Manager', 'PM', 'Project Manager', 'Production', 'Production Manager'].includes(role);
 
   try {
     // Proactively auto-accept any steps where 2 hours have passed
@@ -116,8 +116,8 @@ router.get('/appeals/count', async (req, res) => {
     const queryParams = [];
 
     if (!isAdminOrPm && user_id) {
-      query += " AND (ps.assignee_id = ? OR ps.appealed_by = ? OR p.pm_id = ?)";
-      queryParams.push(user_id, user_id, user_id);
+      query += " AND (ps.assignee_id = ? OR ps.appealed_by = ? OR p.pm_id = ? OR p.production_id = ? OR p.id IN (SELECT project_id FROM project_members WHERE user_id = ?))";
+      queryParams.push(user_id, user_id, user_id, user_id, user_id);
     }
 
     const [[result]] = await db.query(query, queryParams);

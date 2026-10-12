@@ -19,6 +19,10 @@ import './Modal.css';
 export default function ProjectsList() {
   const navigate = useNavigate();
 
+  const userStr = localStorage.getItem('user');
+  const currentUser = userStr ? JSON.parse(userStr) : null;
+  const isPMorAdmin = currentUser?.role === 'Admin' || currentUser?.role === 'Product Manager' || currentUser?.role === 'PM' || currentUser?.role === 'Project Manager';
+
   // Data States
   const [projects, setProjects] = useState([]);
   const [clients, setClients] = useState([]);
@@ -575,6 +579,16 @@ export default function ProjectsList() {
     }
   };
 
+  const handleQuickStatusChange = async (projectId, newStatus) => {
+    try {
+      await axios.patch(`/api/projects/${projectId}/status`, { status: newStatus });
+      setProjects(prev => prev.map(p => p.id === projectId ? { ...p, status: newStatus } : p));
+    } catch (err) {
+      console.error('Failed to update project status', err);
+      alert('Failed to update project status: ' + (err.response?.data?.error || err.message));
+    }
+  };
+
   // Custom styling for React-Select to match Crimson Red theme
   const customSelectStyles = {
     control: (base, state) => ({
@@ -811,14 +825,14 @@ export default function ProjectsList() {
             <table className="enterprise-projects-table">
               <thead>
                 <tr>
-                  <th style={{ paddingLeft: '1.25rem', width: '28%' }}>Project Title & Scope</th>
-                  <th style={{ width: '16%' }}>Client</th>
-                  <th style={{ width: '16%' }}>Assigned Team</th>
-                  <th style={{ width: '12%' }}>Services</th>
-                  <th style={{ width: '12%' }}>Due Date & Urgency</th>
+                  <th style={{ paddingLeft: '0.85rem', width: '22%' }}>Project Title & Scope</th>
+                  <th style={{ width: '13%' }}>Client</th>
+                  <th style={{ width: '13%' }}>Assigned Team</th>
+                  <th style={{ width: '11%' }}>Services</th>
+                  <th style={{ width: '13%' }}>Due Date & Urgency</th>
                   <th style={{ width: '10%' }}>Progress</th>
-                  <th style={{ width: '8%' }}>Status</th>
-                  <th style={{ textAlign: 'right', paddingRight: '1.25rem', width: '10%' }}>Actions</th>
+                  <th style={{ width: '10%' }}>Status</th>
+                  <th style={{ textAlign: 'right', paddingRight: '0.85rem', width: '8%' }}>Actions</th>
                 </tr>
               </thead>
               <tbody>
@@ -851,7 +865,7 @@ export default function ProjectsList() {
                       className="project-row"
                     >
                       {/* Project Title & Scope */}
-                      <td style={{ paddingLeft: '1.25rem' }}>
+                      <td style={{ paddingLeft: '0.85rem' }}>
                         <div className="project-title-wrapper">
                           <div className="project-folder-icon">
                             <Folder size={18} />
@@ -996,20 +1010,48 @@ export default function ProjectsList() {
 
                       {/* Status */}
                       <td>
-                        <span 
-                          className="project-status-badge"
-                          style={{
-                            backgroundColor: sStyle.bg,
-                            color: sStyle.color,
-                            borderColor: sStyle.border
-                          }}
-                        >
-                          {project.status || 'Assigned'}
-                        </span>
+                        {isPMorAdmin ? (
+                          <select
+                            value={project.status || 'Assigned'}
+                            onClick={(e) => e.stopPropagation()}
+                            onChange={(e) => handleQuickStatusChange(project.id, e.target.value)}
+                            style={{
+                              padding: '4px 8px',
+                              borderRadius: '6px',
+                              fontWeight: 700,
+                              fontSize: '0.8rem',
+                              backgroundColor: sStyle.bg,
+                              color: sStyle.color,
+                              border: `1px solid ${sStyle.border || '#cbd5e1'}`,
+                              cursor: 'pointer',
+                              outline: 'none'
+                            }}
+                          >
+                            <option value="Assigned">Assigned</option>
+                            <option value="In Progress">In Progress</option>
+                            <option value="Completed">Completed</option>
+                            <option value="On Hold">On Hold</option>
+                            <option value="Pending">Pending</option>
+                            <option value="Submitted for Review">Submitted for Review</option>
+                            <option value="Revision Requested">Revision Requested</option>
+                            <option value="Deadline Confirmed">Deadline Confirmed</option>
+                          </select>
+                        ) : (
+                          <span 
+                            className="project-status-badge"
+                            style={{
+                              backgroundColor: sStyle.bg,
+                              color: sStyle.color,
+                              borderColor: sStyle.border
+                            }}
+                          >
+                            {project.status || 'Assigned'}
+                          </span>
+                        )}
                       </td>
 
                       {/* Actions */}
-                      <td style={{ textAlign: 'right', paddingRight: '1.25rem' }}>
+                      <td style={{ textAlign: 'right', paddingRight: '0.85rem' }}>
                         <div className="row-action-btns" onClick={(e) => e.stopPropagation()}>
                           <button 
                             type="button" 
@@ -1018,7 +1060,6 @@ export default function ProjectsList() {
                             title="View Project Workspace"
                           >
                             <Eye size={14} />
-                            <span>View</span>
                           </button>
 
                           <button 
@@ -1097,16 +1138,44 @@ export default function ProjectsList() {
                     </div>
                   </div>
 
-                  <span 
-                    className="project-status-badge"
-                    style={{
-                      backgroundColor: sStyle.bg,
-                      color: sStyle.color,
-                      borderColor: sStyle.border
-                    }}
-                  >
-                    {project.status || 'Assigned'}
-                  </span>
+                  {isPMorAdmin ? (
+                    <select
+                      value={project.status || 'Assigned'}
+                      onClick={(e) => e.stopPropagation()}
+                      onChange={(e) => handleQuickStatusChange(project.id, e.target.value)}
+                      style={{
+                        padding: '3px 8px',
+                        borderRadius: '6px',
+                        fontWeight: 700,
+                        fontSize: '0.78rem',
+                        backgroundColor: sStyle.bg,
+                        color: sStyle.color,
+                        border: `1px solid ${sStyle.border || '#cbd5e1'}`,
+                        cursor: 'pointer',
+                        outline: 'none'
+                      }}
+                    >
+                      <option value="Assigned">Assigned</option>
+                      <option value="In Progress">In Progress</option>
+                      <option value="Completed">Completed</option>
+                      <option value="On Hold">On Hold</option>
+                      <option value="Pending">Pending</option>
+                      <option value="Submitted for Review">Submitted for Review</option>
+                      <option value="Revision Requested">Revision Requested</option>
+                      <option value="Deadline Confirmed">Deadline Confirmed</option>
+                    </select>
+                  ) : (
+                    <span 
+                      className="project-status-badge"
+                      style={{
+                        backgroundColor: sStyle.bg,
+                        color: sStyle.color,
+                        borderColor: sStyle.border
+                      }}
+                    >
+                      {project.status || 'Assigned'}
+                    </span>
+                  )}
                 </div>
 
                 <div className="grid-card-client-row">

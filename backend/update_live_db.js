@@ -1014,63 +1014,82 @@ async function updateLiveDb() {
 5. CANCELLATION & REFUNDS: Deposits and work completed prior to cancellation are non-refundable.`;
     await connection.query('INSERT IGNORE INTO `settings` (`setting_key`, `setting_value`) VALUES (?, ?)', ['terms_and_conditions', defaultTermsText]);
 
-    // 3. Seed Bank Alfalah as default bank
-    await connection.query(`
-      INSERT IGNORE INTO \`banks\` (\`name\`, \`opening_balance\`) 
-      VALUES ('Bank Alfalah', 0.00)
-    `);
-
-    // 4. Seed Terms Templates
-    const defaultTemplates = [
-      ['Standard Services Terms', 'General', '1. PAYMENT TERMS: Payments are due within 15 days from the date of invoice issuance.\n2. REVISIONS & SCOPE: Additional feature requests beyond milestone deliverables will be billed separately.\n3. INTELLECTUAL PROPERTY: Final project deliverables released upon 100% full payment.\n4. CONFIDENTIALITY: Non-disclosure of proprietary business data and technology.\n5. CANCELLATION: Deposits and work completed prior to cancellation are non-refundable.', 1],
-      ['Social Media Marketing', 'Social Media', '1. Content schedule will be submitted 5 business days in advance for approval.\n2. Ad spend budget is paid directly to advertising platforms (Meta/Google).\n3. Monthly analytics reports delivered on the 1st of every month.\n4. 30 days written notice required for monthly campaign cancellations.', 0],
-      ['Web Development & Software', 'Web Development', '1. Scope of work strictly based on approved UI/UX mockups and PRD documentation.\n2. Includes 30 days complimentary bug-fixing post live deployment.\n3. Server hosting and third-party API subscription costs are billed to client.\n4. Source code ownership transferred upon final payment settlement.', 0]
-    ];
-    for (const [title, category, content, isDefault] of defaultTemplates) {
-      await connection.query(`
-        INSERT IGNORE INTO \`terms_templates\` (\`title\`, \`category\`, \`content\`, \`is_default\`) 
-        VALUES (?, ?, ?, ?)
-      `, [title, category, content, isDefault]);
-    }
-
-    // 5. Seed Project Categories
-    const defaultProjectCategories = [
-      'Income Tax Return Filing',
-      'Sales Tax Registration',
-      'Corporate Tax Filing',
-      'Company Registration',
-      'Website Development',
-      'Logo Design',
-      'SEO Optimization'
-    ];
-    for (const catName of defaultProjectCategories) {
-      await connection.query('INSERT IGNORE INTO `project_categories` (`name`) VALUES (?)', [catName]);
-    }
-
-    // 6. Seed Expense Categories
-    const defaultExpCategories = [
-      'Software Subscriptions',
-      'Office Supplies',
-      'Marketing',
-      'Utilities',
-      'Payroll',
-      'Rent'
-    ];
-    for (const catName of defaultExpCategories) {
-      await connection.query('INSERT IGNORE INTO `expense_categories` (`name`) VALUES (?)', [catName]);
-    }
-
-    // 7. Seed Sample Products
-    const [[prodCount]] = await connection.query('SELECT COUNT(*) as count FROM `products`');
-    if (!prodCount || prodCount.count === 0) {
-      const defaultProducts = [
-        ['Website Development', 'Custom built responsive website', 1500.00],
-        ['Logo Design', 'Professional logo design package', 300.00],
-        ['SEO Optimization', 'Monthly SEO maintenance and optimization', 500.00]
-      ];
-      for (const [pName, pDesc, pPrice] of defaultProducts) {
-        await connection.query('INSERT IGNORE INTO `products` (`name`, `description`, `default_price`) VALUES (?, ?, ?)', [pName, pDesc, pPrice]);
+    // Check if initial seeds have already been applied to prevent re-creating deleted categories/banks
+    const [[seedSetting]] = await connection.query("SELECT setting_value FROM `settings` WHERE `setting_key` = 'initial_seeds_applied'");
+    if (!seedSetting || seedSetting.setting_value !== 'true') {
+      // 3. Seed Bank Alfalah as default bank (only if banks table is empty)
+      const [[bankCount]] = await connection.query('SELECT COUNT(*) as count FROM `banks`');
+      if (!bankCount || bankCount.count === 0) {
+        await connection.query(`
+          INSERT IGNORE INTO \`banks\` (\`name\`, \`opening_balance\`) 
+          VALUES ('Bank Alfalah', 0.00)
+        `);
       }
+
+      // 4. Seed Terms Templates (only if terms_templates table is empty)
+      const [[templateCount]] = await connection.query('SELECT COUNT(*) as count FROM `terms_templates`');
+      if (!templateCount || templateCount.count === 0) {
+        const defaultTemplates = [
+          ['Standard Services Terms', 'General', '1. PAYMENT TERMS: Payments are due within 15 days from the date of invoice issuance.\n2. REVISIONS & SCOPE: Additional feature requests beyond milestone deliverables will be billed separately.\n3. INTELLECTUAL PROPERTY: Final project deliverables released upon 100% full payment.\n4. CONFIDENTIALITY: Non-disclosure of proprietary business data and technology.\n5. CANCELLATION: Deposits and work completed prior to cancellation are non-refundable.', 1],
+          ['Social Media Marketing', 'Social Media', '1. Content schedule will be submitted 5 business days in advance for approval.\n2. Ad spend budget is paid directly to advertising platforms (Meta/Google).\n3. Monthly analytics reports delivered on the 1st of every month.\n4. 30 days written notice required for monthly campaign cancellations.', 0],
+          ['Web Development & Software', 'Web Development', '1. Scope of work strictly based on approved UI/UX mockups and PRD documentation.\n2. Includes 30 days complimentary bug-fixing post live deployment.\n3. Server hosting and third-party API subscription costs are billed to client.\n4. Source code ownership transferred upon final payment settlement.', 0]
+        ];
+        for (const [title, category, content, isDefault] of defaultTemplates) {
+          await connection.query(`
+            INSERT IGNORE INTO \`terms_templates\` (\`title\`, \`category\`, \`content\`, \`is_default\`) 
+            VALUES (?, ?, ?, ?)
+          `, [title, category, content, isDefault]);
+        }
+      }
+
+      // 5. Seed Project Categories (only if project_categories table is empty)
+      const [[catCount]] = await connection.query('SELECT COUNT(*) as count FROM `project_categories`');
+      if (!catCount || catCount.count === 0) {
+        const defaultProjectCategories = [
+          'Income Tax Return Filing',
+          'Sales Tax Registration',
+          'Corporate Tax Filing',
+          'Company Registration',
+          'Website Development',
+          'Logo Design',
+          'SEO Optimization'
+        ];
+        for (const catName of defaultProjectCategories) {
+          await connection.query('INSERT IGNORE INTO `project_categories` (`name`) VALUES (?)', [catName]);
+        }
+      }
+
+      // 6. Seed Expense Categories (only if expense_categories table is empty)
+      const [[expCatCount]] = await connection.query('SELECT COUNT(*) as count FROM `expense_categories`');
+      if (!expCatCount || expCatCount.count === 0) {
+        const defaultExpCategories = [
+          'Software Subscriptions',
+          'Office Supplies',
+          'Marketing',
+          'Utilities',
+          'Payroll',
+          'Rent'
+        ];
+        for (const catName of defaultExpCategories) {
+          await connection.query('INSERT IGNORE INTO `expense_categories` (`name`) VALUES (?)', [catName]);
+        }
+      }
+
+      // 7. Seed Sample Products (only if products table is empty)
+      const [[prodCount]] = await connection.query('SELECT COUNT(*) as count FROM `products`');
+      if (!prodCount || prodCount.count === 0) {
+        const defaultProducts = [
+          ['Website Development', 'Custom built responsive website', 1500.00],
+          ['Logo Design', 'Professional logo design package', 300.00],
+          ['SEO Optimization', 'Monthly SEO maintenance and optimization', 500.00]
+        ];
+        for (const [pName, pDesc, pPrice] of defaultProducts) {
+          await connection.query('INSERT IGNORE INTO `products` (`name`, `description`, `default_price`) VALUES (?, ?, ?)', [pName, pDesc, pPrice]);
+        }
+      }
+
+      // Mark initial seeds applied so subsequent server restarts never reseed user-deleted records
+      await connection.query("INSERT INTO `settings` (`setting_key`, `setting_value`) VALUES ('initial_seeds_applied', 'true') ON DUPLICATE KEY UPDATE `setting_value` = 'true'");
     }
 
     console.log('🎉 [DB AUTO-MIGRATOR] Complete! All tables, columns, indexes & seeds are 100% up to date.\n');

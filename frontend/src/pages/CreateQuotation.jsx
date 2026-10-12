@@ -5,6 +5,7 @@ import { Plus, Trash2, ArrowLeft, Printer, Edit } from 'lucide-react';
 import Select from 'react-select';
 import CreatableSelect from 'react-select/creatable';
 import TermsTemplateSelector from '../components/TermsTemplateSelector';
+import QuotationTemplate from '../components/QuotationTemplate';
 import './QuotationsList.css'; // Reuse existing styles
 
 export default function CreateQuotation() {
@@ -19,6 +20,7 @@ export default function CreateQuotation() {
   const [isEditingInvNum, setIsEditingInvNum] = useState(false);
   const [isEditingBillFrom, setIsEditingBillFrom] = useState(false);
   const [activeTab, setActiveTab] = useState('quotation');
+  const [includeTermsInPdf, setIncludeTermsInPdf] = useState(false);
   const [recipientType, setRecipientType] = useState('client'); // 'client' | 'lead' | 'manual'
         
   const [formData, setFormData] = useState({
@@ -104,6 +106,7 @@ export default function CreateQuotation() {
           }))
         });
 
+        setIncludeTermsInPdf(!!(inv.terms_and_conditions && inv.terms_and_conditions.trim()));
         if (inv.client_id) {
           setRecipientType('client');
         } else if (inv.manual_client_name) {
@@ -403,87 +406,20 @@ export default function CreateQuotation() {
       return;
     }
 
-    // Remove existing print iframe if present
-    const existing = document.getElementById('quotation-print-frame');
-    if (existing) existing.remove();
+    const styleTags = Array.from(document.querySelectorAll('style, link[rel="stylesheet"]'))
+      .map(el => el.outerHTML)
+      .join('\n');
 
     const iframe = document.createElement('iframe');
-    iframe.id = 'quotation-print-frame';
-    // Must NOT be 0px x 0px
     iframe.style.position = 'fixed';
-    iframe.style.left = '-9999px';
-    iframe.style.top = '0';
-    iframe.style.width = '794px';
-    iframe.style.height = '1123px';
-    iframe.style.border = 'none';
+    iframe.style.right = '0';
+    iframe.style.bottom = '0';
+    iframe.style.width = '0px';
+    iframe.style.height = '0px';
+    iframe.style.border = '0';
+    iframe.id = 'quotation-print-frame';
 
     document.body.appendChild(iframe);
-
-    const printStyles = `
-      @page {
-        size: A4 portrait;
-        margin: 10mm 12mm;
-      }
-      * {
-        box-sizing: border-box !important;
-        -webkit-print-color-adjust: exact !important;
-        print-color-adjust: exact !important;
-      }
-      html, body {
-        margin: 0 !important;
-        padding: 0 !important;
-        background: #ffffff !important;
-        color: #000000 !important;
-        font-family: Arial, sans-serif !important;
-      }
-      .quotation-document {
-        position: relative !important;
-        width: 100% !important;
-        max-width: 100% !important;
-        padding: 1rem !important;
-        margin: 0 !important;
-        background: #ffffff !important;
-        display: block !important;
-        visibility: visible !important;
-        opacity: 1 !important;
-      }
-      .quotation-stamp {
-        position: absolute;
-        top: 35%;
-        left: 50%;
-        transform: translate(-50%, -50%) rotate(-30deg);
-        font-size: 6rem;
-        font-weight: 900;
-        letter-spacing: 0.2em;
-        pointer-events: none;
-        z-index: 0;
-      }
-      .quotation-document.is-paid .quotation-stamp {
-        color: #16a34a;
-        opacity: 0.15;
-      }
-      .quotation-document.is-unpaid .quotation-stamp {
-        color: #dc2626;
-        opacity: 0.15;
-      }
-      .quotation-table {
-        width: 100% !important;
-        border-collapse: collapse !important;
-        margin-bottom: 2rem !important;
-      }
-      .quotation-table th, .quotation-table td {
-        border: 1px solid #000000 !important;
-      }
-      .terms-page-break {
-        page-break-before: always !important;
-        break-before: page !important;
-        margin-top: 2rem !important;
-        padding-top: 1.5rem !important;
-      }
-      .print-hide {
-        display: none !important;
-      }
-    `;
 
     const frameDoc = iframe.contentWindow.document;
     frameDoc.open();
@@ -492,7 +428,54 @@ export default function CreateQuotation() {
       <html>
         <head>
           <title>Quotation - ${formData.quotation_number || 'QUO'}</title>
-          <style>${printStyles}</style>
+          ${styleTags}
+          <style>
+            @page {
+              size: A4 portrait;
+              margin: 10mm 12mm;
+            }
+            * {
+              box-sizing: border-box !important;
+              -webkit-print-color-adjust: exact !important;
+              print-color-adjust: exact !important;
+            }
+            html, body {
+              margin: 0 !important;
+              padding: 0 !important;
+              background: #ffffff !important;
+              width: 100% !important;
+              height: auto !important;
+            }
+            .inv-tpl-container {
+              max-width: 100% !important;
+              width: 100% !important;
+              padding: 0 !important;
+              margin: 0 !important;
+              box-shadow: none !important;
+            }
+            .has-terms .inv-tpl-page-1 {
+              display: block !important;
+              page-break-after: always !important;
+              break-after: page !important;
+              margin-bottom: 0 !important;
+            }
+            .no-terms .inv-tpl-page-1 {
+              display: block !important;
+              page-break-after: auto !important;
+              break-after: auto !important;
+              margin-bottom: 0 !important;
+            }
+            .terms-page-break, .inv-tpl-terms-page {
+              display: block !important;
+              page-break-before: always !important;
+              break-before: page !important;
+              margin-top: 0 !important;
+              padding-top: 5mm !important;
+            }
+            .print-hide {
+              display: none !important;
+            }
+          </style>
         </head>
         <body>
           ${printableElement.outerHTML}
@@ -501,49 +484,23 @@ export default function CreateQuotation() {
     `);
     frameDoc.close();
 
-    const triggerPrint = () => {
+    setTimeout(() => {
       try {
         iframe.contentWindow.focus();
         iframe.contentWindow.print();
       } catch (err) {
-        console.error('Print failed:', err);
+        console.error('Iframe print fallback:', err);
+        window.print();
       } finally {
         setTimeout(() => {
           if (document.body.contains(iframe)) {
             document.body.removeChild(iframe);
           }
-        }, 2000);
+        }, 1500);
       }
-    };
-
-    setTimeout(() => {
-      const images = iframe.contentWindow.document.images;
-      if (images.length > 0) {
-        let loadedCount = 0;
-        const totalImages = images.length;
-        const onImgDone = () => {
-          loadedCount++;
-          if (loadedCount >= totalImages) {
-            setTimeout(triggerPrint, 150);
-          }
-        };
-        for (let i = 0; i < totalImages; i++) {
-          if (images[i].complete) {
-            loadedCount++;
-          } else {
-            images[i].onload = onImgDone;
-            images[i].onerror = onImgDone;
-          }
-        }
-        if (loadedCount >= totalImages) {
-          setTimeout(triggerPrint, 250);
-        }
-      } else {
-        setTimeout(triggerPrint, 250);
-      }
-    }, 150);
+    }, 300);
   };
-      
+
   return (
     <div style={{ backgroundColor: '#ffffff', minHeight: '100vh', padding: '1rem 2rem 3rem 2rem' }}>
       <div className="quotation-editor-container" style={{ width: '100%', maxWidth: '100%', margin: '0' }}>
@@ -567,7 +524,32 @@ export default function CreateQuotation() {
             {id && (
               <span className={`quotation-badge-${formData.status ? formData.status.toLowerCase() : 'draft'}`}>{formData.status || 'DRAFT'}</span>
             )}
-            <div className="quotation-editor-actions print-hide">
+            <div className="quotation-editor-actions print-hide" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+              <label 
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '0.35rem',
+                  fontSize: '0.78rem',
+                  fontWeight: 600,
+                  color: includeTermsInPdf ? '#0f172a' : '#64748b',
+                  background: includeTermsInPdf ? '#eff6ff' : '#f8fafc',
+                  padding: '0.35rem 0.65rem',
+                  borderRadius: '6px',
+                  border: `1px solid ${includeTermsInPdf ? '#93c5fd' : '#cbd5e1'}`,
+                  cursor: 'pointer',
+                  userSelect: 'none'
+                }}
+                title="Toggle whether to include Terms & Conditions as Page 2 in PDF/Print"
+              >
+                <input 
+                  type="checkbox" 
+                  checked={includeTermsInPdf} 
+                  onChange={(e) => setIncludeTermsInPdf(e.target.checked)} 
+                  style={{ width: '14px', height: '14px', accentColor: '#2563eb', cursor: 'pointer' }}
+                />
+                <span>Terms Page (Page 2)</span>
+              </label>
               <button type="button" className="btn-icon-outline" onClick={handlePrintQuotation} title="Print or Save as PDF">
                 <Printer size={16} />
               </button>
@@ -1179,101 +1161,24 @@ export default function CreateQuotation() {
       <div className="print-only-layout">
         {(() => {
           const selectedClient = clients.find(c => String(c.id) === String(formData.client_id)) || {};
-          const clientName = selectedClient.full_name || formData.manual_client_name || 'Select or Enter Client';
-          const businessName = selectedClient.business_name || formData.manual_client_business || '';
-          const address = selectedClient.physical_address || formData.manual_client_address || '';
-          const email = selectedClient.email || formData.manual_client_email || '';
-          const phone = selectedClient.whatsapp_number || selectedClient.phone || formData.manual_client_phone || '';
+          const quoteData = {
+            quotation_number: formData.quotation_number,
+            status: formData.status || 'DRAFT',
+            issue_date: formData.issue_date,
+            valid_until: formData.due_date,
+            client_name: selectedClient.full_name || formData.manual_client_name,
+            business_name: selectedClient.business_name || formData.manual_client_business,
+            physical_address: selectedClient.physical_address || formData.manual_client_address,
+            client_email: selectedClient.email || formData.manual_client_email,
+            client_phone: selectedClient.whatsapp_number || selectedClient.phone || formData.manual_client_phone,
+            items: formData.items,
+            amount: calculateTotal(),
+            subtotal: calculateSubTotal(),
+            discount: parseFloat(formData.discount) || 0,
+            terms_and_conditions: formData.terms_and_conditions
+          };
 
-          return (
-            <div className={`quotation-document is-unpaid`} id="printable-quotation" style={{ padding: '2rem', fontFamily: 'Arial, sans-serif' }}>
-              
-              <div className="quotation-stamp">
-                QUOTATION
-              </div>
-              
-              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '2rem' }}>
-                <div style={{ flex: 1 }}>
-                  <div style={{ marginBottom: '1.5rem' }}>
-                    <img src="/logo.webp" alt="Adwise Labs Logo" style={{ maxWidth: '220px', height: 'auto', display: 'block' }} />
-                  </div>
-                  <h2 style={{ fontSize: '1.2rem', marginBottom: '1.5rem' }}>Quotation {formData.quotation_number}</h2>
-                  
-                  <div style={{ fontSize: '0.9rem', lineHeight: '1.5' }}>
-                    <div style={{ fontWeight: 'bold', marginBottom: '0.25rem' }}>Quotation To,</div>
-                    <div>{clientName}</div>
-                    {businessName && <div>{businessName}</div>}
-                    {address && <div style={{ maxWidth: '250px' }}>{address}</div>}
-                    {email && <div>{email}</div>}
-                    {phone && <div>{phone}</div>}
-                  </div>
-                </div>
-                
-                <div style={{ flex: 1, textAlign: 'right', fontSize: '0.9rem', lineHeight: '1.5' }}>
-                  <div style={{ fontWeight: 'bold', marginBottom: '1rem' }}>Date: {formData.issue_date ? new Date(formData.issue_date).toLocaleDateString() : ''}</div>
-                  <div style={{ letterSpacing: '2px', marginBottom: '1rem' }}>******************************</div>
-                  
-                  <div style={{ fontWeight: 'bold' }}>Account Title: Adwise labs</div>
-                  <div style={{ fontWeight: 'bold' }}>Bank Al Falah</div>
-                  <div style={{ fontWeight: 'bold' }}>Account Number: 56395002519988</div>
-                  <div style={{ fontWeight: 'bold' }}>info@adwiselabs.com</div>
-                  <div style={{ fontWeight: 'bold' }}>www.adwiselabs.com</div>
-                </div>
-              </div>
-
-              <table className="quotation-table" style={{ border: '1px solid #000', marginBottom: '2rem', width: '100%', borderCollapse: 'collapse' }}>
-                <thead>
-                  <tr>
-                    <th style={{ border: '1px solid #000', padding: '0.75rem 1rem', textAlign: 'left', backgroundColor: 'transparent', color: '#000', fontWeight: 'bold' }}>Description</th>
-                    <th style={{ border: '1px solid #000', padding: '0.75rem 1rem', textAlign: 'center', backgroundColor: 'transparent', color: '#000', fontWeight: 'bold' }}>Qty</th>
-                    <th style={{ border: '1px solid #000', padding: '0.75rem 1rem', textAlign: 'center', backgroundColor: 'transparent', color: '#000', fontWeight: 'bold' }}>Rate</th>
-                    <th style={{ border: '1px solid #000', padding: '0.75rem 1rem', textAlign: 'right', backgroundColor: 'transparent', color: '#000', fontWeight: 'bold' }}>Amount</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {formData.items.map((item, idx) => (
-                    <tr key={idx}>
-                      <td style={{ border: '1px solid #000', padding: '0.75rem 1rem' }}>
-                        <div>{item.description}</div>
-                        {item.details && <div style={{ fontSize: '0.85rem', color: '#475569', marginTop: '0.25rem', whiteSpace: 'pre-wrap' }}>{item.details}</div>}
-                      </td>
-                      <td style={{ border: '1px solid #000', padding: '0.75rem 1rem', textAlign: 'center' }}>{item.quantity} {item.unit}</td>
-                      <td style={{ border: '1px solid #000', padding: '0.75rem 1rem', textAlign: 'center' }}>PKR {Number(item.unit_price).toFixed(2)}</td>
-                      <td style={{ border: '1px solid #000', padding: '0.75rem 1rem', textAlign: 'right' }}>PKR {(Number(item.quantity) * Number(item.unit_price)).toFixed(2)}</td>
-                    </tr>
-                  ))}
-                  <tr>
-                    <td colSpan="3" style={{ border: '1px solid #000', padding: '0.75rem 1rem', textAlign: 'right', fontWeight: 'bold' }}>Sub Total</td>
-                    <td style={{ border: '1px solid #000', padding: '0.75rem 1rem', textAlign: 'right', fontWeight: 'bold' }}>PKR {calculateSubTotal().toFixed(2)}</td>
-                  </tr>
-                  
-                  
-                </tbody>
-              </table>
-
-              <div style={{ textAlign: 'center', color: '#0369a1', fontSize: '0.9rem', fontWeight: 'bold', lineHeight: '1.6', marginTop: '3rem' }}>
-                <div style={{ marginBottom: '0.5rem' }}>Prompt Payments are Appreciated!</div>
-                <div style={{ marginBottom: '0.5rem' }}>Thank You</div>
-                <div style={{ marginBottom: '0.5rem' }}>Accounts Department – Adwise Labs</div>
-                <div style={{ color: '#000', fontSize: '0.8rem' }}>ADWISE LABS | A-205/II Saba Ave, DHA Karachi Phase VIII Zone A, 76500</div>
-                <div style={{ color: '#000', fontSize: '0.8rem', fontWeight: 'normal' }}>Contact No. +1 (774) 674-1872 | +92 329 2371279 | Email: info@adwiselabs.com</div>
-              </div>
-
-              {/* SEPARATE PAGE: TERMS & CONDITIONS */}
-              {formData.terms_and_conditions && (
-                <div className="terms-page-break">
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem', borderBottom: '2px solid #0f172a', paddingBottom: '1rem' }}>
-                    <img src="/logo.webp" alt="Adwise Labs Logo" style={{ maxWidth: '180px', height: 'auto' }} />
-                    <h2 style={{ fontSize: '1.3rem', color: '#0f172a', margin: 0, textTransform: 'uppercase', letterSpacing: '1px' }}>Terms & Conditions</h2>
-                  </div>
-                  
-                  <div style={{ fontSize: '0.92rem', color: '#334155', lineHeight: '1.8', whiteSpace: 'pre-wrap' }}>
-                    {formData.terms_and_conditions}
-                  </div>
-                </div>
-              )}
-            </div>
-          );
+          return <QuotationTemplate quotation={quoteData} includeTerms={includeTermsInPdf} />;
         })()}
       </div>
     </div>

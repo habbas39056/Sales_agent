@@ -214,15 +214,8 @@ router.get('/', async (req, res) => {
       const userSteps = user_id ? projectSteps.filter(s => s.assignee_id == user_id) : projectSteps;
       const assignedNames = members.map(m => m.name).join(', ');
 
-      // Auto-compute effective status so UI accurately reflects step completion
-      let effectiveStatus = r.status || 'Assigned';
-      if (r.status !== 'On Hold' && r.status !== 'Commission Released' && r.status !== 'Pending') {
-        if (r.status === 'Completed' || (r.dyn_total_steps > 0 && r.dyn_completed_steps === r.dyn_total_steps)) {
-          effectiveStatus = 'Completed';
-        } else if (r.dyn_completed_steps > 0 && (effectiveStatus === 'Assigned' || !effectiveStatus)) {
-          effectiveStatus = 'In Progress';
-        }
-      }
+      // Manual project status: strictly preserve user-set status from DB (no auto-completion on steps)
+      const effectiveStatus = r.status || 'Assigned';
 
       return {
         ...r,
@@ -244,7 +237,7 @@ router.get('/', async (req, res) => {
 // Get projects for Management Overview module (MUST be before /:id)
 router.get('/management/overview', async (req, res) => {
   try {
-    const { user_id, role } = req.query;
+    const { user_id, role, include_completed } = req.query;
 
     let query = `
       SELECT 
@@ -281,11 +274,21 @@ router.get('/management/overview', async (req, res) => {
       LEFT JOIN clients c ON p.client_id = c.id
       LEFT JOIN users pm_user ON p.pm_id = pm_user.id
     `;
+    const whereClauses = [];
     const params = [];
 
+    // Exclude completed projects from Project Management overview
+    if (include_completed !== 'true') {
+      whereClauses.push("(p.status IS NULL OR p.status != 'Completed')");
+    }
+
     if (user_id && role && role !== 'Admin') {
-      query += ` WHERE (c.user_id = ? OR c.created_by = ? OR p.pm_id = ? OR p.production_id = ? OR p.id IN (SELECT project_id FROM project_members WHERE user_id = ?) OR p.id IN (SELECT project_id FROM project_steps WHERE assignee_id = ?))`;
+      whereClauses.push("(c.user_id = ? OR c.created_by = ? OR p.pm_id = ? OR p.production_id = ? OR p.id IN (SELECT project_id FROM project_members WHERE user_id = ?) OR p.id IN (SELECT project_id FROM project_steps WHERE assignee_id = ?))");
       params.push(user_id, user_id, user_id, user_id, user_id, user_id);
+    }
+
+    if (whereClauses.length > 0) {
+      query += ` WHERE ${whereClauses.join(' AND ')}`;
     }
 
     query += ` ORDER BY p.id DESC`;
@@ -306,15 +309,10 @@ router.get('/management/overview', async (req, res) => {
 
     const processed = rows.map(r => {
       const inv = invoiceMap[r.linked_invoice_id] || null;
-      let autoStatus = r.status || 'Assigned';
+      // Manual project status: strictly preserve user-set status from DB (no auto-completion on steps)
+      const projectStatus = r.status || 'Assigned';
       const totalSteps = Number(r.dyn_total_steps || 0);
       const completedSteps = Number(r.dyn_completed_steps || 0);
-
-      if (r.status === 'Completed' || (totalSteps > 0 && completedSteps === totalSteps)) {
-        autoStatus = 'Completed';
-      } else if (completedSteps > 0 && autoStatus === 'Assigned') {
-        autoStatus = 'In Progress';
-      }
 
       return {
         id: r.id,
@@ -333,7 +331,7 @@ router.get('/management/overview', async (req, res) => {
         invoice_due_date: inv ? inv.due_date : null,
         invoice_status: inv ? inv.status : null,
         project_due_date: r.due_date || r.locked_deadline,
-        status: autoStatus,
+        status: projectStatus,
         remarks: r.remarks || '',
         created_at: r.created_at,
         recovery_case_id: r.recovery_case_id,
@@ -1254,6 +1252,20 @@ router.post('/:id/steps/:step_id/reassign', upload.array('attachments', 10), asy
 
     await connection.query(updateSql, updateParams);
 
+    // If project was completed, reopen it to In Progress
+    await connection.query(
+      `UPDATE projects SET status = 'In Progress' WHERE id = ? AND status = 'Completed'`,
+      [req.params.id]
+    );
+
+    // Ensure the new assignee is added to project members
+    if (targetAssigneeId) {
+      await connection.query(
+        `INSERT IGNORE INTO project_members (project_id, user_id) VALUES (?, ?)`,
+        [req.params.id, targetAssigneeId]
+      );
+    }
+
     // Fetch project title for notifications
     const [[project]] = await connection.query('SELECT title FROM projects WHERE id = ?', [req.params.id]);
     const projectTitle = project?.title || 'Project';
@@ -1344,6 +1356,20 @@ router.post('/:id/steps/:step_id/reject', upload.array('attachments', 10), async
        WHERE id = ?`,
       [targetAssigneeId, new_deadline, finalTodosJSON, step.id]
     );
+
+    // If project was completed, reopen it to In Progress
+    await connection.query(
+      `UPDATE projects SET status = 'In Progress' WHERE id = ? AND status = 'Completed'`,
+      [req.params.id]
+    );
+
+    // Ensure the new assignee is added to project members
+    if (targetAssigneeId) {
+      await connection.query(
+        `INSERT IGNORE INTO project_members (project_id, user_id) VALUES (?, ?)`,
+        [req.params.id, targetAssigneeId]
+      );
+    }
 
     // Fetch project title for notifications
     const [[project]] = await connection.query('SELECT title FROM projects WHERE id = ?', [req.params.id]);
