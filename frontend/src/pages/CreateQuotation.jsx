@@ -446,12 +446,12 @@ export default function CreateQuotation() {
       <!DOCTYPE html>
       <html>
         <head>
-          <title>Quotation - ${formData.quotation_number || 'QUO'}</title>
+          <title></title>
           ${styleTags}
           <style>
             @page {
               size: A4 portrait;
-              margin: 10mm 12mm;
+              margin: 0mm !important;
             }
             * {
               box-sizing: border-box !important;
@@ -480,6 +480,11 @@ export default function CreateQuotation() {
               box-shadow: none !important;
               display: block !important;
             }
+            .inv-tpl-page-1 {
+              padding: 10mm 14mm !important;
+              box-sizing: border-box !important;
+              display: block !important;
+            }
             .has-terms .inv-tpl-page-1 {
               display: block !important;
               page-break-after: auto !important;
@@ -498,8 +503,9 @@ export default function CreateQuotation() {
               display: block !important;
               page-break-before: always !important;
               break-before: page !important;
+              padding: 10mm 14mm !important;
               margin-top: 0 !important;
-              padding-top: 5mm !important;
+              box-sizing: border-box !important;
             }
             .print-hide {
               display: none !important;

@@ -520,15 +520,22 @@
   margin-top: 1.25rem;
 }
 
-/* Print Specific Rules for A5 Paper */
+/* Print Specific Rules */
 @page {
-  size: A5 portrait;
-  margin: 8mm 10mm;
+  size: A4 portrait;
+  margin: 0mm !important;
 }
 
 @media print {
+  @page {
+    size: A4 portrait;
+    margin: 0mm !important;
+  }
+
   body {
     background: #ffffff !important;
+    margin: 0 !important;
+    padding: 0 !important;
   }
 
   /* Force visibility for invoices, quotations and template elements */
@@ -558,6 +565,12 @@
     display: block !important;
     height: auto !important;
     overflow: visible !important;
+  }
+
+  .inv-tpl-page-1 {
+    padding: 10mm 14mm !important;
+    box-sizing: border-box !important;
+    display: block !important;
   }
 
   .has-terms .inv-tpl-page-1 {
@@ -602,7 +615,7 @@
     break-inside: avoid !important;
     min-height: auto !important;
     margin-top: 0 !important;
-    padding-top: 3mm !important;
+    padding: 10mm 14mm !important;
     border-top: none !important;
     clear: both !important;
     box-sizing: border-box !important;
