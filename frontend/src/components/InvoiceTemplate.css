@@ -531,6 +531,16 @@
     background: #ffffff !important;
   }
 
+  /* Force visibility for invoices, quotations and template elements */
+  #printable-quotation,
+  #printable-quotation *,
+  #printable-invoice,
+  #printable-invoice *,
+  .inv-tpl-container,
+  .inv-tpl-container * {
+    visibility: visible !important;
+  }
+
   .inv-tpl-wrapper {
     background: transparent !important;
     padding: 0 !important;
@@ -552,12 +562,12 @@
 
   .has-terms .inv-tpl-page-1 {
     display: block !important;
-    min-height: 185mm !important;
+    min-height: auto !important;
     box-sizing: border-box !important;
-    page-break-after: always !important;
-    break-after: page !important;
-    page-break-inside: avoid !important;
-    break-inside: avoid !important;
+    page-break-after: auto !important;
+    break-after: auto !important;
+    page-break-inside: auto !important;
+    break-inside: auto !important;
     margin-bottom: 0 !important;
     padding-bottom: 0 !important;
     clear: both !important;
@@ -569,8 +579,8 @@
     box-sizing: border-box !important;
     page-break-after: auto !important;
     break-after: auto !important;
-    page-break-inside: avoid !important;
-    break-inside: avoid !important;
+    page-break-inside: auto !important;
+    break-inside: auto !important;
     margin-bottom: 0 !important;
     padding-bottom: 0 !important;
     clear: both !important;
@@ -590,7 +600,7 @@
     break-before: page !important;
     page-break-inside: avoid !important;
     break-inside: avoid !important;
-    min-height: 185mm !important;
+    min-height: auto !important;
     margin-top: 0 !important;
     padding-top: 3mm !important;
     border-top: none !important;

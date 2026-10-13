@@ -557,18 +557,27 @@ export default function InvoiceManagement() {
       return;
     }
 
+    // Clean up any previous print frames first
+    const existingFrame = document.getElementById('invoice-print-frame');
+    if (existingFrame && existingFrame.parentNode) {
+      existingFrame.parentNode.removeChild(existingFrame);
+    }
+
     const styleTags = Array.from(document.querySelectorAll('style, link[rel="stylesheet"]'))
       .map(el => el.outerHTML)
       .join('\n');
 
     const iframe = document.createElement('iframe');
-    iframe.style.position = 'fixed';
-    iframe.style.right = '0';
-    iframe.style.bottom = '0';
-    iframe.style.width = '0px';
-    iframe.style.height = '0px';
-    iframe.style.border = '0';
     iframe.id = 'invoice-print-frame';
+    iframe.style.position = 'fixed';
+    iframe.style.top = '0';
+    iframe.style.left = '0';
+    iframe.style.width = '100vw';
+    iframe.style.height = '100vh';
+    iframe.style.border = 'none';
+    iframe.style.opacity = '0';
+    iframe.style.pointerEvents = 'none';
+    iframe.style.zIndex = '-99999';
 
     document.body.appendChild(iframe);
 
@@ -597,23 +606,32 @@ export default function InvoiceManagement() {
               width: 100% !important;
               height: auto !important;
             }
+            #printable-invoice,
+            #printable-invoice *,
+            .inv-tpl-container,
+            .inv-tpl-container * {
+              visibility: visible !important;
+            }
             .inv-tpl-container {
               max-width: 100% !important;
               width: 100% !important;
               padding: 0 !important;
               margin: 0 !important;
               box-shadow: none !important;
+              display: block !important;
             }
             .has-terms .inv-tpl-page-1 {
               display: block !important;
-              page-break-after: always !important;
-              break-after: page !important;
+              page-break-after: auto !important;
+              break-after: auto !important;
+              min-height: auto !important;
               margin-bottom: 0 !important;
             }
             .no-terms .inv-tpl-page-1 {
               display: block !important;
               page-break-after: auto !important;
               break-after: auto !important;
+              min-height: auto !important;
               margin-bottom: 0 !important;
             }
             .terms-page-break, .inv-tpl-terms-page {
@@ -635,21 +653,31 @@ export default function InvoiceManagement() {
     `);
     frameDoc.close();
 
-    setTimeout(() => {
+    const doPrint = () => {
       try {
         iframe.contentWindow.focus();
         iframe.contentWindow.print();
       } catch (err) {
         console.error('Iframe print fallback:', err);
         window.print();
-      } finally {
-        setTimeout(() => {
-          if (document.body.contains(iframe)) {
-            document.body.removeChild(iframe);
-          }
-        }, 1500);
       }
-    }, 300);
+    };
+
+    const cleanup = () => {
+      setTimeout(() => {
+        if (iframe && iframe.parentNode) {
+          iframe.parentNode.removeChild(iframe);
+        }
+      }, 1000);
+    };
+
+    try {
+      iframe.contentWindow.addEventListener('afterprint', cleanup);
+    } catch (e) {}
+
+    setTimeout(cleanup, 180000);
+
+    setTimeout(doPrint, 500);
   };
 
   return (

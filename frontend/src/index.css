@@ -570,13 +570,17 @@ input:focus, select:focus, textarea:focus {
   }
 }
 
-/* Global Print Reset for Multi-Page PDF Generation (A5 Portrait) */
+/* Global Print Reset for Multi-Page PDF Generation */
 @media print {
-  @page {
-    size: A5 portrait;
-    margin: 8mm 10mm;
+  #printable-quotation,
+  #printable-quotation *,
+  #printable-invoice,
+  #printable-invoice *,
+  .inv-tpl-container,
+  .inv-tpl-container * {
+    visibility: visible !important;
   }
-  html, body, #root, .app-layout, .app-container, main, .main-content, .inv-main-container, .page-container, .modal-overlay, .modal-content, .preview-modal, .inv-tpl-container {
+  html, body, #root, .app-layout, .app-container, main, .main-content, .inv-main-container, .quote-main-container, .quotation-editor-container, .page-container, .modal-overlay, .modal-content, .preview-modal, .inv-tpl-container {
     height: auto !important;
     min-height: 0 !important;
     max-height: none !important;

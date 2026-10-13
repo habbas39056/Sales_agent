@@ -412,11 +412,16 @@
 }
 
 @media print {
-  body * {
+  body:has(#printable-payslip) *:not(#printable-payslip):not(#printable-payslip *):not(#printable-quotation):not(#printable-quotation *):not(#printable-invoice):not(#printable-invoice *):not(.inv-tpl-container):not(.inv-tpl-container *) {
     visibility: hidden;
   }
   #printable-payslip, #printable-payslip * {
-    visibility: visible;
+    visibility: visible !important;
+  }
+  #printable-quotation, #printable-quotation *,
+  #printable-invoice, #printable-invoice *,
+  .inv-tpl-container, .inv-tpl-container * {
+    visibility: visible !important;
   }
   #printable-payslip {
     position: absolute;

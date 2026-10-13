@@ -322,16 +322,28 @@
     -webkit-print-color-adjust: exact !important;
     print-color-adjust: exact !important;
   }
+  body {
+    background: #ffffff !important;
+    margin: 0 !important;
+    padding: 0 !important;
+  }
   .print-hide,
   .sidebar,
   .top-navbar,
   .header,
-  .quote-dashboard-root > *:not(.modal-overlay),
+  .quote-main-container > *:not(.modal-overlay),
+  .quotation-editor-container > *:not(.print-only-layout),
+  .quote-header,
+  .quote-kpi-grid,
+  .quote-filter-bar,
+  .quote-table-wrap,
+  .quote-cards-grid,
+  .pagination,
   nav,
   aside {
     display: none !important;
   }
-  html, body, #root, .app-layout, .app-container, main, .main-content, .modal-overlay, .modal-content, .preview-modal {
+  html, body, #root, .app-layout, .app-container, main, .main-content, .quote-main-container, .quotation-editor-container, .modal-overlay, .modal-content, .preview-modal {
     height: auto !important;
     min-height: 0 !important;
     max-height: none !important;
@@ -352,15 +364,44 @@
     position: static !important;
     background: transparent !important;
     padding: 0 !important;
+    display: block !important;
+    width: 100% !important;
+    height: auto !important;
+    overflow: visible !important;
   }
-  .modal-content.preview-modal {
+  .modal-content.preview-modal,
+  .preview-modal {
+    position: static !important;
+    display: block !important;
+    overflow: visible !important;
     max-width: 100% !important;
     width: 100% !important;
     padding: 0 !important;
     margin: 0 !important;
+    background: #ffffff !important;
+    box-shadow: none !important;
+    border: none !important;
   }
   .print-only-layout {
     display: block !important;
+    visibility: visible !important;
+  }
+  #printable-quotation {
+    display: block !important;
+    visibility: visible !important;
+    position: relative !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    height: auto !important;
+    overflow: visible !important;
+  }
+  #printable-quotation,
+  #printable-quotation *,
+  .inv-tpl-container,
+  .inv-tpl-container * {
+    visibility: visible !important;
   }
   .terms-page-break {
     page-break-before: always !important;

@@ -342,18 +342,27 @@ export default function QuotationsList() {
       return;
     }
 
+    // Clean up any previous print frames first
+    const existingFrame = document.getElementById('quotation-print-frame');
+    if (existingFrame && existingFrame.parentNode) {
+      existingFrame.parentNode.removeChild(existingFrame);
+    }
+
     const styleTags = Array.from(document.querySelectorAll('style, link[rel="stylesheet"]'))
       .map(el => el.outerHTML)
       .join('\n');
 
     const iframe = document.createElement('iframe');
-    iframe.style.position = 'fixed';
-    iframe.style.right = '0';
-    iframe.style.bottom = '0';
-    iframe.style.width = '0px';
-    iframe.style.height = '0px';
-    iframe.style.border = '0';
     iframe.id = 'quotation-print-frame';
+    iframe.style.position = 'fixed';
+    iframe.style.top = '0';
+    iframe.style.left = '0';
+    iframe.style.width = '100vw';
+    iframe.style.height = '100vh';
+    iframe.style.border = 'none';
+    iframe.style.opacity = '0';
+    iframe.style.pointerEvents = 'none';
+    iframe.style.zIndex = '-99999';
 
     document.body.appendChild(iframe);
 
@@ -382,23 +391,33 @@ export default function QuotationsList() {
               width: 100% !important;
               height: auto !important;
             }
+            /* Crucial: Ensure quotation content is visible even if other global styles set visibility:hidden */
+            #printable-quotation,
+            #printable-quotation *,
+            .inv-tpl-container,
+            .inv-tpl-container * {
+              visibility: visible !important;
+            }
             .inv-tpl-container {
               max-width: 100% !important;
               width: 100% !important;
               padding: 0 !important;
               margin: 0 !important;
               box-shadow: none !important;
+              display: block !important;
             }
             .has-terms .inv-tpl-page-1 {
               display: block !important;
-              page-break-after: always !important;
-              break-after: page !important;
+              page-break-after: auto !important;
+              break-after: auto !important;
+              min-height: auto !important;
               margin-bottom: 0 !important;
             }
             .no-terms .inv-tpl-page-1 {
               display: block !important;
               page-break-after: auto !important;
               break-after: auto !important;
+              min-height: auto !important;
               margin-bottom: 0 !important;
             }
             .terms-page-break, .inv-tpl-terms-page {
@@ -420,21 +439,34 @@ export default function QuotationsList() {
     `);
     frameDoc.close();
 
-    setTimeout(() => {
+    const doPrint = () => {
       try {
         iframe.contentWindow.focus();
         iframe.contentWindow.print();
       } catch (err) {
         console.error('Iframe print fallback:', err);
         window.print();
-      } finally {
-        setTimeout(() => {
-          if (document.body.contains(iframe)) {
-            document.body.removeChild(iframe);
-          }
-        }, 1500);
       }
-    }, 300);
+    };
+
+    // Remove the iframe only after the user is done with the print dialog
+    const cleanup = () => {
+      setTimeout(() => {
+        if (iframe && iframe.parentNode) {
+          iframe.parentNode.removeChild(iframe);
+        }
+      }, 1000);
+    };
+
+    try {
+      iframe.contentWindow.addEventListener('afterprint', cleanup);
+    } catch (e) {}
+
+    // Fallback cleanup after 3 minutes if afterprint doesn't fire
+    setTimeout(cleanup, 180000);
+
+    // Wait for styles and layout before triggering print
+    setTimeout(doPrint, 500);
   };
 
   // Filter Quotations
