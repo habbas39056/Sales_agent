@@ -181,7 +181,17 @@ export default function CreateQuotation() {
   };
 
   const calculateSubTotal = () => {
-    return formData.items.reduce((total, item) => total + (item.quantity * item.unit_price), 0);
+    return formData.items.reduce((total, item) => {
+      const qty = parseFloat(item.quantity) || 0;
+      const price = parseFloat(item.unit_price) || 0;
+      return total + (qty * price);
+    }, 0);
+  };
+
+  const calculateTotal = () => {
+    const subTotal = calculateSubTotal();
+    const discount = parseFloat(formData.discount) || 0;
+    return Math.max(0, subTotal - discount);
   };
 
   const safeClients = Array.isArray(clients) ? clients : [];
@@ -1136,7 +1146,7 @@ export default function CreateQuotation() {
           <div className="totals-section">
             <div className="totals-grid">
               <div className="totals-label">Total</div>
-              <div className="totals-value" style={{ color: 'var(--accent-color)' }}>PKR {calculateSubTotal().toFixed(2)}</div>
+              <div className="totals-value" style={{ color: 'var(--accent-color)' }}>PKR {calculateTotal().toFixed(2)}</div>
             </div>
           </div>
 

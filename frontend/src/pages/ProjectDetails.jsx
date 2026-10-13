@@ -6,6 +6,7 @@ import StepComments from '../components/StepComments';
 import StepInhouseChat from '../components/StepInhouseChat';
 import StepActivityLog from '../components/StepActivityLog';
 import { getProjectDueDateStatus } from '../utils/projectDueDate';
+import { getFileUrl, getDeliverableUrl } from '../utils/fileUrl';
 import './ProjectDetails.css';
 import './Modal.css';
 
@@ -835,7 +836,7 @@ export default function ProjectDetails() {
                               <span style={{ fontSize: '0.85rem', color: '#475569', display: 'flex', alignItems: 'center', gap: '0.3rem', flexWrap: 'wrap' }}>
                                 <strong style={{ color: '#334155' }}>Link:</strong> 
                                 <a 
-                                  href={step.deliverable_url.startsWith('http') ? step.deliverable_url : `https://${step.deliverable_url}`} 
+                                  href={getDeliverableUrl(step.deliverable_url)} 
                                   target="_blank" 
                                   rel="noopener noreferrer" 
                                   style={{ color: '#2563eb', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '0.2rem', fontWeight: '500' }}
@@ -894,7 +895,7 @@ export default function ProjectDetails() {
                                           <span>{todo.text || todo}</span>
                                           {todo.file_url && (
                                             <div style={{ marginTop: '0.2rem' }}>
-                                              <a href={`http://localhost:5000${todo.file_url}`} target="_blank" rel="noopener noreferrer" style={{ display: 'inline-flex', alignItems: 'center', gap: '0.2rem', fontSize: '0.8rem', color: '#2563eb', textDecoration: 'none', background: '#eff6ff', padding: '0.2rem 0.5rem', borderRadius: '4px', border: '1px solid #bfdbfe' }}>
+                                              <a href={getFileUrl(todo.file_url)} target="_blank" rel="noopener noreferrer" style={{ display: 'inline-flex', alignItems: 'center', gap: '0.2rem', fontSize: '0.8rem', color: '#2563eb', textDecoration: 'none', background: '#eff6ff', padding: '0.2rem 0.5rem', borderRadius: '4px', border: '1px solid #bfdbfe' }}>
                                                 <ExternalLink size={12} /> View Attached File
                                               </a>
                                             </div>
@@ -1345,7 +1346,7 @@ export default function ProjectDetails() {
                                             images = [rev.image_url];
                                           }
                                           return images.map((img, i) => (
-                                            <a key={i} href={img.startsWith('http') ? img : `${img}`} target="_blank" rel="noreferrer" style={{color: 'var(--primary-color)', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '0.5rem', backgroundColor: '#f1f5f9', padding: '0.5rem 1rem', borderRadius: '4px'}}>
+                                            <a key={i} href={getFileUrl(img)} target="_blank" rel="noreferrer" style={{color: 'var(--primary-color)', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '0.5rem', backgroundColor: '#f1f5f9', padding: '0.5rem 1rem', borderRadius: '4px'}}>
                                               <ExternalLink size={16} /> View Attachment {i+1}
                                             </a>
                                           ));
@@ -1439,7 +1440,7 @@ export default function ProjectDetails() {
                                       return (
                                         <a 
                                           key={idx} 
-                                          href={`${file}`} 
+                                          href={getFileUrl(file)} 
                                           target="_blank" 
                                           rel="noopener noreferrer" 
                                           style={{ 
@@ -1538,7 +1539,7 @@ export default function ProjectDetails() {
                       </div>
                       <p style={{ margin: '0.5rem 0', fontSize: '0.85rem', color: '#64748b' }}>{review.description}</p>
                       
-                      <a href={review.file_url} target="_blank" rel="noreferrer" style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem', fontSize: '0.8rem', color: '#4f46e5', textDecoration: 'none', fontWeight: '600', background: '#f5f3ff', padding: '0.35rem 0.75rem', borderRadius: '6px' }}>
+                      <a href={getFileUrl(review.file_url)} target="_blank" rel="noreferrer" style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem', fontSize: '0.8rem', color: '#4f46e5', textDecoration: 'none', fontWeight: '600', background: '#f5f3ff', padding: '0.35rem 0.75rem', borderRadius: '6px' }}>
                         <FileText size={14} /> View Submitted File
                       </a>
                     </div>
@@ -1587,7 +1588,7 @@ export default function ProjectDetails() {
                           <strong style={{ fontSize: '0.8rem', color: '#be123c' }}>Attachments:</strong>
                           <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.25rem' }}>
                             {atts.map((att, i) => (
-                              <a key={i} href={att} target="_blank" rel="noreferrer" style={{ display: 'inline-flex', alignItems: 'center', gap: '0.25rem', fontSize: '0.75rem', color: '#e11d48', background: '#ffe4e6', padding: '0.25rem 0.5rem', borderRadius: '4px', textDecoration: 'none' }}>
+                              <a key={i} href={getFileUrl(att)} target="_blank" rel="noreferrer" style={{ display: 'inline-flex', alignItems: 'center', gap: '0.25rem', fontSize: '0.75rem', color: '#e11d48', background: '#ffe4e6', padding: '0.25rem 0.5rem', borderRadius: '4px', textDecoration: 'none' }}>
                                 <Download size={12} /> File {i + 1}
                               </a>
                             ))}

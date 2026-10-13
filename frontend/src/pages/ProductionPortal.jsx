@@ -9,6 +9,7 @@ import {
   Briefcase, Send, X, FileCheck
 } from 'lucide-react';
 import StepInhouseChat from '../components/StepInhouseChat';
+import { getFileUrl, getDeliverableUrl } from '../utils/fileUrl';
 import './ProductionPortal.css';
 import './Modal.css';
 
@@ -258,8 +259,9 @@ export default function ProductionPortal() {
         const uploadRes = await axios.post(`/api/projects/${submitModal.projectId}/steps/${submitModal.stepId}/documents`, formData, {
           headers: { 'Content-Type': 'multipart/form-data' }
         });
-        if (uploadRes.data?.paths && uploadRes.data.paths[0]) {
-          finalUrl = uploadRes.data.paths[0];
+        const attachedList = uploadRes.data?.attachments || uploadRes.data?.paths;
+        if (Array.isArray(attachedList) && attachedList.length > 0) {
+          finalUrl = attachedList[attachedList.length - 1];
         }
       }
 
@@ -1081,7 +1083,7 @@ export default function ProductionPortal() {
                                       <span className="file-name">{step.deliverable_name || 'Proof Link'}</span>
                                       {step.deliverable_url && (
                                         <a 
-                                          href={step.deliverable_url.startsWith('http') ? step.deliverable_url : `https://${step.deliverable_url}`}
+                                          href={getDeliverableUrl(step.deliverable_url)}
                                           target="_blank"
                                           rel="noopener noreferrer"
                                           className="link-icon"
@@ -1180,7 +1182,7 @@ export default function ProductionPortal() {
                                               <span className="revision-todo-text">{todo.text}</span>
                                               {todo.file_url && (
                                                 <a 
-                                                  href={`http://localhost:5000${todo.file_url}`}
+                                                  href={getFileUrl(todo.file_url)}
                                                   target="_blank"
                                                   rel="noopener noreferrer"
                                                   className="revision-file-attachment"
@@ -1202,7 +1204,7 @@ export default function ProductionPortal() {
                                           <strong>{step.deliverable_name || 'Deliverable Package'}</strong>
                                           {step.deliverable_url && (
                                             <a 
-                                              href={step.deliverable_url.startsWith('http') ? step.deliverable_url : `https://${step.deliverable_url}`} 
+                                              href={getDeliverableUrl(step.deliverable_url)} 
                                               target="_blank" 
                                               rel="noopener noreferrer"
                                               className="proof-link"

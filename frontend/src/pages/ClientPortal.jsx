@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { LayoutDashboard, FileText, CreditCard, Folder, StickyNote, Check, CheckCircle, DollarSign, Filter, Eye, Printer, X, ChevronRight, Lock, LogOut, Plus, Edit, Trash2, MessageSquare, Activity, AlertCircle, Briefcase, Clock, Bell, User, Search, Download, Image } from 'lucide-react';
 import StepComments from '../components/StepComments';
 import InvoiceTemplate from '../components/InvoiceTemplate';
+import { getFileUrl } from '../utils/fileUrl';
 import './ClientPortal.css';
 
 export default function ClientPortal() {
@@ -1121,7 +1122,7 @@ export default function ClientPortal() {
                                           const fileName = file.split('/').pop();
                                           const isImg = file.match(/\.(jpeg|jpg|gif|png)$/i);
                                           return (
-                                            <a key={idx} href={`${file}`} target="_blank" rel="noopener noreferrer" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.5rem', backgroundColor: 'white', border: '1px solid #cbd5e1', borderRadius: '4px', textDecoration: 'none', color: 'var(--primary-color)', fontSize: '0.85rem' }}>
+                                            <a key={idx} href={getFileUrl(file)} target="_blank" rel="noopener noreferrer" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.5rem', backgroundColor: 'white', border: '1px solid #cbd5e1', borderRadius: '4px', textDecoration: 'none', color: 'var(--primary-color)', fontSize: '0.85rem' }}>
                                               {isImg ? <Eye size={14} /> : <FileText size={14} />} {fileName}
                                             </a>
                                           );
@@ -1191,9 +1192,9 @@ export default function ClientPortal() {
                                                   }
                                                   return images.map((img, i) => (
                                                     img.startsWith('http') ? (
-                                                      <a key={i} href={img} target="_blank" rel="noopener noreferrer" style={{color: 'var(--primary-color)', fontSize: '0.9rem', display: 'block'}}>View Reference Link {i+1}</a>
+                                                      <a key={i} href={getFileUrl(img)} target="_blank" rel="noopener noreferrer" style={{color: 'var(--primary-color)', fontSize: '0.9rem', display: 'block'}}>View Reference Link {i+1}</a>
                                                     ) : (
-                                                      <img key={i} src={`${img}`} alt={`Revision attachment ${i+1}`} style={{maxWidth: '100%', maxHeight: '200px', borderRadius: '4px', border: '1px solid #e2e8f0'}} />
+                                                      <img key={i} src={getFileUrl(img)} alt={`Revision attachment ${i+1}`} style={{maxWidth: '100%', maxHeight: '200px', borderRadius: '4px', border: '1px solid #e2e8f0'}} />
                                                     )
                                                   ));
                                                 })()}
@@ -1286,7 +1287,7 @@ export default function ClientPortal() {
                         <p className="text-secondary" style={{margin: '0.5rem 0 0 0'}}>Project: {file.project_title} | Submitted: {new Date(file.submitted_at).toLocaleDateString()}</p>
                       </div>
                       <div style={{display: 'flex', gap: '0.5rem'}}>
-                        <a href={file.file_url} target="_blank" rel="noreferrer" className="btn btn-primary" style={{fontSize: '0.9rem', padding: '0.4rem 1rem'}}>Download</a>
+                        <a href={getFileUrl(file.file_url)} target="_blank" rel="noreferrer" className="btn btn-primary" style={{fontSize: '0.9rem', padding: '0.4rem 1rem'}}>Download</a>
                         {file.submitted_by === JSON.parse(localStorage.getItem('user'))?.id && (
                           <button onClick={() => handleFileDelete(file.id)} className="btn btn-danger" style={{fontSize: '0.9rem', padding: '0.4rem 1rem', display: 'flex', alignItems: 'center', justifyContent: 'center'}}><Trash2 size={16}/></button>
                         )}

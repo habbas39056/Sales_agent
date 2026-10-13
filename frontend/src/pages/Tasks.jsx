@@ -11,6 +11,7 @@ import * as XLSX from 'xlsx';
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { getProjectDueDateStatus } from '../utils/projectDueDate';
+import { getFileUrl, getDeliverableUrl } from '../utils/fileUrl';
 import './Tasks.css';
 
 // Helper to parse checklist markdown and render interactive-styled items
@@ -482,7 +483,7 @@ export default function Tasks() {
             {files.map((file, i) => {
               const fileName = file.split('/').pop();
               return (
-                <a key={i} href={file} target="_blank" rel="noreferrer" className="attachment-file-pill">
+                <a key={i} href={getFileUrl(file)} target="_blank" rel="noreferrer" className="attachment-file-pill">
                   <span>{fileName}</span>
                   <ExternalLink size={11} />
                 </a>
@@ -975,7 +976,7 @@ export default function Tasks() {
                       <span className="banner-file">{task.deliverable_name || 'Project Deliverable'}</span>
                     </div>
                     <a 
-                      href={task.deliverable_url} 
+                      href={getDeliverableUrl(task.deliverable_url)} 
                       target="_blank" 
                       rel="noreferrer" 
                       className="view-deliverable-btn"
@@ -1698,7 +1699,7 @@ export default function Tasks() {
                     <span className="banner-file">{selectedTaskDetails.deliverable_name || 'Project Deliverable'}</span>
                   </div>
                   <a 
-                    href={selectedTaskDetails.deliverable_url} 
+                    href={getDeliverableUrl(selectedTaskDetails.deliverable_url)} 
                     target="_blank" 
                     rel="noreferrer" 
                     className="view-deliverable-btn"

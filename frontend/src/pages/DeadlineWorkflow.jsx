@@ -12,6 +12,7 @@ import * as XLSX from 'xlsx';
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { getProjectDueDateStatus } from '../utils/projectDueDate';
+import { getDeliverableUrl } from '../utils/fileUrl';
 import './DeadlineWorkflow.css';
 
 export default function DeadlineWorkflow() {
@@ -872,7 +873,7 @@ export default function DeadlineWorkflow() {
                       <span className="banner-name">{item.deliverable_name || 'Production Output'}</span>
                     </div>
                     <a 
-                      href={item.deliverable_url?.startsWith('http') ? item.deliverable_url : `${item.deliverable_url}`} 
+                      href={getDeliverableUrl(item.deliverable_url)} 
                       target="_blank" 
                       rel="noopener noreferrer"
                       className="view-deliverable-btn"

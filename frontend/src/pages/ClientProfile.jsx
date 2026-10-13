@@ -6,6 +6,7 @@ import {
   CreditCard, Activity, StickyNote, Plus, Trash2, Edit, X,
   MessageSquare, Receipt, CheckCircle2, AlertCircle
 } from 'lucide-react';
+import { getFileUrl } from '../utils/fileUrl';
 import './ClientProfile.css';
 
 export default function ClientProfile() {
@@ -319,7 +320,7 @@ export default function ClientProfile() {
                     <td><strong>{f.file_name}</strong></td>
                     <td>{f.project_title}</td>
                     <td>{new Date(f.submitted_at).toLocaleString()}</td>
-                    <td><a href={f.file_url} target="_blank" rel="noreferrer" className="btn-link">Download</a></td>
+                    <td><a href={getFileUrl(f.file_url)} target="_blank" rel="noreferrer" className="btn-link">Download</a></td>
                   </tr>
                 ))}
                 {files.length === 0 && <tr><td colSpan="4" className="empty-state">No files uploaded yet.</td></tr>}
