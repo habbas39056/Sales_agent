@@ -21,16 +21,26 @@ const {
   getClientApprovalRecordedTemplate
 } = require('../utils/whatsappTemplates');
 
+const fs = require('fs');
+
 // Configure multer for file uploads
+const uploadDir = path.join(__dirname, '../uploads');
+if (!fs.existsSync(uploadDir)) {
+  fs.mkdirSync(uploadDir, { recursive: true });
+}
+
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
-    cb(null, 'uploads/');
+    cb(null, uploadDir);
   },
   filename: (req, file, cb) => {
     cb(null, Date.now() + path.extname(file.originalname));
   }
 });
-const upload = multer({ storage: storage });
+const upload = multer({
+  storage: storage,
+  limits: { fileSize: 20 * 1024 * 1024 }
+});
 
 // Create a new client review submission
 router.post('/projects/:project_id', upload.single('file'), async (req, res) => {

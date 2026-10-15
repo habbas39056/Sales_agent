@@ -24,16 +24,30 @@ const {
   getClientApprovalRecordedTemplate
 } = require('../utils/whatsappTemplates');
 
-// Configure multer for file uploads
+const fs = require('fs');
+
+// Configure multer for file uploads - ensure directory exists in backend/uploads
+const uploadDir = path.join(__dirname, '../uploads');
+if (!fs.existsSync(uploadDir)) {
+  fs.mkdirSync(uploadDir, { recursive: true });
+}
+
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
-    cb(null, 'uploads/');
+    cb(null, uploadDir);
   },
   filename: (req, file, cb) => {
-    cb(null, Date.now() + path.extname(file.originalname));
+    const safeExt = path.extname(file.originalname);
+    cb(null, `${Date.now()}-${Math.round(Math.random() * 1e9)}${safeExt}`);
   }
 });
-const upload = multer({ storage: storage });
+const upload = multer({
+  storage: storage,
+  limits: {
+    fileSize: 20 * 1024 * 1024, // 20 MB max file size
+    files: 10
+  }
+});
 
 async function notifyManagers(projectId, message, type, link) {
   // Get PM for this project
@@ -595,7 +609,7 @@ router.delete('/:id', async (req, res) => {
 });
 
 // Add a workflow step
-router.post('/:id/steps', upload.array('attachments', 5), async (req, res) => {
+router.post('/:id/steps', upload.array('attachments', 10), async (req, res) => {
   const { title, description, assignee_id, deadline, requires_client_form, client_form_schema, requires_payment, allow_revision, invoice_item_ids } = req.body;
   try {
     let attachmentPaths = [];
@@ -618,14 +632,17 @@ router.post('/:id/steps', upload.array('attachments', 5), async (req, res) => {
       parsed_invoice_items = typeof invoice_item_ids === 'string' ? invoice_item_ids : JSON.stringify(invoice_item_ids);
     }
 
+    const cleanAssigneeId = (assignee_id && assignee_id !== 'null' && assignee_id !== 'undefined' && assignee_id !== '') ? parseInt(assignee_id) : null;
+    const cleanDeadline = (deadline && deadline !== 'null' && deadline !== 'undefined' && deadline !== '') ? deadline : null;
+
     const [result] = await db.query(
       'INSERT INTO project_steps (project_id, title, description, assignee_id, deadline, requires_client_form, client_form_schema, requires_payment, allow_revision, attachments, invoice_item_ids, deadline_status, deadline_assigned_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
       [
         req.params.id, 
         title, 
         description || '',
-        assignee_id || null,
-        deadline || null,
+        cleanAssigneeId,
+        cleanDeadline,
         req_client_form,
         parsed_schema,
         req_payment,
@@ -633,7 +650,7 @@ router.post('/:id/steps', upload.array('attachments', 5), async (req, res) => {
         attachments,
         parsed_invoice_items,
         'Pending Acceptance',
-        deadline ? new Date() : null
+        cleanDeadline ? new Date() : null
       ]
     );
 
@@ -811,14 +828,28 @@ router.put('/:id/steps/:step_id', async (req, res) => {
 });
 
 // Full update of a project step
-router.put('/:id/steps/:step_id/full', upload.array('attachments', 5), async (req, res) => {
-  const { title, description, assignee_id, deadline, requires_client_form, client_form_schema, requires_payment, allow_revision, invoice_item_ids } = req.body;
+router.put('/:id/steps/:step_id/full', upload.array('attachments', 10), async (req, res) => {
+  const { title, description, assignee_id, deadline, requires_client_form, client_form_schema, requires_payment, allow_revision, invoice_item_ids, existing_attachments } = req.body;
   try {
     let attachmentPaths = [];
     if (req.files && req.files.length > 0) {
       attachmentPaths = req.files.map(file => `/uploads/${file.filename}`);
     }
-    const attachments = attachmentPaths.length > 0 ? JSON.stringify(attachmentPaths) : null;
+
+    let retainedAttachments = [];
+    if (existing_attachments) {
+      try {
+        retainedAttachments = typeof existing_attachments === 'string' ? JSON.parse(existing_attachments) : existing_attachments;
+      } catch (e) {
+        retainedAttachments = [existing_attachments];
+      }
+    }
+    if (!Array.isArray(retainedAttachments)) retainedAttachments = [];
+
+    const totalAttachments = [...retainedAttachments, ...attachmentPaths];
+    const attachmentsToSave = (existing_attachments !== undefined || attachmentPaths.length > 0)
+      ? (totalAttachments.length > 0 ? JSON.stringify(totalAttachments) : null)
+      : undefined;
 
     const req_client_form = requires_client_form === 'true' || requires_client_form === true ? 1 : 0;
     const req_payment = requires_payment === 'true' || requires_payment === true ? 1 : 0;
@@ -834,19 +865,22 @@ router.put('/:id/steps/:step_id/full', upload.array('attachments', 5), async (re
       parsed_invoice_items = typeof invoice_item_ids === 'string' ? invoice_item_ids : JSON.stringify(invoice_item_ids);
     }
 
+    const cleanAssigneeId = (assignee_id && assignee_id !== 'null' && assignee_id !== 'undefined' && assignee_id !== '') ? parseInt(assignee_id) : null;
+    const cleanDeadline = (deadline && deadline !== 'null' && deadline !== 'undefined' && deadline !== '') ? deadline : null;
+
     let updateQuery = `
       UPDATE project_steps SET 
       title = ?, description = ?, assignee_id = ?, deadline = ?, requires_client_form = ?, 
       client_form_schema = ?, requires_payment = ?, allow_revision = ?, invoice_item_ids = ?
     `;
     let params = [
-      title, description || '', assignee_id || null, deadline || null, req_client_form, 
+      title, description || '', cleanAssigneeId, cleanDeadline, req_client_form, 
       parsed_schema, req_payment, allow_rev, parsed_invoice_items
     ];
 
-    if (attachments) {
+    if (attachmentsToSave !== undefined) {
       updateQuery += `, attachments = ?`;
-      params.push(attachments);
+      params.push(attachmentsToSave);
     }
     updateQuery += ` WHERE id = ? AND project_id = ?`;
     params.push(req.params.step_id, req.params.id);

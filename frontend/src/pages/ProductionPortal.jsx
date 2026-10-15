@@ -254,11 +254,14 @@ export default function ProductionPortal() {
 
       // If user provided a local file, upload it first
       if (deliverableFile) {
+        if (deliverableFile.size > 20 * 1024 * 1024) {
+          alert(`Deliverable file exceeds the 20MB limit (${(deliverableFile.size / (1024 * 1024)).toFixed(1)} MB). Please choose a file up to 20MB.`);
+          setSubmittingDeliverable(false);
+          return;
+        }
         const formData = new FormData();
         formData.append('documents', deliverableFile);
-        const uploadRes = await axios.post(`/api/projects/${submitModal.projectId}/steps/${submitModal.stepId}/documents`, formData, {
-          headers: { 'Content-Type': 'multipart/form-data' }
-        });
+        const uploadRes = await axios.post(`/api/projects/${submitModal.projectId}/steps/${submitModal.stepId}/documents`, formData);
         const attachedList = uploadRes.data?.attachments || uploadRes.data?.paths;
         if (Array.isArray(attachedList) && attachedList.length > 0) {
           finalUrl = attachedList[attachedList.length - 1];

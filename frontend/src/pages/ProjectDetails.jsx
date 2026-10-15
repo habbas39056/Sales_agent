@@ -1374,15 +1374,23 @@ export default function ProjectDetails() {
                                   style={{ display: 'none' }}
                                   onChange={async (e) => {
                                     if (!e.target.files || e.target.files.length === 0) return;
+                                    const files = Array.from(e.target.files);
+                                    for (const f of files) {
+                                      if (f.size > 20 * 1024 * 1024) {
+                                        alert(`"${f.name}" exceeds the 20MB limit (${(f.size / (1024 * 1024)).toFixed(1)} MB). Please select files up to 20MB.`);
+                                        return;
+                                      }
+                                    }
                                     const fileData = new FormData();
-                                    Array.from(e.target.files).forEach(f => fileData.append('documents', f));
+                                    files.forEach(f => fileData.append('documents', f));
                                     try {
                                       await axios.post(`/api/projects/${id}/steps/${step.id}/documents`, fileData);
                                       fetchProjectDetails();
                                     } catch(err) {
                                       console.error('Failed to upload documents', err);
-                                      alert('Failed to upload files');
+                                      alert('Failed to upload files: ' + (err.response?.data?.error || err.message));
                                     }
+                                    e.target.value = '';
                                   }}
                                 />
                               </label>

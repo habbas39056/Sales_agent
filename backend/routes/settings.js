@@ -37,16 +37,26 @@ router.get('/agent/qr', async (req, res) => {
   }
 });
 
+const fs = require('fs');
+
 // Configure multer for profile avatar upload
+const uploadDir = path.join(__dirname, '../uploads');
+if (!fs.existsSync(uploadDir)) {
+  fs.mkdirSync(uploadDir, { recursive: true });
+}
+
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
-    cb(null, 'uploads/');
+    cb(null, uploadDir);
   },
   filename: (req, file, cb) => {
     cb(null, 'avatar-' + Date.now() + path.extname(file.originalname));
   }
 });
-const upload = multer({ storage: storage });
+const upload = multer({
+  storage: storage,
+  limits: { fileSize: 20 * 1024 * 1024 }
+});
 
 const ensureSettingsTable = async () => {
   try {

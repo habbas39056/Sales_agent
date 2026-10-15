@@ -11,6 +11,10 @@ export default function AddStep() {
   const [project, setProject] = useState(null);
   const [specialists, setSpecialists] = useState([]);
   const [attachments, setAttachments] = useState([]);
+  const [existingAttachments, setExistingAttachments] = useState([]);
+  const [saving, setSaving] = useState(false);
+
+  const MAX_FILE_SIZE = 20 * 1024 * 1024; // 20 MB
   
   const [formData, setFormData] = useState({
     title: '',
@@ -76,6 +80,14 @@ export default function AddStep() {
             allow_revision: !!step.allow_revision,
             invoice_item_ids: parsedInvoiceItemIds
           });
+
+          if (step.attachments) {
+            let parsedAtt = [];
+            try {
+              parsedAtt = typeof step.attachments === 'string' ? JSON.parse(step.attachments) : step.attachments;
+            } catch(e) { parsedAtt = [step.attachments]; }
+            if (Array.isArray(parsedAtt)) setExistingAttachments(parsedAtt);
+          }
         }
       }
     } catch (error) {
@@ -154,34 +166,74 @@ export default function AddStep() {
     setFormData({ ...formData, client_form_schema: newSchema });
   };
 
+  const handleFileChange = (e) => {
+    const files = Array.from(e.target.files || []);
+    if (files.length === 0) return;
+
+    const validFiles = [];
+    for (const file of files) {
+      if (file.size > MAX_FILE_SIZE) {
+        alert(`"${file.name}" exceeds the 20MB limit (${(file.size / (1024 * 1024)).toFixed(1)} MB). Please select a file up to 20MB.`);
+      } else {
+        validFiles.push(file);
+      }
+    }
+
+    if (validFiles.length > 0) {
+      setAttachments(prev => {
+        const combined = [...prev, ...validFiles];
+        const total = combined.length + existingAttachments.length;
+        if (total > 5) {
+          alert('You can attach up to 5 files in total. Extra files were not added.');
+          const allowed = Math.max(0, 5 - existingAttachments.length);
+          return combined.slice(0, allowed);
+        }
+        return combined;
+      });
+    }
+    e.target.value = '';
+  };
+
   const handleSave = async () => {
-    if (!formData.title) return alert('Title is required');
+    if (!formData.title?.trim()) return alert('Title is required');
+
+    for (const file of attachments) {
+      if (file.size > MAX_FILE_SIZE) {
+        return alert(`File "${file.name}" exceeds the 20MB limit. Please remove it before saving.`);
+      }
+    }
+
+    setSaving(true);
     try {
       const fd = new FormData();
       Object.keys(formData).forEach(key => {
         if (key === 'client_form_schema' || key === 'invoice_item_ids') {
           fd.append(key, JSON.stringify(formData[key]));
         } else {
-          fd.append(key, formData[key]);
+          fd.append(key, formData[key] === null || formData[key] === undefined ? '' : formData[key]);
         }
       });
+
+      if (step_id) {
+        fd.append('existing_attachments', JSON.stringify(existingAttachments));
+      }
+
       attachments.forEach(file => {
         fd.append('attachments', file);
       });
 
       if (step_id) {
-        await axios.put(`/api/projects/${id}/steps/${step_id}/full`, fd, {
-          headers: { 'Content-Type': 'multipart/form-data' }
-        });
+        await axios.put(`/api/projects/${id}/steps/${step_id}/full`, fd);
       } else {
-        await axios.post(`/api/projects/${id}/steps`, fd, {
-          headers: { 'Content-Type': 'multipart/form-data' }
-        });
+        await axios.post(`/api/projects/${id}/steps`, fd);
       }
       navigate(`/projects/${id}`);
     } catch (error) {
       console.error('Save failed', error);
-      alert('Failed to save step');
+      const serverMsg = error.response?.data?.error || error.response?.data?.message || error.message || 'Failed to save step';
+      alert(`Failed to save step: ${serverMsg}`);
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -192,7 +244,9 @@ export default function AddStep() {
       <div className="add-step-header">
         <button className="btn-cancel" onClick={() => navigate(`/projects/${id}`)}>Cancel</button>
         <h2>{step_id ? 'Edit Milestone' : 'Create Milestone'}</h2>
-        <button className="btn-save-step" onClick={handleSave}>Save Milestone</button>
+        <button className="btn-save-step" onClick={handleSave} disabled={saving}>
+          {saving ? 'Saving Milestone...' : 'Save Milestone'}
+        </button>
       </div>
 
       <div className="add-step-grid">
@@ -224,28 +278,60 @@ export default function AddStep() {
             </div>
 
             <div className="form-group" style={{marginTop: '2rem'}}>
-              <label className="as-label">ATTACHMENTS (PDF, Images) - Up to 5</label>
+              <label className="as-label">ATTACHMENTS (PDF, Images) - Up to 5 (Max 20MB each)</label>
               <div className="attachment-upload-area">
                 <input 
                   type="file" 
                   multiple
-                  onChange={(e) => setAttachments(prev => [...prev, ...Array.from(e.target.files)])} 
+                  onChange={handleFileChange} 
                   id="step-attachments"
                   style={{ display: 'none' }}
                 />
                 <label htmlFor="step-attachments" style={{ cursor: 'pointer', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.75rem', width: '100%' }}>
                   <div className="plus-icon"><Plus size={24} /></div>
                   <span style={{ color: '#4f46e5', fontWeight: '700', fontSize: '0.95rem' }}>Click to select files</span>
-                  <span style={{ color: '#94a3b8', fontSize: '0.75rem' }}>or drag and drop here</span>
+                  <span style={{ color: '#94a3b8', fontSize: '0.75rem' }}>or drag and drop here (up to 20MB each)</span>
                 </label>
               </div>
+
+              {/* Existing attachments when editing */}
+              {existingAttachments.length > 0 && (
+                <div style={{ marginTop: '1rem' }}>
+                  <div style={{ fontSize: '0.78rem', color: '#64748b', fontWeight: '700', textTransform: 'uppercase', marginBottom: '0.5rem', letterSpacing: '0.04em' }}>
+                    Current Attachments
+                  </div>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.75rem' }}>
+                    {existingAttachments.map((url, idx) => {
+                      const name = url.split('/').pop();
+                      return (
+                        <div key={`existing-${idx}`} className="attachment-file-pill" style={{ background: '#f8fafc', borderColor: '#cbd5e1' }}>
+                          <FileText size={16} color="#0284c7" />
+                          <a href={url} target="_blank" rel="noopener noreferrer" style={{ maxWidth: '170px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: '#0369a1', textDecoration: 'none', fontWeight: '600' }} title={name}>
+                            {name}
+                          </a>
+                          <button type="button" title="Remove attachment" onClick={() => setExistingAttachments(prev => prev.filter((_, i) => i !== idx))}>
+                            <Trash2 size={16} />
+                          </button>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {/* Newly added attachments */}
               {attachments.length > 0 && (
                 <div style={{ marginTop: '1rem', display: 'flex', flexWrap: 'wrap', gap: '0.75rem' }}>
                   {attachments.map((file, idx) => (
                     <div key={idx} className="attachment-file-pill">
                       <FileText size={16} color="#4f46e5" />
-                      <span style={{ maxWidth: '180px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{file.name}</span>
-                      <button type="button" onClick={() => setAttachments(prev => prev.filter((_, i) => i !== idx))}>
+                      <span style={{ maxWidth: '160px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontWeight: '600' }} title={file.name}>
+                        {file.name}
+                      </span>
+                      <span style={{ fontSize: '0.75rem', color: '#64748b', fontWeight: '500' }}>
+                        ({(file.size / (1024 * 1024)).toFixed(1)} MB)
+                      </span>
+                      <button type="button" title="Remove file" onClick={() => setAttachments(prev => prev.filter((_, i) => i !== idx))}>
                         <Trash2 size={16} />
                       </button>
                     </div>

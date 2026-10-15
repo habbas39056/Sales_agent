@@ -812,6 +812,7 @@ async function updateLiveDb() {
     await safeExec("ALTER TABLE `projects` MODIFY COLUMN `status` VARCHAR(100) DEFAULT 'Assigned'", 'Upgraded projects.status column to VARCHAR(100)');
 
     // project_steps
+    await addColumnIfNotExists('project_steps', 'attachments', 'MEDIUMTEXT NULL');
     await addColumnIfNotExists('project_steps', 'deadline_status', "ENUM('Accepted', 'Pending Acceptance', 'Appealed', 'Rejected') DEFAULT 'Pending Acceptance'");
     await addColumnIfNotExists('project_steps', 'proposed_deadline', 'DATE NULL');
     await addColumnIfNotExists('project_steps', 'deadline_appeal_reason', 'TEXT NULL');
